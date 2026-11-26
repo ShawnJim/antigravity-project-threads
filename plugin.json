@@ -1,0 +1,18 @@
+{
+  "name": "project-threads",
+  "displayName": "Project Threads",
+  "version": "1.0.0",
+  "description": "Claude Projects-style ongoing work coordinator for Antigravity 2.0: persistent Coordinator session, isolated Git worktree or read-only background worker threads, per-project memory sync, and live Swarm-styled sidecar board with inline chat preview.",
+  "logo": "assets/logo.svg",
+  "author": {
+    "name": "ShawnJim",
+    "url": "https://github.com/ShawnJim"
+  },
+  "homepage": "https://github.com/ShawnJim/antigravity-project-threads",
+  "repository": "https://github.com/ShawnJim/antigravity-project-threads",
+  "suggestedPrompts": [
+    "/coord 将当前会话初始化为项目总控协调器并打开 Project Threads 面板",
+    "/coord 拆解以下任务并并发派发独立的 Git Worktree 工作线程",
+    "/coord 同步所有活跃工作线程的进度与分支提交状态"
+  ]
+}

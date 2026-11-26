@@ -1,0 +1,18 @@
+{
+  "command": "node",
+  "args": ["main.mjs"],
+  "restart_policy": "always",
+  "display_name": "Project Threads",
+  "description": "Claude Projects-style live thread board: monitor parallel Git worktree threads, inspect commit/dirty status, dispatch background threads, and manage Shared Project Memory.",
+  "has_web_ui": true,
+  "ui_config": {
+    "display_name": "Project Threads",
+    "views": [
+      {
+        "path": "/",
+        "entrypoint": "SIDECAR_UI_ENTRYPOINT_AUX_PANE",
+        "title": "Project Threads"
+      }
+    ]
+  }
+}

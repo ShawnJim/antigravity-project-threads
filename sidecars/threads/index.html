@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Threads</title>
+  <script src="/preload.js"></script>
+  <link rel="stylesheet" href="/theme.css">
+</head>
+<body>
+
+  <!-- ==================== VIEW A: SWARM-MATCHED PROJECT THREADS OVERVIEW ==================== -->
+  <section id="board-screen" class="screen">
+    <header class="pt-header">
+      <div class="header-row">
+        <h1 id="panel-title" class="header-title">Project Threads</h1>
+        <div class="header-actions">
+          <span id="toast" class="toast" role="status" aria-live="polite"></span>
+          <span id="live-pill" class="live" role="status" title="Updates automatically">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span id="live-label">Live</span>
+          </span>
+          <button type="button" id="btn-bind" class="ghost" hidden></button>
+          <button type="button" id="btn-open-coord" class="coord-jump-btn" hidden></button>
+          <button type="button" id="btn-new" class="pill-action-btn">
+            <svg class="ico ico-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span id="lbl-new">New</span>
+          </button>
+        </div>
+      </div>
+
+      <nav class="nav-tabs" role="tablist">
+        <button type="button" role="tab" class="nav-tab active" data-tab="threads" id="tab-threads" aria-selected="true">
+          <span id="lbl-tab-threads">Threads</span>
+          <span id="badge-waiting" class="tab-badge warn tabular"></span>
+          <span id="cnt-threads" class="tab-count tabular"></span>
+        </button>
+        <button type="button" role="tab" class="nav-tab" data-tab="library" id="tab-library" aria-selected="false">
+          <span id="lbl-tab-library">Library</span>
+          <span id="cnt-library" class="tab-count tabular"></span>
+        </button>
+        <button type="button" role="tab" class="nav-tab" data-tab="archived" id="tab-archived" aria-selected="false">
+          <span id="lbl-tab-archived">Archived</span>
+          <span id="cnt-archived" class="tab-count tabular"></span>
+        </button>
+      </nav>
+    </header>
+
+    <div id="board-body" class="board-body">
+      <!-- Slide-Down Dispatch Drawer -->
+      <div id="dispatch-drawer" class="drawer">
+        <div class="drawer-hdr">
+          <span id="lbl-drawer-title" class="drawer-title">New background thread</span>
+          <button type="button" id="btn-close-drawer" class="icon-ghost-btn" title="Close">
+            <svg class="ico ico-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="field">
+          <label id="lbl-f-title" for="f-title">Thread title</label>
+          <input id="f-title" type="text" autocomplete="off">
+        </div>
+        <div class="row2 field">
+          <div>
+            <label id="lbl-f-branch" for="f-branch">Git branch (optional)</label>
+            <input id="f-branch" type="text" placeholder="thread/thr-xxx-..." autocomplete="off">
+          </div>
+          <div>
+            <label id="lbl-f-model" for="f-model">Model</label>
+            <select id="f-model">
+              <option value="pro">Pro</option>
+              <option value="flash">Flash</option>
+              <option value="flash_lite">Flash Lite</option>
+            </select>
+          </div>
+        </div>
+        <label class="chk">
+          <input id="f-wt" type="checkbox" checked>
+          <span id="lbl-f-wt"></span>
+        </label>
+        <div class="field">
+          <label id="lbl-f-prompt" for="f-prompt">Task instructions</label>
+          <textarea id="f-prompt" rows="3"></textarea>
+        </div>
+        <div class="drawer-actions">
+          <button type="button" id="btn-submit-dispatch" class="btn-solid">Start thread</button>
+          <button type="button" id="btn-cancel-dispatch" class="btn-secondary">Cancel</button>
+          <span id="dispatch-msg" class="err"></span>
+        </div>
+      </div>
+
+      <!-- Tab 1: Swarm-Style Overview Cards (Goal + Running + Progress/Tasks) -->
+      <div id="threads-pane">
+        <div id="goal-card" class="pt-card goal-card">
+          <div class="goal-kicker">
+            <span id="goal-kicker-text">PROJECT</span>
+            <div class="goal-actions">
+              <button type="button" id="btn-card-coord" class="coord-card-btn" hidden></button>
+              <button type="button" id="btn-sort" class="sort-chip" hidden>
+                <span id="lbl-sort">Status</span>
+                <svg class="ico ico-xs" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+            </div>
+          </div>
+          <div id="goal-title" class="goal-title">Current Project</div>
+          <div id="goal-sub" class="goal-sub"></div>
+        </div>
+
+        <div id="threads-cards"></div>
+      </div>
+
+      <!-- Tab 2: Library (Shared Project Memory & Active Git Worktrees) -->
+      <div id="library-pane" hidden>
+        <div class="lib-card">
+          <div class="lib-card-hdr">
+            <span class="lib-card-title">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              <span id="lbl-lib-mem">Shared Project Memory</span>
+            </span>
+            <span id="mem-path" class="lib-path-pill"></span>
+          </div>
+          <textarea id="mem-editor" spellcheck="false"></textarea>
+          <div class="lib-card-foot">
+            <button type="button" id="btn-save-mem" class="btn-solid"></button>
+            <button type="button" id="btn-reload-mem" class="btn-secondary"></button>
+          </div>
+        </div>
+
+        <div>
+          <div class="lib-sec-title">
+            <span id="lbl-lib-wt">Active Git Worktrees</span>
+            <span id="wt-count" class="mono tabular"></span>
+          </div>
+          <div id="lib-wt-list"></div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Archived Threads -->
+      <div id="archived-pane" hidden>
+        <div id="archived-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== VIEW B: INLINE SLIDE-OVER THREAD CHAT ==================== -->
+  <section id="thread-screen" class="screen screen-slide" hidden>
+    <header class="chat-hdr">
+      <div class="chat-hdr-left">
+        <button type="button" id="btn-back" class="back-btn">
+          <svg class="ico" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          <span id="lbl-back">Threads</span>
+          <span id="other-running-badge" class="other-running-pill tabular"></span>
+        </button>
+        <span id="chat-tid" class="hdr-tid"></span>
+        <span id="chat-title-text" class="hdr-title"></span>
+      </div>
+
+      <div class="chat-hdr-right">
+        <span id="chat-status-dot" class="sdot ok"></span>
+        <button type="button" id="btn-chat-coord" class="row-act" hidden></button>
+        <button type="button" id="btn-sync-coord" class="row-act"></button>
+        <button type="button" id="btn-archive-cur" class="row-act"></button>
+        <button type="button" id="btn-popout-cur" class="icon-ghost-btn">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="chat-stream" class="chat-stream"></div>
+
+    <div class="composer-wrap">
+      <div id="live-bar" class="live-bar" hidden>
+        <span class="sdot run"></span>
+        <span id="live-bar-text"></span>
+      </div>
+      <div class="composer-pill">
+        <textarea id="chat-input" rows="1"></textarea>
+        <div class="composer-bar">
+          <span id="composer-meta" class="composer-meta"></span>
+          <button type="button" id="btn-send" class="send-circle">
+            <svg class="ico" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "project-threads-lifecycle": {
+    "enabled": true,
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hook-handler.mjs PreInvocation",
+        "timeout": 5
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "invoke_subagent|run_workflow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./scripts/hook-handler.mjs PreToolUse",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node ./scripts/hook-handler.mjs Stop",
+        "timeout": 8
+      }
+    ]
+  }
+}
