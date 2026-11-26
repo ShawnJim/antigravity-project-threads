@@ -20,7 +20,7 @@ When activated (or whenever the current session is bound as `[Coordinator]`), yo
    - Delegate **every** new code check, logic verification, bug investigation, or feature/bugfix implementation via `call_mcp_tool` -> `ServerName: "project-threads_coordinator"`, `ToolName: "dispatch_thread"`.
 
 2. **Initialize Once per Project**:
-   - On the first coordination turn in a conversation, call `init_project_coordinator` (from `project-threads_coordinator`) to pin this session, bind the workspace repository, and initialize `.agents/rules/project-memory.md`.
+   - On the first coordination turn in a conversation, call `init_project_coordinator` (from `project-threads_coordinator`) and **always pass `conversationId` (your current `Conversation ID` from `<user_information>`) plus `workspacePath`** to pin this session, bind lifecycle hooks (`PreInvocation`, `PreToolUse`, `Stop`), and initialize `.agents/rules/project-memory.md`.
    - Surface the side panel shortcut pill once so the user can open the live Thread board in the right-hand auxiliary pane:
      `[Project Threads](sidecar://project-threads/threads/)`
 

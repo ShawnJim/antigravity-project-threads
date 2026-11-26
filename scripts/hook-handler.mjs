@@ -7,7 +7,7 @@ import {
 } from '../lib/store.mjs';
 import { extractThreadCompletion } from '../lib/transcript.mjs';
 
-const DIRECTIVE_VERSION = 5;
+const DIRECTIVE_VERSION = 6;
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -19,6 +19,30 @@ function readStdin() {
     process.stdin.on('end', () => resolve(data));
     process.stdin.on('error', () => resolve(data));
   });
+}
+
+function summarizeCoordinatorThreads(reg, coord) {
+  const scopeThreads = Object.values(reg.threads || {}).filter(
+    (t) =>
+      !t.archived &&
+      (t.coordinatorId === coord.conversationId || (coord.key && t.workspaceKey === coord.key)),
+  );
+  const running = scopeThreads.filter((t) => t.runState === 'RUN_STATE_RUNNING').length;
+  const ready = scopeThreads.length - running;
+  return { total: scopeThreads.length, running, ready };
+}
+
+function buildTurnCoordinatorReminder(coord, reg) {
+  const repo = coord.repoRoot || coord.workspacePath || '';
+  const cid = coord.conversationId || '';
+  const scopeLabel = repo || coord.title || coord.key || 'Current Project';
+  const counts = summarizeCoordinatorThreads(reg, coord);
+  return [
+    `[Project Coordinator Standing Protocol — Scope: ${scopeLabel} | Threads: ${counts.running} running, ${counts.ready} idle]`,
+    '当前会话处于常驻总控协调器（Coordinator）模式，本轮请继续严格遵守总控规范：',
+    `1. 禁止调用 \`invoke_subagent\`（\`research\` / \`self\`）或 \`run_workflow\`，禁止直接在总控会话大面积读改业务代码；所有新排查或改动一律调用 \`project-threads_coordinator\` -> \`dispatch_thread\`（只读排查传 \`createWorktree: false\`，改代码传 \`createWorktree: true\`，必传 \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`）。`,
+    '2. 对已有线程补充指令请用 `send_thread_message`；若本轮是 `[THREAD_COMPLETION_SYNC]` 子线程完成回调，请按 `> **✅ [thr-xxx] <标题> · 执行完毕**（[查看完整线程](conversation://<id>)）` + 3–5 条核心要点 + 末尾 `---` 分段卡片格式输出，严禁针对回调重复新建线程。',
+  ].join('\n');
 }
 
 function buildCoordinatorDirective(coord) {
@@ -138,12 +162,16 @@ async function main() {
     const messages = [];
     let dirty = false;
     const stepCount = Number(input.initialNumSteps) || 0;
+    const invocationNum = Number(input.invocationNum || 1);
+    const isTurnStart = !Number.isFinite(invocationNum) || invocationNum <= 1;
     const compacted = coord.lastStepCount && stepCount > 0 && stepCount < coord.lastStepCount;
 
     if (coord.directiveVersion !== DIRECTIVE_VERSION || compacted) {
       messages.push(buildCoordinatorDirective(coord));
       coord.directiveVersion = DIRECTIVE_VERSION;
       dirty = true;
+    } else if (isTurnStart) {
+      messages.push(buildTurnCoordinatorReminder(coord, reg));
     }
     if (stepCount > 0 && stepCount !== coord.lastStepCount) {
       coord.lastStepCount = stepCount;

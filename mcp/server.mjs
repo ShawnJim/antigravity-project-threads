@@ -33,7 +33,7 @@ const TOOLS = [
         },
         conversationId: {
           type: 'string',
-          description: 'Conversation ID to register as Coordinator.',
+          description: 'Current Conversation ID (from <user_information> Conversation ID) to register as Coordinator so PreInvocation/PreToolUse/Stop hooks bind to this session.',
         },
         coordinatorId: {
           type: 'string',
@@ -48,6 +48,7 @@ const TOOLS = [
           description: 'Optional custom title for the Coordinator conversation.',
         },
       },
+      required: ['conversationId'],
     },
   },
   {
