@@ -8,8 +8,8 @@ import {
 } from '../lib/store.mjs';
 import { extractThreadCompletion } from '../lib/transcript.mjs';
 
-const DIRECTIVE_VERSION = 6;
-const SLASH_COORD_RE = /(?:^|[\s>])\/coord(?=$|[\s<:，。！？,!?])/i;
+const DIRECTIVE_VERSION = 7;
+const LEADING_SLASH_COORD_RE = /^\s*\/coord(?=$|[\s:：，,。!?！？])/i;
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -23,6 +23,19 @@ function readStdin() {
   });
 }
 
+function extractDirectUserMessage(rawInput) {
+  const s = String(rawInput || '');
+  if (!s) return '';
+  const reqMatches = [...s.matchAll(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/gi)];
+  if (reqMatches.length > 0) {
+    return reqMatches[reqMatches.length - 1][1].trim();
+  }
+  return s
+    .replace(/<CONTEXT_SUMMARY>[\s\S]*?<\/CONTEXT_SUMMARY>/gi, '')
+    .replace(/<ADDITIONAL_METADATA>[\s\S]*?<\/ADDITIONAL_METADATA>/gi, '')
+    .trim();
+}
+
 function buildCoordinatorDirective(coord) {
   const repo = coord.repoRoot || coord.workspacePath || '';
   const cid = coord.conversationId || '';
@@ -30,19 +43,19 @@ function buildCoordinatorDirective(coord) {
   const hasRepo = Boolean(repo);
   return [
     `[Project Coordinator Standing Protocol — Bound Scope: ${scopeLabel}]`,
-    '当前会话已永久绑定为项目总控协调器（Coordinator）。即使后续用户消息未输入 `/coord` 前缀，你也必须严格按总控模式运作：',
-    '1. **严禁调用 `invoke_subagent`（如 `research` / `self`）或 `run_workflow`** 来派发项目任务——临时子代理不会进入右侧 Project Threads 看板！同样严禁在当前总控会话中直接大面积读取业务源码或修改代码。',
-    '2. **所有新任务一律创建 Project Thread**：无论是代码修改、Bug 修复，还是“检查/排查/核实某处逻辑”的只读问题，都必须通过 `call_mcp_tool` 调用 `ServerName: "project-threads_coordinator"`, `ToolName: "dispatch_thread"` 创建可追踪的 `thr-xxx` 线程：',
-    `   - **只读代码排查 / 逻辑核实 / 非仓库项目任务**：传 \`createWorktree: false\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`, \`model: "pro"\`（秒级启动，不额外克隆分支目录，同时在当前项目 Project Threads 看板生成 \`thr-xxx\` 线程卡片）。`,
+    'This conversation is permanently bound as the ongoing Project Coordinator. Even when subsequent user messages omit the `/coord` prefix, you MUST continue operating strictly in Coordinator mode (always reply to the user in the language they use):',
+    '1. **NEVER call `invoke_subagent` (e.g. `research` / `self`) or `run_workflow`** for project tasks — ephemeral subagents do not appear on the Project Threads board! Likewise, do NOT read large source files or edit application code directly inside this Coordinator session.',
+    '2. **Dispatch EVERY new task as a Project Thread**: Whether the user asks for code changes, bug fixes, or a read-only code/logic investigation, call `call_mcp_tool` with `ServerName: "project-threads_coordinator"`, `ToolName: "dispatch_thread"` to create a tracked `thr-xxx` thread:',
+    `   - **Read-only investigation / logic check / non-repo project task**: Pass \`createWorktree: false\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`, \`model: "pro"\` (starts instantly with zero Git worktree copy overhead while creating a tracked \`thr-xxx\` card on the Project Threads board).`,
     hasRepo
-      ? `   - **代码修改 / 脚本编写 / Bug 修复**：传 \`createWorktree: true\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`（自动创建独立 Git Worktree 与分支隔离执行）。`
-      : `   - **注意**：当前项目未绑定本地 Git 仓库目录，请保持 \`createWorktree: false\` 并必传 \`coordinatorId: ${JSON.stringify(cid)}\`。`,
-    '3. **处理 `[THREAD_COMPLETION_SYNC]` 自动回传汇报（分段独立卡片样式）**：当子线程执行完毕时，系统会自动向你投递 `[THREAD_COMPLETION_SYNC]` 消息。为保证多个连续回调在总控会话中像多段独立会话一样清晰隔离，必须严格遵循：',
-    '   - **首行引用标题横幅**：`> **✅ [thr-xxx] <任务标题> · 执行完毕**（[查看完整线程](conversation://<threadConvId>)）`',
-    '   - **精炼要点列表**：仅输出 **3–5 条核心结论要点**（根因 / 关键变更或结论 / 待用户确认项），切勿将冗长日志或大表格倾倒至总控会话。',
-    `   - **末尾分段分割线**：以 \`---\` 结束本段卡片（若有跨任务通用规则可顺带调用 \`update_project_memory\` 沉淀并传 \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`）。`,
-    '   - 若某条回调与此前已汇报结论重复，仅做 1 行简短确认或保持静默，不输出内部去重元信息；**严禁针对回调再次调用 `dispatch_thread` 重复建线程**！',
-    `4. 当用户询问现有线程进度、向已有线程补充指令或要求归档时，调用 \`list_threads\`（必传 \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`）/ \`get_thread_detail\` / \`send_thread_message\` / \`archive_thread\`。`,
+      ? `   - **Code changes / scripts / bug fixes**: Pass \`createWorktree: true\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (automatically creates an isolated Git worktree and branch).`
+      : `   - **Note**: No local Git repository is bound to this scope; keep \`createWorktree: false\` and always pass \`coordinatorId: ${JSON.stringify(cid)}\`.`,
+    '3. **Format `[THREAD_COMPLETION_SYNC]` callbacks as segmented summary cards**: When a background worker thread finishes, the system delivers a `[THREAD_COMPLETION_SYNC]` message to this session. Keep multiple callbacks cleanly separated by following this exact card layout (localized to the user\'s language):',
+    '   - **Blockquote header banner**: `> **✅ [thr-xxx] <Task Title> · Completed** ([View Thread](conversation://<threadConvId>))`',
+    '   - **3–5 concise takeaway bullets**: Summarize only root cause, key changes/findings, and any decision needed from the user. Do NOT dump long logs or large tables into the Coordinator session.',
+    `   - **Trailing divider**: End the card with \`---\` (and if cross-cutting project conventions emerged, call \`update_project_memory\` passing \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`).`,
+    '   - If a callback duplicates an already-reported conclusion, acknowledge briefly in one line or stay concise without exposing internal dedup metadata. **NEVER call `dispatch_thread` again in response to a completion sync!**',
+    `4. To check thread status, steer an existing thread, or archive finished work, call \`list_threads\` (always pass \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`), \`get_thread_detail\`, \`send_thread_message\`, or \`archive_thread\`.`,
   ].join('\n');
 }
 
@@ -87,9 +100,9 @@ async function main() {
         `${JSON.stringify({
           decision: 'deny',
           reason:
-            `当前会话已绑定为 Project Coordinator 总控会话，禁止使用 ${toolName} 派发任务（子代理不会创建 Project Threads 看板卡片）。` +
-            `请改用 call_mcp_tool 调用 ServerName="project-threads_coordinator", ToolName="dispatch_thread" 创建 thr-xxx 线程` +
-            `（只读代码排查请传 createWorktree: false, coordinatorId: ${JSON.stringify(cid)}, workspacePath: ${JSON.stringify(repo)}；有 Git 仓库修改代码请传 createWorktree: true）。`,
+            `This conversation is bound as the Project Coordinator; do not use ${toolName} to delegate project tasks (ephemeral subagents are invisible on the Project Threads board). ` +
+            `Instead, call call_mcp_tool with ServerName="project-threads_coordinator", ToolName="dispatch_thread" to create a tracked thr-xxx thread ` +
+            `(pass createWorktree: false, coordinatorId: ${JSON.stringify(cid)}, workspacePath: ${JSON.stringify(repo)} for read-only checks, or createWorktree: true for Git repository code changes).`,
         })}\n`,
       );
       return;
@@ -134,7 +147,8 @@ async function main() {
     let coord = Object.values(reg.coordinators).find((c) => c.conversationId === convId);
 
     // Auto-bootstrap on the VERY FIRST `/coord` turn before `init_project_coordinator` MCP tool runs
-    if (!coord && SLASH_COORD_RE.test(String(input.lastUserInput || ''))) {
+    const directUserText = extractDirectUserMessage(input.lastUserInput);
+    if (!coord && LEADING_SLASH_COORD_RE.test(directUserText)) {
       const isWorkerThread = Object.values(reg.threads || {}).some(
         (t) => t?.conversationId === convId,
       );
@@ -196,7 +210,7 @@ async function main() {
       });
       messages.push(
         [
-          '[Project Threads Update] 以下后台子线程也已完成：',
+          '[Project Threads Update] The following background worker threads have completed:',
           ...bullets,
         ].join('\n'),
       );
