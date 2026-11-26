@@ -4,7 +4,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "agy-node ./scripts/hook-handler.mjs PreInvocation || node ./scripts/hook-handler.mjs PreInvocation",
+        "command": "scripts\\run-hook.cmd PreInvocation || sh ./scripts/run-hook.sh PreInvocation",
         "timeout": 5
       }
     ],
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agy-node ./scripts/hook-handler.mjs PreToolUse || node ./scripts/hook-handler.mjs PreToolUse",
+            "command": "scripts\\run-hook.cmd PreToolUse || sh ./scripts/run-hook.sh PreToolUse",
             "timeout": 5
           }
         ]
@@ -23,7 +23,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "agy-node ./scripts/hook-handler.mjs Stop || node ./scripts/hook-handler.mjs Stop",
+        "command": "scripts\\run-hook.cmd Stop || sh ./scripts/run-hook.sh Stop",
         "timeout": 8
       }
     ]
