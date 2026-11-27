@@ -311,6 +311,18 @@ button.btn-secondary:hover:not(:disabled) {
   color: var(--pt-fg);
 }
 
+button.btn-danger {
+  background: var(--pt-stop-red);
+  color: #ffffff;
+  border-color: transparent;
+  font-weight: 600;
+}
+button.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: transparent;
+  color: #ffffff;
+}
+
 button.ghost,
 .ghost-btn,
 .icon-ghost-btn {
@@ -687,6 +699,17 @@ button.row-act.away:hover:not(:disabled) {
   border-radius: var(--pt-r-pill);
   background: var(--pt-ok-soft);
   white-space: nowrap;
+  max-width: clamp(110px, 42vw, 240px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.toast.warn {
+  color: var(--pt-warn);
+  background: var(--pt-warn-soft);
+}
+.toast.err {
+  color: var(--pt-danger);
+  background: var(--pt-danger-soft);
 }
 .toast:empty {
   display: none;
@@ -3103,4 +3126,143 @@ button.send-circle.running-stop:hover:not(:disabled) {
     -webkit-mask-image: none;
     mask-image: none;
   }
+}
+
+/* ==================== ARCHIVED LEFTOVER WORKTREE ACTIONS & IN-DOM MODAL ==================== */
+button.row-act.act-clean-wt {
+  color: var(--pt-warn);
+  border-color: color-mix(in srgb, var(--pt-warn) 36%, var(--pt-line));
+  background: color-mix(in srgb, var(--pt-warn) 10%, var(--pt-surface-1));
+}
+button.row-act.act-clean-wt:hover:not(:disabled) {
+  background: var(--pt-warn-soft);
+  border-color: color-mix(in srgb, var(--pt-warn) 56%, transparent);
+  color: var(--pt-warn);
+}
+
+#archived-list .qrow.arch-has-wt .qrow-rest {
+  display: none;
+}
+#archived-list .qrow.arch-has-wt .qrow-acts {
+  position: static;
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  padding-left: 0;
+  background: transparent;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pt-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.pt-modal {
+  width: min(100%, 400px);
+  background: var(--pt-bg);
+  border: 1px solid var(--pt-line-strong);
+  border-radius: var(--pt-r-lg);
+  box-shadow: var(--pt-shadow-float);
+  overflow: hidden;
+  animation: ptDrawerIn 0.16s var(--pt-ease) both;
+}
+
+.pt-modal-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--pt-line);
+}
+
+.pt-modal-title {
+  font-size: var(--pt-text-sm);
+  font-weight: 600;
+  color: var(--pt-fg);
+}
+
+.pt-modal-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pt-modal-thread {
+  font-size: var(--pt-text-sm);
+  font-weight: 600;
+  color: var(--pt-fg);
+  word-break: break-word;
+}
+
+.pt-modal-wt-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.pt-modal-path {
+  display: inline-block;
+  max-width: 100%;
+  font-family: var(--pt-mono);
+  font-size: var(--pt-text-2xs);
+  color: var(--pt-sub);
+  background: var(--pt-surface-2);
+  border-radius: var(--pt-r-sm);
+  padding: 2px 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pt-modal-warn {
+  background: var(--pt-warn-soft);
+  border: 1px solid color-mix(in srgb, var(--pt-warn) 38%, transparent);
+  color: var(--pt-warn);
+  border-radius: var(--pt-r-md);
+  padding: 8px 10px;
+  font-size: var(--pt-text-xs);
+  line-height: 1.45;
+}
+
+.pt-modal-chk {
+  margin: 0;
+  align-items: flex-start;
+  line-height: 1.4;
+}
+.pt-modal-chk input[type="checkbox"] {
+  margin-top: 2px;
+}
+.pt-modal-chk.warn {
+  color: var(--pt-danger);
+}
+.pt-modal-chk.warn input[type="checkbox"]:checked {
+  background: var(--pt-stop-red);
+  border-color: var(--pt-stop-red);
+}
+.pt-modal-chk.warn input[type="checkbox"]:checked::before {
+  border-left-color: #ffffff;
+  border-bottom-color: #ffffff;
+}
+
+.pt-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--pt-line);
+  background: var(--pt-surface-1);
 }

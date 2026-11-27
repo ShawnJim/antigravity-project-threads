@@ -158,6 +158,7 @@
         <span id="chat-status-dot" class="sdot ok"></span>
         <button type="button" id="btn-chat-coord" class="row-act" hidden></button>
         <button type="button" id="btn-sync-coord" class="row-act"></button>
+        <button type="button" id="btn-clean-wt-cur" class="row-act act-clean-wt" hidden></button>
         <button type="button" id="btn-archive-cur" class="row-act"></button>
         <button type="button" id="btn-popout-cur" class="icon-ghost-btn">
           <svg class="ico" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -183,6 +184,40 @@
       </div>
     </div>
   </section>
+
+  <!-- ==================== IN-DOM CONFIRMATION MODAL (ARCHIVE / WORKTREE CLEANUP) ==================== -->
+  <div id="pt-modal-backdrop" class="pt-modal-backdrop" hidden>
+    <div id="pt-modal" class="pt-modal" role="dialog" aria-modal="true" aria-labelledby="pt-modal-title">
+      <div class="pt-modal-hdr">
+        <span id="pt-modal-title" class="pt-modal-title"></span>
+        <button type="button" id="pt-modal-close" class="icon-ghost-btn" aria-label="Close">
+          <svg class="ico ico-sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="pt-modal-body" class="pt-modal-body">
+        <div id="pt-modal-thread" class="pt-modal-thread"></div>
+        <div id="pt-modal-wt-info" class="pt-modal-wt-info"></div>
+        <div id="pt-modal-warn" class="pt-modal-warn" hidden></div>
+        <label id="pt-modal-remove-row" class="chk pt-modal-chk" hidden>
+          <input id="pt-modal-remove-wt" type="checkbox">
+          <span id="lbl-modal-remove-wt"></span>
+        </label>
+        <label id="pt-modal-branch-row" class="chk pt-modal-chk" hidden>
+          <input id="pt-modal-del-branch" type="checkbox" checked>
+          <span id="lbl-modal-del-branch"></span>
+        </label>
+        <label id="pt-modal-force-row" class="chk pt-modal-chk warn" hidden>
+          <input id="pt-modal-force-wt" type="checkbox">
+          <span id="lbl-modal-force-wt"></span>
+        </label>
+        <div id="pt-modal-err" class="err" hidden></div>
+      </div>
+      <div class="pt-modal-foot">
+        <button type="button" id="pt-modal-cancel" class="btn-secondary"></button>
+        <button type="button" id="pt-modal-confirm" class="btn-solid"></button>
+      </div>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

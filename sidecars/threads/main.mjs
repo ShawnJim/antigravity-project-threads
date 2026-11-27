@@ -5,6 +5,7 @@ import { Response, SidecarApp } from 'sidecar_sdk';
 import { resolveLsEndpoint } from '../../lib/ls-client.mjs';
 import {
   archiveThread,
+  cleanupThreadWorktree,
   dispatchThread,
   getThreadMessages,
   initCoordinator,
@@ -176,11 +177,21 @@ async function handleDispatch(data = {}) {
 }
 registerDualApi('/api/dispatch', handleDispatch);
 
+function parseBool(val, defaultVal = false) {
+  if (val === undefined || val === null || val === '') return defaultVal;
+  if (typeof val === 'boolean') return val;
+  const s = String(val).trim().toLowerCase();
+  if (s === 'true' || s === '1') return true;
+  if (s === 'false' || s === '0') return false;
+  return defaultVal;
+}
+
 async function handleArchive(data = {}) {
   try {
-    const res = await archiveThread({
-      threadId: data.threadId || '',
-      removeWorktree: data.removeWorktree === true || data.removeWorktree === 'true' || data.removeWorktree === '1',
+    const res = await archiveThread(data.threadId || '', {
+      removeWorktree: parseBool(data.removeWorktree, true),
+      forceWorktree: parseBool(data.forceWorktree, false),
+      deleteBranch: parseBool(data.deleteBranch, true),
     });
     return { ok: true, locale: resolveAppLocale(), ...res };
   } catch (err) {
@@ -188,6 +199,19 @@ async function handleArchive(data = {}) {
   }
 }
 registerDualApi('/api/archive', handleArchive);
+
+async function handleCleanupWorktree(data = {}) {
+  try {
+    const res = await cleanupThreadWorktree(data.threadId || '', {
+      forceWorktree: parseBool(data.forceWorktree, false),
+      deleteBranch: parseBool(data.deleteBranch, true),
+    });
+    return { locale: resolveAppLocale(), ...res };
+  } catch (err) {
+    return { ok: false, error: err.message, locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/cleanup_worktree', handleCleanupWorktree);
 
 app.api(
   '/api/memory',

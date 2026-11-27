@@ -104,12 +104,48 @@
       actCopyPath: 'Copy path',
       actOpenThread: 'Open',
       actArchive: 'Archive',
+      actCleanWt: 'Clean worktree',
+      actCleanWtTip: 'Remove leftover Git worktree & merged branch',
       copiedPath: 'Path copied',
       copiedCode: 'Copied',
       copyBtn: 'Copy',
       archivedToast: 'Archived',
-      confirmRemoveWt:
-        'Also remove the clean Git worktree directory?\n(Cancel archives the thread while keeping the directory.)',
+      archivedWtAndBranchToast: 'Archived · worktree & branch removed',
+      archivedWtToast: 'Archived · worktree removed',
+      archivedPrunedToast: 'Archived · stale worktree pruned',
+      archivedKeptDirtyToast: 'Archived · kept worktree (uncommitted changes)',
+      archivedKeptUnmergedToast: 'Archived · kept worktree (unmerged commits)',
+      archivedWtErrToast: (e) => `Archived · worktree kept (${e})`,
+      archiveErrToast: 'Archive failed',
+      cleanedWtAndBranchToast: 'Worktree & branch removed',
+      cleanedWtToast: 'Worktree removed',
+      cleanedPrunedToast: 'Stale worktree entry pruned',
+      keptDirtyToast: 'Kept worktree: uncommitted changes present',
+      keptUnmergedToast: 'Kept worktree: unmerged commits present',
+      cleanupErrToast: 'Worktree cleanup failed',
+      modalArchiveTitle: 'Archive thread',
+      modalCleanTitle: 'Clean Git worktree',
+      modalArchiveConfirm: 'Archive',
+      modalArchiveForceConfirm: 'Force archive & delete',
+      modalCleanConfirm: 'Clean worktree',
+      modalCleanForceConfirm: 'Force remove',
+      modalWorking: 'Working…',
+      modalRemoveWtOpt: 'Also remove Git worktree & merged branch',
+      modalDelBranchOpt: 'Also delete thread branch',
+      modalForceWtOpt:
+        'Force remove dirty/unmerged worktree (discards uncommitted changes & unmerged branch)',
+      modalStatusClean: 'Clean & merged',
+      modalStatusMissing: 'Directory missing (will prune stale entry)',
+      modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
+        const parts = [];
+        if (dirtyCount > 0) {
+          parts.push(`${dirtyCount} uncommitted change${dirtyCount === 1 ? '' : 's'}`);
+        }
+        if (aheadCount > 0) {
+          parts.push(`${aheadCount} unmerged commit${aheadCount === 1 ? '' : 's'}`);
+        }
+        return `Detected ${parts.join(' and ')}. Safe cleanup preserves this worktree unless Force is checked.`;
+      },
       emptyThreadsTitle: 'No active threads in this project',
       emptyThreadsBody:
         'Ask the Coordinator in the main chat to dispatch tasks in parallel, or click "+ New" above.',
@@ -267,12 +303,43 @@
       actCopyPath: '复制路径',
       actOpenThread: '打开会话',
       actArchive: '归档',
+      actCleanWt: '清理 Worktree',
+      actCleanWtTip: '移除残留的 Git Worktree 目录与已合并分支',
       copiedPath: '已复制路径',
       copiedCode: '已复制',
       copyBtn: '复制',
       archivedToast: '已归档',
-      confirmRemoveWt:
-        '归档同时是否移除干净的 Git Worktree 目录？\n（点击“取消”仅归档会话并保留目录）',
+      archivedWtAndBranchToast: '已归档 · 已清理 Worktree 及分支',
+      archivedWtToast: '已归档 · 已清理 Worktree',
+      archivedPrunedToast: '已归档 · 已清理失效 Worktree 记录',
+      archivedKeptDirtyToast: '已归档 · 保留 Worktree（存在未提交修改）',
+      archivedKeptUnmergedToast: '已归档 · 保留 Worktree（存在未合并提交）',
+      archivedWtErrToast: (e) => `已归档 · Worktree 未移除（${e}）`,
+      archiveErrToast: '归档失败',
+      cleanedWtAndBranchToast: '已清理 Worktree 及分支',
+      cleanedWtToast: '已清理 Worktree',
+      cleanedPrunedToast: '已清理失效 Worktree 记录',
+      keptDirtyToast: '未移除：Worktree 存在未提交修改',
+      keptUnmergedToast: '未移除：分支存在未合并提交',
+      cleanupErrToast: '清理 Worktree 失败',
+      modalArchiveTitle: '归档工作线程',
+      modalCleanTitle: '清理 Git Worktree',
+      modalArchiveConfirm: '确认归档',
+      modalArchiveForceConfirm: '强制归档并删除',
+      modalCleanConfirm: '清理 Worktree',
+      modalCleanForceConfirm: '强制移除',
+      modalWorking: '处理中…',
+      modalRemoveWtOpt: '同时移除 Git Worktree 目录并清理已合并分支',
+      modalDelBranchOpt: '同时删除关联的线程 Git 分支',
+      modalForceWtOpt: '强制删除未提交或未合并的 Worktree（将丢弃未提交改动与未合并分支）',
+      modalStatusClean: '干净且已合并',
+      modalStatusMissing: '目录已不存在（将自动清理残留记录）',
+      modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
+        const parts = [];
+        if (dirtyCount > 0) parts.push(`${dirtyCount} 处未提交修改`);
+        if (aheadCount > 0) parts.push(`${aheadCount} 个未合并提交`);
+        return `检测到 ${parts.join('和')}。默认会保留该 Worktree 目录以防丢失改动；如需强制删除请勾选下方选项。`;
+      },
       emptyThreadsTitle: '当前项目暂无活跃线程',
       emptyThreadsBody:
         '在中央总控会话直接派发并行任务，或点击右上角「+ 新建」手动创建。',
@@ -432,12 +499,43 @@
       actCopyPath: '複製路徑',
       actOpenThread: '開啟會話',
       actArchive: '封存',
+      actCleanWt: '清理 Worktree',
+      actCleanWtTip: '移除殘留的 Git Worktree 目錄與已合併分支',
       copiedPath: '已複製路徑',
       copiedCode: '已複製',
       copyBtn: '複製',
       archivedToast: '已封存',
-      confirmRemoveWt:
-        '封存同時是否移除乾淨的 Git Worktree 目錄？\n（點擊「取消」僅封存會話並保留目錄）',
+      archivedWtAndBranchToast: '已封存 · 已清理 Worktree 及分支',
+      archivedWtToast: '已封存 · 已清理 Worktree',
+      archivedPrunedToast: '已封存 · 已清理失效 Worktree 記錄',
+      archivedKeptDirtyToast: '已封存 · 保留 Worktree（存在未提交修改）',
+      archivedKeptUnmergedToast: '已封存 · 保留 Worktree（存在未合併提交）',
+      archivedWtErrToast: (e) => `已封存 · Worktree 未移除（${e}）`,
+      archiveErrToast: '封存失敗',
+      cleanedWtAndBranchToast: '已清理 Worktree 及分支',
+      cleanedWtToast: '已清理 Worktree',
+      cleanedPrunedToast: '已清理失效 Worktree 記錄',
+      keptDirtyToast: '未移除：Worktree 存在未提交修改',
+      keptUnmergedToast: '未移除：分支存在未合併提交',
+      cleanupErrToast: '清理 Worktree 失敗',
+      modalArchiveTitle: '封存工作執行緒',
+      modalCleanTitle: '清理 Git Worktree',
+      modalArchiveConfirm: '確認封存',
+      modalArchiveForceConfirm: '強制封存並刪除',
+      modalCleanConfirm: '清理 Worktree',
+      modalCleanForceConfirm: '強制移除',
+      modalWorking: '處理中…',
+      modalRemoveWtOpt: '同時移除 Git Worktree 目錄並清理已合併分支',
+      modalDelBranchOpt: '同時刪除關聯的執行緒 Git 分支',
+      modalForceWtOpt: '強制刪除未提交或未合併的 Worktree（將捨棄未提交改動與未合併分支）',
+      modalStatusClean: '乾淨且已合併',
+      modalStatusMissing: '目錄已不存在（將自動清理殘留記錄）',
+      modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
+        const parts = [];
+        if (dirtyCount > 0) parts.push(`${dirtyCount} 處未提交修改`);
+        if (aheadCount > 0) parts.push(`${aheadCount} 個未合併提交`);
+        return `偵測到 ${parts.join('與')}。預設會保留此 Worktree 目錄以免遺失改動；如需強制刪除請勾選下方選項。`;
+      },
       emptyThreadsTitle: '目前專案暫無活躍執行緒',
       emptyThreadsBody:
         '在中央總控會話直接派發平行任務，或點擊右上角「+ 新增」手動建立。',
@@ -562,6 +660,7 @@
   let briefExpanded = false;
   let isImeComposing = false;
   let toastTimer = null;
+  let activeModalCtx = null;
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
@@ -580,6 +679,24 @@
   const elChatInput = document.getElementById('chat-input');
   const elSendBtn = document.getElementById('btn-send');
   const elLiveBar = document.getElementById('live-bar');
+  const elModalBackdrop = document.getElementById('pt-modal-backdrop');
+  const elModalTitle = document.getElementById('pt-modal-title');
+  const elModalClose = document.getElementById('pt-modal-close');
+  const elModalThread = document.getElementById('pt-modal-thread');
+  const elModalWtInfo = document.getElementById('pt-modal-wt-info');
+  const elModalWarn = document.getElementById('pt-modal-warn');
+  const elModalRemoveRow = document.getElementById('pt-modal-remove-row');
+  const elModalRemoveWt = document.getElementById('pt-modal-remove-wt');
+  const elLblModalRemoveWt = document.getElementById('lbl-modal-remove-wt');
+  const elModalBranchRow = document.getElementById('pt-modal-branch-row');
+  const elModalDelBranch = document.getElementById('pt-modal-del-branch');
+  const elLblModalDelBranch = document.getElementById('lbl-modal-del-branch');
+  const elModalForceRow = document.getElementById('pt-modal-force-row');
+  const elModalForceWt = document.getElementById('pt-modal-force-wt');
+  const elLblModalForceWt = document.getElementById('lbl-modal-force-wt');
+  const elModalErr = document.getElementById('pt-modal-err');
+  const elModalCancel = document.getElementById('pt-modal-cancel');
+  const elModalConfirm = document.getElementById('pt-modal-confirm');
 
   const esc = (s) =>
     String(s || '').replace(
@@ -807,12 +924,213 @@
     return changed;
   }
 
-  function flashToast(msg) {
+  function flashToast(msg, tone = 'ok', durationMs = 2400) {
     if (toastTimer) clearTimeout(toastTimer);
-    elToast.textContent = msg || '';
+    const text = String(msg || '');
+    elToast.className = tone === 'err' ? 'toast err' : tone === 'warn' ? 'toast warn' : 'toast';
+    elToast.textContent = text;
+    elToast.title = text;
     toastTimer = setTimeout(() => {
       elToast.textContent = '';
-    }, 2200);
+      elToast.title = '';
+      elToast.className = 'toast';
+    }, durationMs);
+  }
+
+  function showArchiveResultToast(res) {
+    const t = L();
+    if (!res || !res.ok) {
+      flashToast(res?.error || t.archiveErrToast, 'err', 4200);
+      return;
+    }
+    if (res.worktreeRemoved && res.branchDeleted) {
+      flashToast(t.archivedWtAndBranchToast, 'ok', 2800);
+    } else if (res.worktreeRemoved) {
+      flashToast(t.archivedWtToast, 'ok', 2800);
+    } else if (res.pruned) {
+      flashToast(t.archivedPrunedToast, 'ok', 2800);
+    } else if (res.skippedReason === 'uncommitted_changes') {
+      flashToast(t.archivedKeptDirtyToast, 'warn', 4200);
+    } else if (res.skippedReason === 'unmerged_commits') {
+      flashToast(t.archivedKeptUnmergedToast, 'warn', 4200);
+    } else if (res.worktreeError) {
+      flashToast(t.archivedWtErrToast(res.worktreeError), 'warn', 4800);
+    } else {
+      flashToast(t.archivedToast, 'ok', 2200);
+    }
+  }
+
+  function showCleanupResultToast(res) {
+    const t = L();
+    if (!res) {
+      flashToast(t.cleanupErrToast, 'err', 4200);
+      return;
+    }
+    if (res.worktreeRemoved && res.branchDeleted) {
+      flashToast(t.cleanedWtAndBranchToast, 'ok', 2800);
+    } else if (res.worktreeRemoved) {
+      flashToast(t.cleanedWtToast, 'ok', 2800);
+    } else if (res.pruned) {
+      flashToast(t.cleanedPrunedToast, 'ok', 2800);
+    } else if (res.skippedReason === 'uncommitted_changes') {
+      flashToast(t.keptDirtyToast, 'warn', 4200);
+    } else if (res.skippedReason === 'unmerged_commits') {
+      flashToast(t.keptUnmergedToast, 'warn', 4200);
+    } else if (!res.ok || res.worktreeError || res.error) {
+      flashToast(res.worktreeError || res.error || t.cleanupErrToast, 'err', 4800);
+    } else {
+      flashToast(t.cleanedWtToast, 'ok', 2400);
+    }
+  }
+
+  function syncModalConfirmButton() {
+    if (!activeModalCtx) return;
+    const t = L();
+    const isForce = !elModalForceRow.hidden && elModalForceWt.checked;
+    elModalConfirm.className = isForce ? 'btn-danger' : 'btn-solid';
+    if (activeModalCtx.busy) {
+      elModalConfirm.textContent = t.modalWorking;
+      return;
+    }
+    if (activeModalCtx.mode === 'cleanup') {
+      elModalConfirm.textContent = isForce ? t.modalCleanForceConfirm : t.modalCleanConfirm;
+    } else {
+      elModalConfirm.textContent = isForce ? t.modalArchiveForceConfirm : t.modalArchiveConfirm;
+    }
+  }
+
+  function closePtModal(force = false) {
+    if (!activeModalCtx) return;
+    if (activeModalCtx.busy && !force) return;
+    if (activeModalCtx.triggerBtn) {
+      activeModalCtx.triggerBtn.disabled = false;
+    }
+    activeModalCtx = null;
+    elModalBackdrop.hidden = true;
+    elModalErr.hidden = true;
+    elModalErr.textContent = '';
+  }
+
+  function openWorktreeModal({ mode, thread, triggerBtn = null, onDone = null }) {
+    const t = L();
+    const dirtyCount = Number(thread.git?.dirtyCount) || 0;
+    const aheadCount = Number(thread.git?.aheadCount) || 0;
+    const wtExists = thread.git ? thread.git.exists !== false : true;
+    const isDirtyOrUnmerged = wtExists && (dirtyCount > 0 || aheadCount > 0);
+    const branchName = thread.git?.branch || thread.branch || '';
+
+    activeModalCtx = {
+      mode,
+      thread,
+      triggerBtn,
+      busy: false,
+      onDone,
+    };
+
+    elModalTitle.textContent = mode === 'cleanup' ? t.modalCleanTitle : t.modalArchiveTitle;
+    elModalClose.title = t.closeTip;
+    elModalCancel.textContent = t.fCancel;
+    elModalThread.textContent = thread.threadId
+      ? `[${thread.threadId}] ${thread.title || ''}`
+      : thread.title || '';
+
+    const pills = [];
+    if (branchName) {
+      pills.push(`<span class="branch-pill">${ICONS.branch} <span>${esc(branchName)}</span></span>`);
+    }
+    if (!wtExists) {
+      pills.push(`<span class="wt-pill">${esc(t.modalStatusMissing)}</span>`);
+    } else if (isDirtyOrUnmerged) {
+      if (aheadCount > 0) pills.push(`<span class="commit-pill">${esc(t.subCommits(aheadCount))}</span>`);
+      if (dirtyCount > 0) pills.push(`<span class="dirty-pill">${esc(t.subDirty(dirtyCount))}</span>`);
+    } else {
+      pills.push(`<span class="wt-pill">${esc(t.modalStatusClean)}</span>`);
+    }
+    if (thread.worktreePath) {
+      pills.push(`<span class="pt-modal-path" title="${esc(thread.worktreePath)}">${esc(thread.worktreePath)}</span>`);
+    }
+    elModalWtInfo.innerHTML = pills.join('');
+
+    if (isDirtyOrUnmerged) {
+      elModalWarn.hidden = false;
+      elModalWarn.textContent = t.modalWarnDirtyUnmerged(dirtyCount, aheadCount);
+    } else {
+      elModalWarn.hidden = true;
+      elModalWarn.textContent = '';
+    }
+
+    if (mode === 'archive') {
+      elModalRemoveRow.hidden = false;
+      elModalRemoveWt.checked = !isDirtyOrUnmerged;
+      elLblModalRemoveWt.textContent = t.modalRemoveWtOpt;
+      elModalBranchRow.hidden = true;
+    } else {
+      elModalRemoveRow.hidden = true;
+      elModalRemoveWt.checked = true;
+      elModalBranchRow.hidden = !branchName;
+      elModalDelBranch.checked = true;
+      elLblModalDelBranch.textContent = t.modalDelBranchOpt;
+    }
+
+    if (isDirtyOrUnmerged) {
+      elModalForceRow.hidden = false;
+      elModalForceWt.checked = false;
+      elLblModalForceWt.textContent = t.modalForceWtOpt;
+    } else {
+      elModalForceRow.hidden = true;
+      elModalForceWt.checked = false;
+    }
+
+    elModalErr.hidden = true;
+    elModalErr.textContent = '';
+    elModalConfirm.disabled = false;
+    elModalCancel.disabled = false;
+    elModalClose.disabled = false;
+    elModalRemoveWt.disabled = false;
+    elModalDelBranch.disabled = false;
+    elModalForceWt.disabled = false;
+
+    syncModalConfirmButton();
+    elModalBackdrop.hidden = false;
+    (isDirtyOrUnmerged ? elModalCancel : elModalConfirm).focus();
+  }
+
+  async function requestArchiveThread(th, { triggerBtn = null, onArchived = null } = {}) {
+    if (!th || !th.threadId) return;
+    if (!th.worktreePath) {
+      if (triggerBtn) triggerBtn.disabled = true;
+      try {
+        const res = await postApi('/api/archive', '/api/archive_get', {
+          threadId: th.threadId,
+          removeWorktree: false,
+        });
+        lastBoardKey = '';
+        if (res?.ok && typeof onArchived === 'function') await onArchived(res);
+        await refreshBoard(true);
+        showArchiveResultToast(res);
+      } catch (err) {
+        flashToast(err?.message || L().archiveErrToast, 'err', 4200);
+      } finally {
+        if (triggerBtn) triggerBtn.disabled = false;
+      }
+      return;
+    }
+    openWorktreeModal({
+      mode: 'archive',
+      thread: th,
+      triggerBtn,
+      onDone: onArchived,
+    });
+  }
+
+  function requestCleanWorktree(th, { triggerBtn = null, onCleaned = null } = {}) {
+    if (!th || !th.threadId || !th.worktreePath) return;
+    openWorktreeModal({
+      mode: 'cleanup',
+      thread: th,
+      triggerBtn,
+      onDone: onCleaned,
+    });
   }
 
   function relTime(isoStr) {
@@ -1381,10 +1699,14 @@
       acts.push(
         `<button type="button" class="row-act" data-action="archive" data-id="${esc(th.threadId)}" data-wt="${th.worktreePath ? '1' : '0'}">${esc(t.actArchive)}</button>`,
       );
+    } else if (th.worktreePath) {
+      acts.push(
+        `<button type="button" class="row-act act-clean-wt" data-action="clean-wt" data-id="${esc(th.threadId)}" title="${esc(t.actCleanWtTip)}">${esc(t.actCleanWt)}</button>`,
+      );
     }
 
     const subCls = isWorking ? 'qrow-sub animate-shimmer-text' : 'qrow-sub';
-    const rowCls = `qrow two-line${isActiveMain ? ' active-main' : ''}`;
+    const rowCls = `qrow two-line${isActiveMain ? ' active-main' : ''}${isArchived && th.worktreePath ? ' arch-has-wt' : ''}`;
 
     return `
       <div class="${rowCls}" data-tid="${esc(th.threadId)}" title="${esc(th.displayTitle || th.title)}">
@@ -1769,18 +2091,27 @@
     });
 
     container.querySelectorAll('button[data-action="archive"]').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const hasWt = btn.dataset.wt === '1';
-        const removeWorktree = hasWt ? confirm(L().confirmRemoveWt) : false;
-        btn.disabled = true;
-        await postApi('/api/archive', '/api/archive_get', {
-          threadId: btn.dataset.id,
-          removeWorktree,
-        });
-        lastBoardKey = '';
-        flashToast(L().archivedToast);
-        refreshBoard(true);
+        const tid = btn.dataset.id;
+        const th =
+          cachedThreads.find((x) => x.threadId === tid) || {
+            threadId: tid,
+            title: tid,
+            worktreePath: btn.dataset.wt === '1' ? 'worktree' : '',
+          };
+        requestArchiveThread(th, { triggerBtn: btn });
+      });
+    });
+
+    container.querySelectorAll('button[data-action="clean-wt"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tid = btn.dataset.id;
+        const th = cachedThreads.find((x) => x.threadId === tid);
+        if (th && th.worktreePath) {
+          requestCleanWorktree(th, { triggerBtn: btn });
+        }
       });
     });
   }
@@ -2083,6 +2414,12 @@
 
     const archBtn = document.getElementById('btn-archive-cur');
     archBtn.hidden = Boolean(th.archived);
+    const cleanWtCurBtn = document.getElementById('btn-clean-wt-cur');
+    if (cleanWtCurBtn) {
+      cleanWtCurBtn.hidden = !(th.archived && th.worktreePath);
+      cleanWtCurBtn.textContent = t.actCleanWt;
+      cleanWtCurBtn.title = t.actCleanWtTip;
+    }
     updateCoordinatorControls();
 
     const compMeta = document.getElementById('composer-meta');
@@ -2649,15 +2986,110 @@
     if (openThreadObj?.conversationId) popoutToMainCanvas(openThreadObj.conversationId);
   });
 
-  document.getElementById('btn-archive-cur').addEventListener('click', async () => {
+  document.getElementById('btn-archive-cur').addEventListener('click', () => {
     if (!openThreadObj) return;
-    const removeWorktree = openThreadObj.worktreePath ? confirm(L().confirmRemoveWt) : false;
-    await postApi('/api/archive', '/api/archive_get', {
-      threadId: openThreadObj.threadId,
-      removeWorktree,
+    requestArchiveThread(openThreadObj, {
+      triggerBtn: document.getElementById('btn-archive-cur'),
+      onArchived: () => {
+        closeThreadDrawer();
+      },
     });
-    closeThreadDrawer();
-    flashToast(L().archivedToast);
+  });
+
+  document.getElementById('btn-clean-wt-cur').addEventListener('click', () => {
+    if (!openThreadObj || !openThreadObj.worktreePath) return;
+    requestCleanWorktree(openThreadObj, {
+      triggerBtn: document.getElementById('btn-clean-wt-cur'),
+      onCleaned: async () => {
+        if (openThreadId) {
+          lastThreadStamp = '';
+          await refreshOpenThread(false, false);
+        }
+      },
+    });
+  });
+
+  elModalForceWt.addEventListener('change', () => {
+    if (elModalForceWt.checked && !elModalRemoveWt.checked) {
+      elModalRemoveWt.checked = true;
+    }
+    syncModalConfirmButton();
+  });
+
+  elModalRemoveWt.addEventListener('change', () => {
+    if (!elModalRemoveWt.checked && elModalForceWt.checked) {
+      elModalForceWt.checked = false;
+    }
+    syncModalConfirmButton();
+  });
+
+  elModalCancel.addEventListener('click', () => closePtModal());
+  elModalClose.addEventListener('click', () => closePtModal());
+  elModalBackdrop.addEventListener('click', (e) => {
+    if (e.target === elModalBackdrop) closePtModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && activeModalCtx && !activeModalCtx.busy) {
+      closePtModal();
+    }
+  });
+
+  elModalConfirm.addEventListener('click', async () => {
+    if (!activeModalCtx || activeModalCtx.busy) return;
+    const ctx = activeModalCtx;
+    const th = ctx.thread;
+    ctx.busy = true;
+    elModalErr.hidden = true;
+    elModalErr.textContent = '';
+    elModalConfirm.disabled = true;
+    elModalCancel.disabled = true;
+    elModalClose.disabled = true;
+    elModalRemoveWt.disabled = true;
+    elModalDelBranch.disabled = true;
+    elModalForceWt.disabled = true;
+    syncModalConfirmButton();
+
+    try {
+      if (ctx.mode === 'archive') {
+        const removeWorktree = elModalRemoveWt.checked;
+        const forceWorktree = removeWorktree && elModalForceWt.checked;
+        const res = await postApi('/api/archive', '/api/archive_get', {
+          threadId: th.threadId,
+          removeWorktree,
+          forceWorktree,
+          deleteBranch: true,
+        });
+        closePtModal(true);
+        lastBoardKey = '';
+        if (res?.ok && typeof ctx.onDone === 'function') await ctx.onDone(res);
+        await refreshBoard(true);
+        showArchiveResultToast(res);
+      } else {
+        const forceWorktree = elModalForceWt.checked;
+        const deleteBranch = elModalDelBranch.checked;
+        const res = await postApi('/api/cleanup_worktree', '/api/cleanup_worktree_get', {
+          threadId: th.threadId,
+          forceWorktree,
+          deleteBranch,
+        });
+        closePtModal(true);
+        lastBoardKey = '';
+        if (typeof ctx.onDone === 'function') await ctx.onDone(res);
+        await refreshBoard(true);
+        showCleanupResultToast(res);
+      }
+    } catch (err) {
+      ctx.busy = false;
+      elModalErr.hidden = false;
+      elModalErr.textContent = err?.message || 'Request failed';
+      elModalConfirm.disabled = false;
+      elModalCancel.disabled = false;
+      elModalClose.disabled = false;
+      elModalRemoveWt.disabled = false;
+      elModalDelBranch.disabled = false;
+      elModalForceWt.disabled = false;
+      syncModalConfirmButton();
+    }
   });
 
   // Composer auto-grow & IME-safe Enter submission
