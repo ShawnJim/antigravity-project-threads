@@ -87,6 +87,12 @@ project-threads/
 
 ---
 
+## 友情链接
+
+友情链接：[LINUX DO - 新的理想型社区](https://linux.do)
+
+---
+
 ## License
 
 [MIT License](./LICENSE) © 2026 [ShawnJim](https://github.com/ShawnJim)
