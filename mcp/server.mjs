@@ -293,7 +293,7 @@ async function handleToolCall(name, args = {}) {
         `Dispatched Worker Thread **\`${t.threadId}\`**: [${t.title}](conversation://${t.conversationId})`,
         `- Conversation ID: \`${t.conversationId}\``,
         `- Project Scope: \`${t.workspaceKey}\`${t.projectId ? ` (projectId: \`${t.projectId}\`)` : ''}`,
-        `- Model: \`${t.model}\` | Initial State: \`${t.runState}\``,
+        `- Model: \`${t.modelDisplayName || t.model}\` | Initial State: \`${t.runState}\``,
         t.worktreePath ? `- Isolated Git Worktree: \`${t.worktreePath}\`` : '- Git Worktree: (disabled or non-git workspace)',
         t.branch ? `- Assigned Branch: \`${t.branch}\` (from \`${t.baseRef}\`)` : '',
       ]

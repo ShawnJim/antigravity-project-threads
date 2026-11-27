@@ -1357,13 +1357,16 @@ button.o2-tht:active:not(:disabled) {
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 .o2-wchip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: inline-block;
+  max-width: min(190px, 100%);
+  min-width: 0;
   height: 20px;
+  line-height: 20px;
   padding: 0 7px;
   border-radius: var(--pt-r-pill);
   font-size: var(--pt-text-2xs);
@@ -1371,6 +1374,8 @@ button.o2-tht:active:not(:disabled) {
   color: var(--pt-fg-2);
   background: var(--pt-surface-2);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .o2-th-actions {
@@ -2966,10 +2971,11 @@ select option {
 }
 
 .comp-model-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: inline-block;
+  max-width: clamp(110px, 42vw, 210px);
+  min-width: 0;
   height: 21px;
+  line-height: 19px;
   padding: 0 7px;
   border-radius: var(--pt-r-pill);
   font-size: 11.5px;
@@ -2978,7 +2984,9 @@ select option {
   background: transparent;
   border: 1px solid transparent;
   white-space: nowrap;
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
 }
 
 .comp-steps-pill {
