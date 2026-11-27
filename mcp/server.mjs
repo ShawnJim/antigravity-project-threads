@@ -211,7 +211,7 @@ const TOOLS = [
   {
     name: 'archive_thread',
     description:
-      'Archive a completed or obsolete Worker Thread conversation (hides it from active lists while preserving its transcript) and optionally remove its clean Git worktree.',
+      'Archive a completed or obsolete Worker Thread conversation (hides it from active lists while preserving its transcript) and safely remove its clean, merged Git worktree & branch (unless dirty or unmerged).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -221,7 +221,15 @@ const TOOLS = [
         },
         removeWorktree: {
           type: 'boolean',
-          description: 'Also run `git worktree remove` if the worktree has no uncommitted changes (default: false).',
+          description: 'Whether to remove the thread Git worktree when clean and merged (default: true).',
+        },
+        forceWorktree: {
+          type: 'boolean',
+          description: 'Force removal even when uncommitted changes or unmerged commits exist (default: false).',
+        },
+        deleteBranch: {
+          type: 'boolean',
+          description: 'Also delete the thread Git branch after worktree removal (default: true).',
         },
       },
       required: ['threadId'],
@@ -388,15 +396,28 @@ async function handleToolCall(name, args = {}) {
     }
 
     case 'archive_thread': {
-      const res = await archiveThread(args);
-      const msg = [
+      const res = await archiveThread(args.threadId, {
+        removeWorktree: args.removeWorktree !== undefined ? Boolean(args.removeWorktree) : true,
+        forceWorktree: Boolean(args.forceWorktree),
+        deleteBranch: args.deleteBranch !== undefined ? Boolean(args.deleteBranch) : true,
+      });
+      const removedPath = res.removedWorktreePath || res.thread?.worktreePath || '';
+      const branchName = res.deletedBranch || res.thread?.branch || '';
+      const lines = [
         `Archived thread \`${res.thread.threadId}\` ([${res.thread.title}](conversation://${res.thread.conversationId})).`,
-        res.worktreeRemoved ? `- Removed Git worktree: \`${res.thread.worktreePath}\`` : '',
-        res.worktreeError ? `- Kept Git worktree (cleanup skipped: ${res.worktreeError})` : '',
-      ]
-        .filter(Boolean)
-        .join('\n');
-      return { content: [{ type: 'text', text: msg }], structuredContent: res };
+        `- Worktree removed: \`${res.worktreeRemoved}\`${res.worktreeRemoved && removedPath ? ` (\`${removedPath}\`)` : ''}`,
+        `- Branch deleted: \`${res.branchDeleted}\`${res.branchDeleted && branchName ? ` (\`${branchName}\`)` : ''}`,
+      ];
+      if (res.pruned) {
+        lines.push(`- Pruned stale worktree entry (\`${removedPath}\` was already missing on disk).`);
+      }
+      if (res.skippedReason) {
+        lines.push(`- Skipped reason: \`${res.skippedReason}\``);
+      }
+      if (res.worktreeError) {
+        lines.push(`- Worktree notice: ${res.worktreeError}`);
+      }
+      return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent: res };
     }
 
     default:
