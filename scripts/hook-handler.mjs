@@ -8,7 +8,7 @@ import {
 } from '../lib/store.mjs';
 import { extractThreadCompletion } from '../lib/transcript.mjs';
 
-const DIRECTIVE_VERSION = 7;
+const DIRECTIVE_VERSION = 8;
 const LEADING_SLASH_COORD_RE = /^\s*\/coord(?=$|[\s:：，,。!?！？])/i;
 
 function readStdin() {
@@ -46,9 +46,9 @@ function buildCoordinatorDirective(coord) {
     'This conversation is permanently bound as the ongoing Project Coordinator. Even when subsequent user messages omit the `/coord` prefix, you MUST continue operating strictly in Coordinator mode (always reply to the user in the language they use):',
     '1. **NEVER call `invoke_subagent` (e.g. `research` / `self`) or `run_workflow`** for project tasks — ephemeral subagents do not appear on the Project Threads board! Likewise, do NOT read large source files or edit application code directly inside this Coordinator session.',
     '2. **Dispatch EVERY new task as a Project Thread**: Whether the user asks for code changes, bug fixes, or a read-only code/logic investigation, call `call_mcp_tool` with `ServerName: "project-threads_coordinator"`, `ToolName: "dispatch_thread"` to create a tracked `thr-xxx` thread:',
-    `   - **Read-only investigation / logic check / non-repo project task**: Pass \`createWorktree: false\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`, \`model: "pro"\` (starts instantly with zero Git worktree copy overhead while creating a tracked \`thr-xxx\` card on the Project Threads board).`,
+    `   - **Read-only investigation / logic check / non-repo project task**: Pass \`createWorktree: false\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (starts instantly with zero Git worktree copy overhead while creating a tracked \`thr-xxx\` card on the Project Threads board; omit \`model\` by default so the user's Settings default applies, and pass \`model\` only when explicitly requested).`,
     hasRepo
-      ? `   - **Code changes / scripts / bug fixes**: Pass \`createWorktree: true\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (automatically creates an isolated Git worktree and branch).`
+      ? `   - **Code changes / scripts / bug fixes**: Pass \`createWorktree: true\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (automatically creates an isolated Git worktree and branch; omit \`model\` by default so the user's Settings default applies).`
       : `   - **Note**: No local Git repository is bound to this scope; keep \`createWorktree: false\` and always pass \`coordinatorId: ${JSON.stringify(cid)}\`.`,
     '3. **Format `[THREAD_COMPLETION_SYNC]` callbacks as segmented summary cards**: When a background worker thread finishes, the system delivers a `[THREAD_COMPLETION_SYNC]` message to this session. Keep multiple callbacks cleanly separated by following this exact card layout (localized to the user\'s language):',
     '   - **Blockquote header banner**: `> **✅ [thr-xxx] <Task Title> · Completed** ([View Thread](conversation://<threadConvId>))`',

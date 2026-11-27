@@ -26,10 +26,10 @@ When activated (or whenever the current session is bound as `[Coordinator]`), yo
 
 3. **Choose Worktree Mode vs Read-Only Mode in `dispatch_thread`**:
    - **Read-Only Check / Code Investigation** (e.g., "检查一下某处逻辑是否会拦截", "排查某个报错原因"):
-     - Call `dispatch_thread` with `createWorktree: false`, `workspacePath: "<repoRoot>"`, `model: "pro"`.
+     - Call `dispatch_thread` with `createWorktree: false`, `workspacePath: "<repoRoot>"`. Omit `model` by default so the user's configured Read-Only default model in Settings applies (only pass `model` when explicitly overriding).
      - Starts instantaneously with zero Git worktree copy overhead while still creating a tracked `thr-xxx` thread card in `Project Threads`!
    - **Code Modification / Bugfix / SQL / Unit Tests**:
-     - Call `dispatch_thread` with `createWorktree: true`, `workspacePath: "<repoRoot>"`.
+     - Call `dispatch_thread` with `createWorktree: true`, `workspacePath: "<repoRoot>"`. Omit `model` by default so the user's configured Worktree default model in Settings applies.
      - Automatically creates an isolated Git worktree (`../.worktrees/<repo>/<threadId>-<slug>`) and branch (`thread/<threadId>-<slug>`) so parallel tasks never collide.
 
 4. **Check Active Threads & Steer Existing Threads Without Navigating Away**:

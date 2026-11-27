@@ -3460,3 +3460,141 @@ button.row-act.act-clean-wt:hover:not(:disabled) {
   border-top: 1px solid var(--pt-line);
   background: var(--pt-surface-1);
 }
+
+/* ==================== SETTINGS SLIDE-OVER SCREEN (#settings-screen) ==================== */
+.settings-hdr {
+  padding: 0 12px 0 10px;
+}
+.settings-hdr-right {
+  min-width: 0;
+}
+.seg-group.settings-seg {
+  width: auto;
+  flex-shrink: 0;
+}
+.settings-seg .seg-btn {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px var(--pt-inline) 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-body .pt-card {
+  margin-bottom: 0;
+}
+
+.settings-desc {
+  margin: 5px 0 0;
+  font-size: var(--pt-text-xs);
+  line-height: 1.48;
+  color: var(--pt-sub);
+}
+
+.settings-card-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.settings-card-title {
+  font-size: var(--pt-text-sm);
+  font-weight: 600;
+  color: var(--pt-fg);
+}
+
+.settings-field-hint {
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--pt-dim);
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.settings-card #settings-err {
+  margin-top: 8px;
+}
+
+.settings-preview-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 9px;
+}
+.settings-preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 22px;
+}
+.settings-preview-key {
+  font-size: var(--pt-text-xs);
+  font-weight: 500;
+  color: var(--pt-sub);
+  flex-shrink: 0;
+}
+.settings-preview-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  justify-content: flex-end;
+}
+.settings-preview-val .o2-wchip {
+  max-width: min(210px, 54vw);
+}
+.settings-src-pill {
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1.5px 6px;
+  border-radius: var(--pt-r-pill);
+  background: var(--pt-surface-2);
+  color: var(--pt-sub);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.settings-src-pill.project {
+  background: var(--pt-accent-soft);
+  color: var(--pt-accent);
+}
+.settings-unsaved-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1.5px 6px;
+  border-radius: var(--pt-r-pill);
+  background: var(--pt-warn-soft);
+  color: var(--pt-warn);
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+  .settings-hdr {
+    padding: 0 10px 0 8px;
+    gap: 6px;
+  }
+  .settings-seg .seg-btn {
+    padding: 0 6px;
+    font-size: 10.5px;
+  }
+  .settings-preview-row {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+}

@@ -26,6 +26,9 @@
             <svg class="ico ico-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             <span id="lbl-new">New</span>
           </button>
+          <button type="button" id="btn-settings" class="icon-ghost-btn" title="Settings" aria-label="Settings">
+            <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
         </div>
       </div>
 
@@ -67,6 +70,7 @@
           <div>
             <label id="lbl-f-model" for="f-model">Model</label>
             <select id="f-model">
+              <option value="">Use Settings Default (Gemini Pro)</option>
               <option value="pro">Pro</option>
               <option value="flash">Flash</option>
               <option value="flash_lite">Flash Lite</option>
@@ -181,6 +185,87 @@
           <button type="button" id="btn-send" class="send-circle">
             <svg class="ico" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
           </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== VIEW C: DEFAULT MODEL SETTINGS SLIDE-OVER ==================== -->
+  <section id="settings-screen" class="screen screen-slide" hidden>
+    <header class="chat-hdr settings-hdr">
+      <div class="chat-hdr-left">
+        <button type="button" id="btn-settings-back" class="back-btn">
+          <svg class="ico" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+          <span id="lbl-settings-back">Back</span>
+        </button>
+        <span id="settings-title" class="hdr-title">Default Models</span>
+      </div>
+
+      <div class="chat-hdr-right settings-hdr-right">
+        <div id="settings-scope-toggle" class="seg-group settings-seg" role="tablist" hidden>
+          <button type="button" role="tab" class="seg-btn active" data-scope="global" id="btn-scope-global" aria-selected="true">Global</button>
+          <button type="button" role="tab" class="seg-btn" data-scope="project" id="btn-scope-project" aria-selected="false">This Project</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="settings-body">
+      <div class="pt-card settings-scope-card">
+        <div class="goal-kicker">
+          <span id="lbl-settings-scope-kicker">GLOBAL DEFAULTS</span>
+          <span id="settings-scope-pill" class="lib-path-pill" hidden></span>
+        </div>
+        <p id="lbl-settings-scope-desc" class="settings-desc"></p>
+      </div>
+
+      <div class="pt-card settings-card">
+        <div class="settings-card-hdr">
+          <span id="lbl-settings-models-hdr" class="settings-card-title">Default Worker Thread Models</span>
+          <button type="button" id="btn-settings-refresh-models" class="icon-ghost-btn" title="Refresh live model catalog">
+            <svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+        </div>
+
+        <div class="field">
+          <label id="lbl-set-worktree" for="set-worktree-model">Code-Editing / Worktree Threads</label>
+          <select id="set-worktree-model"></select>
+          <div id="desc-set-worktree" class="settings-field-hint"></div>
+        </div>
+
+        <div class="field">
+          <label id="lbl-set-readonly" for="set-readonly-model">Read-Only / Investigation Threads</label>
+          <select id="set-readonly-model"></select>
+          <div id="desc-set-readonly" class="settings-field-hint"></div>
+        </div>
+
+        <div class="settings-actions">
+          <button type="button" id="btn-settings-save" class="btn-solid">Save</button>
+          <button type="button" id="btn-settings-reset" class="btn-secondary">Reset to Defaults</button>
+          <span id="settings-toast" class="toast" role="status" aria-live="polite"></span>
+        </div>
+        <div id="settings-err" class="err" hidden></div>
+      </div>
+
+      <div class="pt-card settings-preview-card">
+        <div class="goal-kicker">
+          <span id="lbl-settings-preview-title">EFFECTIVE FOR CURRENT PROJECT</span>
+          <span id="settings-unsaved-badge" class="settings-unsaved-pill" hidden></span>
+        </div>
+        <div class="settings-preview-rows">
+          <div class="settings-preview-row">
+            <span id="lbl-preview-wt" class="settings-preview-key">Worktree</span>
+            <span class="settings-preview-val">
+              <span id="val-preview-wt" class="o2-wchip"></span>
+              <span id="src-preview-wt" class="settings-src-pill"></span>
+            </span>
+          </div>
+          <div class="settings-preview-row">
+            <span id="lbl-preview-ro" class="settings-preview-key">Read-Only</span>
+            <span class="settings-preview-val">
+              <span id="val-preview-ro" class="o2-wchip"></span>
+              <span id="src-preview-ro" class="settings-src-pill"></span>
+            </span>
+          </div>
         </div>
       </div>
     </div>

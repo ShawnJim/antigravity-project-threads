@@ -223,6 +223,40 @@
       agoTime: (val, unit) => `${val}${unit} ago`,
       loadingChat: 'Loading conversation…',
       emptyChat: 'Waiting for first response…',
+      settingsTip: 'Settings',
+      settingsTitle: 'Default Models',
+      settingsBack: 'Back',
+      settingsScopeGlobal: 'Global',
+      settingsScopeProject: 'This Project',
+      settingsScopeKickerGlobal: 'GLOBAL DEFAULTS',
+      settingsScopeKickerProject: 'PROJECT OVERRIDE',
+      settingsGlobalHint:
+        'Applies to all projects unless overridden per project. Coordinator and "+ New" threads use these defaults when no model is explicitly specified.',
+      settingsProjectHint: (proj) =>
+        `Overrides global defaults for "${proj}" only. Choose "Follow Global Default" to inherit global settings.`,
+      settingsModelsHdr: 'Default Worker Thread Models',
+      settingsWorktreeLabel: 'Code-Editing / Worktree Threads',
+      settingsWorktreeDesc: 'Used when creating isolated Git worktree branches (createWorktree: true).',
+      settingsReadOnlyLabel: 'Read-Only / Investigation Threads',
+      settingsReadOnlyDesc: 'Used for fast read-only checks or non-Git workspaces (createWorktree: false).',
+      settingsFollowGlobal: (lbl) => `Follow Global Default (${lbl})`,
+      settingsSave: 'Save',
+      settingsSaving: 'Saving…',
+      settingsSavedToast: 'Settings saved',
+      settingsSaveErr: 'Failed to save settings',
+      settingsResetGlobal: 'Reset to Defaults',
+      settingsResetProject: 'Clear Project Override',
+      settingsResetToast: 'Settings reset to defaults',
+      settingsClearedProjectToast: 'Cleared project overrides',
+      settingsPreviewTitle: 'EFFECTIVE FOR CURRENT PROJECT',
+      settingsPreviewTitleGlobal: 'EFFECTIVE GLOBAL DEFAULTS',
+      settingsPreviewWorktree: 'Worktree',
+      settingsPreviewReadOnly: 'Read-Only',
+      settingsSrcGlobal: 'Global',
+      settingsSrcProject: 'Project',
+      settingsUnsaved: 'Unsaved',
+      settingsRefreshModelsTip: 'Refresh live model catalog',
+      useSettingsDefault: (lbl) => `Use Settings Default (${lbl})`,
     },
 
     'zh-CN': {
@@ -432,6 +466,40 @@
       },
       loadingChat: '正在读取会话记录…',
       emptyChat: '正在等待线程响应…',
+      settingsTip: '默认模型设置',
+      settingsTitle: '默认模型设置',
+      settingsBack: '返回',
+      settingsScopeGlobal: '全局默认',
+      settingsScopeProject: '当前项目',
+      settingsScopeKickerGlobal: '全局默认配置',
+      settingsScopeKickerProject: '当前项目覆盖',
+      settingsGlobalHint:
+        '适用于所有项目（除非单个项目另有覆盖）。总控派发与「新建」线程未指定模型时将使用此默认配置。',
+      settingsProjectHint: (proj) =>
+        `仅对当前项目「${proj}」生效；选择「跟随全局默认」即可继承全局配置。`,
+      settingsModelsHdr: '默认工作线程模型',
+      settingsWorktreeLabel: '代码编辑 / Worktree 线程默认模型',
+      settingsWorktreeDesc: '用于创建独立 Git Worktree 分支并修改代码的任务（createWorktree: true）。',
+      settingsReadOnlyLabel: '只读排查 / 无 Worktree 线程默认模型',
+      settingsReadOnlyDesc: '用于快速只读排查或非 Git 项目任务（createWorktree: false）。',
+      settingsFollowGlobal: (lbl) => `跟随全局默认 (${lbl})`,
+      settingsSave: '保存设置',
+      settingsSaving: '保存中…',
+      settingsSavedToast: '设置已保存',
+      settingsSaveErr: '保存设置失败',
+      settingsResetGlobal: '恢复默认',
+      settingsResetProject: '清除项目覆盖',
+      settingsResetToast: '已恢复默认设置',
+      settingsClearedProjectToast: '已清除当前项目覆盖',
+      settingsPreviewTitle: '当前项目实际生效模型',
+      settingsPreviewTitleGlobal: '当前全局生效模型',
+      settingsPreviewWorktree: 'Worktree 编辑',
+      settingsPreviewReadOnly: '只读排查',
+      settingsSrcGlobal: '全局',
+      settingsSrcProject: '项目覆盖',
+      settingsUnsaved: '未保存',
+      settingsRefreshModelsTip: '刷新实时模型列表',
+      useSettingsDefault: (lbl) => `使用设置默认 (${lbl})`,
     },
 
     'zh-TW': {
@@ -641,6 +709,40 @@
       },
       loadingChat: '正在讀取會話記錄…',
       emptyChat: '正在等待執行緒回應…',
+      settingsTip: '預設模型設定',
+      settingsTitle: '預設模型設定',
+      settingsBack: '返回',
+      settingsScopeGlobal: '全域預設',
+      settingsScopeProject: '目前專案',
+      settingsScopeKickerGlobal: '全域預設設定',
+      settingsScopeKickerProject: '目前專案覆寫',
+      settingsGlobalHint:
+        '適用於所有專案（除非個別專案另有覆寫）。總控派發與「新增」執行緒未指定模型時將套用此預設設定。',
+      settingsProjectHint: (proj) =>
+        `僅對目前專案「${proj}」生效；選擇「跟隨全域預設」即可繼承全域設定。`,
+      settingsModelsHdr: '預設工作執行緒模型',
+      settingsWorktreeLabel: '程式碼編輯 / Worktree 執行緒預設模型',
+      settingsWorktreeDesc: '用於建立獨立 Git Worktree 分支並修改程式碼的任務（createWorktree: true）。',
+      settingsReadOnlyLabel: '唯讀排查 / 無 Worktree 執行緒預設模型',
+      settingsReadOnlyDesc: '用於快速唯讀排查或非 Git 專案任務（createWorktree: false）。',
+      settingsFollowGlobal: (lbl) => `跟隨全域預設 (${lbl})`,
+      settingsSave: '儲存設定',
+      settingsSaving: '儲存中…',
+      settingsSavedToast: '設定已儲存',
+      settingsSaveErr: '儲存設定失敗',
+      settingsResetGlobal: '恢復預設',
+      settingsResetProject: '清除專案覆寫',
+      settingsResetToast: '已恢復預設設定',
+      settingsClearedProjectToast: '已清除目前專案覆寫',
+      settingsPreviewTitle: '目前專案實際生效模型',
+      settingsPreviewTitleGlobal: '目前全域生效模型',
+      settingsPreviewWorktree: 'Worktree 編輯',
+      settingsPreviewReadOnly: '唯讀排查',
+      settingsSrcGlobal: '全域',
+      settingsSrcProject: '專案覆寫',
+      settingsUnsaved: '未儲存',
+      settingsRefreshModelsTip: '重新整理即時模型清單',
+      useSettingsDefault: (lbl) => `使用設定預設 (${lbl})`,
     },
   };
 
@@ -706,10 +808,27 @@
   let selectableModelsPromise = null;
   let modelMenuOpen = false;
   const pendingModelByThread = new Map(); // threadId -> selected model object
+  let settingsScreenOpen = false;
+  let settingsScope = 'global'; // 'global' | 'project'
+  let loadedSettingsData = null; // { settings, effective, scopeKey }
+  let settingsSaving = false;
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
   const elThreadScreen = document.getElementById('thread-screen');
+  const elSettingsScreen = document.getElementById('settings-screen');
+  const elBtnSettings = document.getElementById('btn-settings');
+  const elBtnSettingsBack = document.getElementById('btn-settings-back');
+  const elSettingsScopeToggle = document.getElementById('settings-scope-toggle');
+  const elBtnScopeGlobal = document.getElementById('btn-scope-global');
+  const elBtnScopeProject = document.getElementById('btn-scope-project');
+  const elSetWorktree = document.getElementById('set-worktree-model');
+  const elSetReadOnly = document.getElementById('set-readonly-model');
+  const elBtnSettingsSave = document.getElementById('btn-settings-save');
+  const elBtnSettingsReset = document.getElementById('btn-settings-reset');
+  const elBtnSettingsRefreshModels = document.getElementById('btn-settings-refresh-models');
+  const elSettingsToast = document.getElementById('settings-toast');
+  const elSettingsErr = document.getElementById('settings-err');
   const elBoardBody = document.getElementById('board-body');
   const elLivePill = document.getElementById('live-pill');
   const elLiveLabel = document.getElementById('live-label');
@@ -919,6 +1038,10 @@
     document.getElementById('lbl-tab-archived').textContent = t.tabArchived;
     setLiveStatus(isLiveOk);
     document.getElementById('lbl-new').textContent = t.newBtn;
+    if (elBtnSettings) {
+      elBtnSettings.title = t.settingsTip;
+      elBtnSettings.setAttribute('aria-label', t.settingsTip);
+    }
     document.getElementById('btn-bind').textContent = t.bindBtn;
     document.getElementById('lbl-sort').textContent =
       sortMode === 'priority' ? t.sortPriority : t.sortRecent;
@@ -960,6 +1083,7 @@
     updateCoordinatorControls();
     syncSendButtonState();
     populateDispatchModelSelect();
+    if (settingsScreenOpen && elSettingsScreen) renderSettingsScreen(false);
 
     if (changed) {
       if (lastSnap) renderBoard(lastSnap);
@@ -975,13 +1099,20 @@
   function flashToast(msg, tone = 'ok', durationMs = 2400) {
     if (toastTimer) clearTimeout(toastTimer);
     const text = String(msg || '');
-    elToast.className = tone === 'err' ? 'toast err' : tone === 'warn' ? 'toast warn' : 'toast';
-    elToast.textContent = text;
-    elToast.title = text;
+    const cls = tone === 'err' ? 'toast err' : tone === 'warn' ? 'toast warn' : 'toast';
+    for (const target of [elToast, elSettingsToast]) {
+      if (!target) continue;
+      target.className = cls;
+      target.textContent = text;
+      target.title = text;
+    }
     toastTimer = setTimeout(() => {
-      elToast.textContent = '';
-      elToast.title = '';
-      elToast.className = 'toast';
+      for (const target of [elToast, elSettingsToast]) {
+        if (!target) continue;
+        target.textContent = '';
+        target.title = '';
+        target.className = 'toast';
+      }
     }, durationMs);
   }
 
@@ -2246,6 +2377,7 @@
     }
     lastHasGitRepo = hasGit;
     document.getElementById('lbl-f-wt').textContent = hasGit ? t.fWt : t.fWtDisabled;
+    populateDispatchModelSelect();
 
     const allThreads = snap.threads || [];
     cachedThreads = allThreads;
@@ -2448,18 +2580,72 @@
       .join('');
   }
 
-  function populateDispatchModelSelect() {
-    const sel = document.getElementById('f-model');
-    if (!sel) return;
+  function getCurrentEffectiveSettings() {
+    if (loadedSettingsData?.effective) return loadedSettingsData.effective;
+    const scopeKey = loadedSettingsData?.scopeKey || activeScopeKey || '';
+    return {
+      scopeKey,
+      scopeKind: scopeKey ? 'workspace' : 'unscoped',
+      scopeLabel: '',
+      hasProjectOverride: false,
+      worktreeModel: 'pro',
+      readOnlyModel: 'pro',
+      worktreeModelLabel: 'Gemini Pro',
+      readOnlyModelLabel: 'Gemini Pro',
+      worktreeSource: 'global',
+      readOnlySource: 'global',
+      global: {
+        worktreeModel: 'pro',
+        readOnlyModel: 'pro',
+        worktreeModelLabel: 'Gemini Pro',
+        readOnlyModelLabel: 'Gemini Pro',
+      },
+      project: {
+        worktreeModel: '',
+        readOnlyModel: '',
+        worktreeModelLabel: '',
+        readOnlyModelLabel: '',
+      },
+    };
+  }
+
+  function resolveSettingsOptionValue(rawVal) {
+    const val = String(rawVal || '').trim();
+    if (!val) return '';
+    const low = val.toLowerCase();
+    if (low === 'pro' || low === 'flash' || low === 'flash_lite') return low;
+    if (low === 'flash-lite' || low === 'lite') return 'flash_lite';
+    if (low === 'default' || low === 'auto' || low === 'inherit') return '';
+    const matched = getModelByIdFromCatalog(val);
+    if (matched) return matched.id || matched.modelId || matched.modelEnum || val;
+    return val;
+  }
+
+  function resolveSettingsModelDisplay(rawVal) {
+    const val = String(rawVal || '').trim();
+    if (!val) return 'Gemini Pro';
+    const matched = getModelByIdFromCatalog(val);
+    if (matched?.label) return matched.label;
+    const savedLabels = loadedSettingsData?.settings?.labels;
+    if (savedLabels && savedLabels[val]) return savedLabels[val];
+    return formatModelDisplay(val);
+  }
+
+  function buildModelSelectOptions(topOption = null) {
     const t = L();
-    const prevVal = sel.value || 'pro';
+    const validValues = new Set();
+    let html = '';
+    if (topOption) {
+      validValues.add(topOption.value);
+      html += `<option value="${esc(topOption.value)}">${esc(topOption.label)}</option>`;
+    }
     const tiers = [
       { value: 'pro', label: t.tierPro },
       { value: 'flash', label: t.tierFlash },
       { value: 'flash_lite', label: t.tierFlashLite },
     ];
-    const validValues = new Set(tiers.map((x) => x.value));
-    let html = `<optgroup label="${esc(t.modelGroupTiers)}">${tiers
+    for (const x of tiers) validValues.add(x.value);
+    html += `<optgroup label="${esc(t.modelGroupTiers)}">${tiers
       .map((x) => `<option value="${esc(x.value)}">${esc(x.label)}</option>`)
       .join('')}</optgroup>`;
 
@@ -2477,9 +2663,347 @@
         html += `<optgroup label="${esc(t.modelGroupModels)}">${liveOpts}</optgroup>`;
       }
     }
+    return { html, validValues };
+  }
 
+  function populateDispatchModelSelect() {
+    const sel = document.getElementById('f-model');
+    if (!sel) return;
+    const t = L();
+    const prevVal = sel.value || '';
+    const wtChk = document.getElementById('f-wt');
+    const isWt = wtChk ? !wtChk.disabled && wtChk.checked : true;
+    const eff = getCurrentEffectiveSettings();
+    const effModelId = isWt ? eff.worktreeModel : eff.readOnlyModel;
+    const effLabel = isWt
+      ? eff.worktreeModelLabel || resolveSettingsModelDisplay(effModelId)
+      : eff.readOnlyModelLabel || resolveSettingsModelDisplay(effModelId);
+
+    const { html, validValues } = buildModelSelectOptions({
+      value: '',
+      label: t.useSettingsDefault(effLabel || 'Gemini Pro'),
+    });
     sel.innerHTML = html;
-    sel.value = validValues.has(prevVal) ? prevVal : 'pro';
+    const resolvedPrev = prevVal ? resolveSettingsOptionValue(prevVal) : '';
+    sel.value = resolvedPrev && validValues.has(resolvedPrev) ? resolvedPrev : '';
+  }
+
+  function populateSettingsModelSelect(sel, { topOption = null, targetValue = '' } = {}) {
+    if (!sel) return;
+    const { html, validValues } = buildModelSelectOptions(topOption);
+    const resolvedTarget = resolveSettingsOptionValue(targetValue);
+    let finalHtml = html;
+    if (resolvedTarget && !validValues.has(resolvedTarget)) {
+      validValues.add(resolvedTarget);
+      finalHtml =
+        `<option value="${esc(resolvedTarget)}">${esc(resolveSettingsModelDisplay(resolvedTarget))}</option>` +
+        html;
+    }
+    sel.innerHTML = finalHtml;
+    if (resolvedTarget && validValues.has(resolvedTarget)) {
+      sel.value = resolvedTarget;
+    } else if (topOption) {
+      sel.value = topOption.value;
+    } else {
+      sel.value = 'pro';
+    }
+  }
+
+  function getSavedSettingForScope(kind, scope) {
+    const settings = loadedSettingsData?.settings || {};
+    const eff = getCurrentEffectiveSettings();
+    const scopeKey = loadedSettingsData?.scopeKey || eff.scopeKey || activeScopeKey || '';
+    if (scope === 'project') {
+      const projEntry = (scopeKey && settings.projects?.[scopeKey]) || eff.project || {};
+      const raw = kind === 'worktree' ? projEntry.worktreeModel : projEntry.readOnlyModel;
+      return resolveSettingsOptionValue(raw || '');
+    }
+    const defs = settings.defaults || eff.global || {};
+    const raw = kind === 'worktree' ? defs.worktreeModel : defs.readOnlyModel;
+    return resolveSettingsOptionValue(raw || 'pro') || 'pro';
+  }
+
+  function renderSettingsPreview() {
+    if (!elSettingsScreen) return;
+    const t = L();
+    const eff = getCurrentEffectiveSettings();
+    const scopeKey = loadedSettingsData?.scopeKey || eff.scopeKey || activeScopeKey || '';
+    const hasScope = Boolean(scopeKey);
+    const titleEl = document.getElementById('lbl-settings-preview-title');
+    if (titleEl) {
+      titleEl.textContent = hasScope ? t.settingsPreviewTitle : t.settingsPreviewTitleGlobal;
+    }
+
+    const savedWtScope = getSavedSettingForScope('worktree', settingsScope);
+    const savedRoScope = getSavedSettingForScope('readOnly', settingsScope);
+    const draftWt = elSetWorktree ? elSetWorktree.value : savedWtScope;
+    const draftRo = elSetReadOnly ? elSetReadOnly.value : savedRoScope;
+    const isDirty = draftWt !== savedWtScope || draftRo !== savedRoScope;
+
+    const unsavedEl = document.getElementById('settings-unsaved-badge');
+    if (unsavedEl) {
+      unsavedEl.hidden = !isDirty;
+      unsavedEl.textContent = t.settingsUnsaved;
+    }
+
+    const globalWt =
+      settingsScope === 'global'
+        ? draftWt || 'pro'
+        : resolveSettingsOptionValue(eff.global?.worktreeModel || '') || 'pro';
+    const globalRo =
+      settingsScope === 'global'
+        ? draftRo || 'pro'
+        : resolveSettingsOptionValue(eff.global?.readOnlyModel || '') || 'pro';
+    const projWt =
+      settingsScope === 'project'
+        ? draftWt
+        : resolveSettingsOptionValue(eff.project?.worktreeModel || '');
+    const projRo =
+      settingsScope === 'project'
+        ? draftRo
+        : resolveSettingsOptionValue(eff.project?.readOnlyModel || '');
+
+    const finalWt = projWt || globalWt || 'pro';
+    const finalRo = projRo || globalRo || 'pro';
+    const wtSrc = projWt ? 'project' : 'global';
+    const roSrc = projRo ? 'project' : 'global';
+
+    const valWtEl = document.getElementById('val-preview-wt');
+    const valRoEl = document.getElementById('val-preview-ro');
+    const srcWtEl = document.getElementById('src-preview-wt');
+    const srcRoEl = document.getElementById('src-preview-ro');
+
+    const wtLabel = resolveSettingsModelDisplay(finalWt);
+    const roLabel = resolveSettingsModelDisplay(finalRo);
+    if (valWtEl) {
+      valWtEl.textContent = wtLabel;
+      valWtEl.title = wtLabel;
+    }
+    if (valRoEl) {
+      valRoEl.textContent = roLabel;
+      valRoEl.title = roLabel;
+    }
+    if (srcWtEl) {
+      srcWtEl.textContent = wtSrc === 'project' ? t.settingsSrcProject : t.settingsSrcGlobal;
+      srcWtEl.className = `settings-src-pill${wtSrc === 'project' ? ' project' : ''}`;
+    }
+    if (srcRoEl) {
+      srcRoEl.textContent = roSrc === 'project' ? t.settingsSrcProject : t.settingsSrcGlobal;
+      srcRoEl.className = `settings-src-pill${roSrc === 'project' ? ' project' : ''}`;
+    }
+
+    if (elBtnSettingsReset && !settingsSaving) {
+      elBtnSettingsReset.textContent =
+        settingsScope === 'project' ? t.settingsResetProject : t.settingsResetGlobal;
+      elBtnSettingsReset.disabled =
+        settingsScope === 'project' && !eff.hasProjectOverride && !projWt && !projRo;
+    }
+  }
+
+  function renderSettingsScreen(syncInputs = false) {
+    if (!elSettingsScreen) return;
+    const t = L();
+    const eff = getCurrentEffectiveSettings();
+    const scopeKey = loadedSettingsData?.scopeKey || eff.scopeKey || activeScopeKey || '';
+    const hasScope = Boolean(scopeKey);
+    if (!hasScope && settingsScope === 'project') {
+      settingsScope = 'global';
+    }
+
+    document.getElementById('lbl-settings-back').textContent = t.settingsBack;
+    document.getElementById('settings-title').textContent = t.settingsTitle;
+    if (elSettingsScopeToggle) {
+      elSettingsScopeToggle.hidden = !hasScope;
+    }
+    if (elBtnScopeGlobal && elBtnScopeProject) {
+      const isGlobal = settingsScope !== 'project';
+      elBtnScopeGlobal.textContent = t.settingsScopeGlobal;
+      elBtnScopeProject.textContent = t.settingsScopeProject;
+      elBtnScopeGlobal.classList.toggle('active', isGlobal);
+      elBtnScopeProject.classList.toggle('active', !isGlobal);
+      elBtnScopeGlobal.setAttribute('aria-selected', isGlobal ? 'true' : 'false');
+      elBtnScopeProject.setAttribute('aria-selected', isGlobal ? 'false' : 'true');
+    }
+
+    const projLabel =
+      eff.scopeLabel ||
+      lastSnap?.projectLabel ||
+      (workspace ? workspace.split(/[\\/]/).filter(Boolean).pop() : '') ||
+      scopeKey;
+    document.getElementById('lbl-settings-scope-kicker').textContent =
+      settingsScope === 'project' ? t.settingsScopeKickerProject : t.settingsScopeKickerGlobal;
+    const scopePill = document.getElementById('settings-scope-pill');
+    if (scopePill) {
+      scopePill.hidden = settingsScope !== 'project' || !projLabel;
+      scopePill.textContent = projLabel;
+      scopePill.title = scopeKey || projLabel;
+    }
+    document.getElementById('lbl-settings-scope-desc').textContent =
+      settingsScope === 'project' ? t.settingsProjectHint(projLabel) : t.settingsGlobalHint;
+
+    document.getElementById('lbl-settings-models-hdr').textContent = t.settingsModelsHdr;
+    if (elBtnSettingsRefreshModels) {
+      elBtnSettingsRefreshModels.title = t.settingsRefreshModelsTip;
+      elBtnSettingsRefreshModels.setAttribute('aria-label', t.settingsRefreshModelsTip);
+    }
+    document.getElementById('lbl-set-worktree').textContent = t.settingsWorktreeLabel;
+    document.getElementById('desc-set-worktree').textContent = t.settingsWorktreeDesc;
+    document.getElementById('lbl-set-readonly').textContent = t.settingsReadOnlyLabel;
+    document.getElementById('desc-set-readonly').textContent = t.settingsReadOnlyDesc;
+    document.getElementById('lbl-preview-wt').textContent = t.settingsPreviewWorktree;
+    document.getElementById('lbl-preview-ro').textContent = t.settingsPreviewReadOnly;
+
+    if (elBtnSettingsSave && !settingsSaving) {
+      elBtnSettingsSave.textContent = t.settingsSave;
+    }
+
+    const globalWtLabel =
+      eff.global?.worktreeModelLabel || resolveSettingsModelDisplay(eff.global?.worktreeModel || 'pro');
+    const globalRoLabel =
+      eff.global?.readOnlyModelLabel || resolveSettingsModelDisplay(eff.global?.readOnlyModel || 'pro');
+
+    const wtTarget = syncInputs
+      ? getSavedSettingForScope('worktree', settingsScope)
+      : elSetWorktree?.value ?? getSavedSettingForScope('worktree', settingsScope);
+    const roTarget = syncInputs
+      ? getSavedSettingForScope('readOnly', settingsScope)
+      : elSetReadOnly?.value ?? getSavedSettingForScope('readOnly', settingsScope);
+
+    populateSettingsModelSelect(elSetWorktree, {
+      topOption:
+        settingsScope === 'project'
+          ? { value: '', label: t.settingsFollowGlobal(globalWtLabel) }
+          : null,
+      targetValue: wtTarget,
+    });
+    populateSettingsModelSelect(elSetReadOnly, {
+      topOption:
+        settingsScope === 'project'
+          ? { value: '', label: t.settingsFollowGlobal(globalRoLabel) }
+          : null,
+      targetValue: roTarget,
+    });
+
+    renderSettingsPreview();
+  }
+
+  async function loadSettingsData({ syncInputs = false } = {}) {
+    try {
+      await syncHostConversationScope();
+      const qs = new URLSearchParams(buildScopePayload());
+      const res = await doFetch(`/api/settings?${qs}`);
+      const data = await res.json();
+      if (data?.locale) applyLocale(data.locale);
+      if (data?.ok) {
+        loadedSettingsData = {
+          settings: data.settings,
+          effective: data.effective,
+          scopeKey: data.scopeKey || data.effective?.scopeKey || '',
+        };
+        populateDispatchModelSelect();
+        if (settingsScreenOpen) {
+          renderSettingsScreen(syncInputs);
+        }
+      }
+    } catch {
+      // Keep cached/default settings if endpoint is temporarily busy
+    }
+  }
+
+  function openSettingsScreen() {
+    if (!elSettingsScreen) return;
+    closeModelMenu({ restoreHeader: false });
+    boardScrollTop = elBoardBody.scrollTop;
+    settingsScreenOpen = true;
+    if (elSettingsErr) {
+      elSettingsErr.hidden = true;
+      elSettingsErr.textContent = '';
+    }
+    elBoardScreen.hidden = true;
+    elThreadScreen.hidden = true;
+    elSettingsScreen.classList.remove('screen-slide');
+    elSettingsScreen.hidden = false;
+    void elSettingsScreen.offsetWidth;
+    elSettingsScreen.classList.add('screen-slide');
+
+    renderSettingsScreen(true);
+    loadSelectableModels(false);
+    loadSettingsData({ syncInputs: true });
+  }
+
+  function closeSettingsScreen() {
+    if (!elSettingsScreen) return;
+    settingsScreenOpen = false;
+    elSettingsScreen.hidden = true;
+    elBoardScreen.hidden = false;
+    elBoardBody.scrollTop = boardScrollTop;
+    populateDispatchModelSelect();
+    refreshBoard(true);
+  }
+
+  async function submitSettingsSave(reset = false) {
+    if (settingsSaving) return;
+    const t = L();
+    const scopeKey =
+      loadedSettingsData?.scopeKey || loadedSettingsData?.effective?.scopeKey || activeScopeKey || '';
+    const activeScope = settingsScope === 'project' && scopeKey ? 'project' : 'global';
+    settingsSaving = true;
+    if (elSettingsErr) {
+      elSettingsErr.hidden = true;
+      elSettingsErr.textContent = '';
+    }
+    elBtnSettingsSave.disabled = true;
+    elBtnSettingsReset.disabled = true;
+    if (!reset) elBtnSettingsSave.textContent = t.settingsSaving;
+
+    try {
+      await syncHostConversationScope();
+      const payload = buildScopePayload({
+        scope: activeScope,
+        ...(activeScope === 'project' ? { workspaceKey: scopeKey } : {}),
+        reset,
+      });
+      if (!reset) {
+        payload.worktreeModel = elSetWorktree ? elSetWorktree.value : 'pro';
+        payload.readOnlyModel = elSetReadOnly ? elSetReadOnly.value : 'pro';
+      }
+      const res = await postApi('/api/settings_save', '/api/settings_save_get', payload);
+      if (!res?.ok) {
+        const msg = res?.error || t.settingsSaveErr;
+        if (elSettingsErr) {
+          elSettingsErr.hidden = false;
+          elSettingsErr.textContent = msg;
+        }
+        flashToast(msg, 'err', 3600);
+        return;
+      }
+      loadedSettingsData = {
+        settings: res.settings,
+        effective: res.effective,
+        scopeKey: res.scopeKey || res.effective?.scopeKey || scopeKey,
+      };
+      populateDispatchModelSelect();
+      renderSettingsScreen(true);
+      flashToast(
+        reset
+          ? activeScope === 'project'
+            ? t.settingsClearedProjectToast
+            : t.settingsResetToast
+          : t.settingsSavedToast,
+      );
+    } catch (err) {
+      const msg = err?.message || t.settingsSaveErr;
+      if (elSettingsErr) {
+        elSettingsErr.hidden = false;
+        elSettingsErr.textContent = msg;
+      }
+      flashToast(msg, 'err', 3600);
+    } finally {
+      settingsSaving = false;
+      elBtnSettingsSave.disabled = false;
+      elBtnSettingsSave.textContent = L().settingsSave;
+      renderSettingsPreview();
+    }
   }
 
   async function loadSelectableModels(force = false) {
@@ -2501,6 +3025,7 @@
           selectableModels = data.models;
           selectableModelsLoadedAt = Date.now();
           populateDispatchModelSelect();
+          if (settingsScreenOpen) renderSettingsScreen(false);
         }
       } catch {
         // Keep fallback options if /api/models is temporarily unavailable
@@ -2960,6 +3485,8 @@
   async function openThreadDrawer(threadId) {
     if (!threadId) return;
     closeModelMenu({ restoreHeader: false });
+    settingsScreenOpen = false;
+    if (elSettingsScreen) elSettingsScreen.hidden = true;
     boardScrollTop = elBoardBody.scrollTop;
     openThreadId = threadId;
     lastThreadStamp = '';
@@ -3164,6 +3691,14 @@
           loadMemory();
         }
       }
+      if (
+        scopeChanged ||
+        convChanged ||
+        !loadedSettingsData ||
+        nextScopeKey !== String(loadedSettingsData.scopeKey || '')
+      ) {
+        loadSettingsData({ syncInputs: settingsScreenOpen });
+      }
 
       // Immediately close any open thread drawer that does not belong to the active project scope
       if (
@@ -3211,6 +3746,7 @@
         document.getElementById('tab-threads').click();
       }
       loadSelectableModels(false);
+      loadSettingsData();
       document.getElementById('f-title').focus();
     }
   }
@@ -3384,6 +3920,10 @@
       }
       if (activeModalCtx && !activeModalCtx.busy) {
         closePtModal();
+        return;
+      }
+      if (settingsScreenOpen) {
+        closeSettingsScreen();
       }
     }
   });
@@ -3472,12 +4012,60 @@
   elNewBtn.addEventListener('click', () => {
     setDrawerOpen(!elDrawer.classList.contains('open'));
   });
+  document.getElementById('f-wt').addEventListener('change', () => {
+    populateDispatchModelSelect();
+  });
   document.getElementById('btn-close-drawer').addEventListener('click', () => {
     setDrawerOpen(false);
   });
   document.getElementById('btn-cancel-dispatch').addEventListener('click', () => {
     setDrawerOpen(false);
   });
+
+  // Settings slide-over controls
+  if (elBtnSettings) {
+    elBtnSettings.addEventListener('click', openSettingsScreen);
+  }
+  if (elBtnSettingsBack) {
+    elBtnSettingsBack.addEventListener('click', closeSettingsScreen);
+  }
+  if (elBtnScopeGlobal) {
+    elBtnScopeGlobal.addEventListener('click', () => {
+      if (settingsScope === 'global') return;
+      settingsScope = 'global';
+      renderSettingsScreen(true);
+    });
+  }
+  if (elBtnScopeProject) {
+    elBtnScopeProject.addEventListener('click', () => {
+      const scopeKey =
+        loadedSettingsData?.scopeKey || loadedSettingsData?.effective?.scopeKey || activeScopeKey || '';
+      if (!scopeKey || settingsScope === 'project') return;
+      settingsScope = 'project';
+      renderSettingsScreen(true);
+    });
+  }
+  if (elSetWorktree) {
+    elSetWorktree.addEventListener('change', renderSettingsPreview);
+  }
+  if (elSetReadOnly) {
+    elSetReadOnly.addEventListener('change', renderSettingsPreview);
+  }
+  if (elBtnSettingsRefreshModels) {
+    elBtnSettingsRefreshModels.addEventListener('click', () => {
+      loadSelectableModels(true);
+    });
+  }
+  if (elBtnSettingsSave) {
+    elBtnSettingsSave.addEventListener('click', () => {
+      submitSettingsSave(false);
+    });
+  }
+  if (elBtnSettingsReset) {
+    elBtnSettingsReset.addEventListener('click', () => {
+      submitSettingsSave(true);
+    });
+  }
 
   document.getElementById('btn-bind').addEventListener('click', async () => {
     await syncHostConversationScope();
@@ -3526,6 +4114,7 @@
         document.getElementById('f-title').value = '';
         document.getElementById('f-branch').value = '';
         document.getElementById('f-prompt').value = '';
+        document.getElementById('f-model').value = '';
         setDrawerOpen(false);
         lastBoardKey = '';
         await refreshBoard(true);

@@ -2,17 +2,21 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Response, SidecarApp } from 'sidecar_sdk';
-import { getCascadeModelCatalog, resolveLsEndpoint } from '../../lib/ls-client.mjs';
+import { getCascadeModelCatalog, getSelectableModels, resolveLsEndpoint } from '../../lib/ls-client.mjs';
 import {
   archiveThread,
+  canonicalizeModelForSettings,
   cleanupThreadWorktree,
   dispatchThread,
+  getEffectiveSettings,
   getThreadMessages,
   initCoordinator,
+  loadSettings,
   markThreadRead,
   readProjectMemory,
   resolveAppLocale,
   resolveProjectScope,
+  saveSettings,
   sendThreadMessage,
   syncCompletionToCoordinator,
   syncThreads,
@@ -204,7 +208,7 @@ async function handleDispatch(data = {}) {
       taskPrompt: data.taskPrompt || '',
       branch: data.branch || '',
       baseRef: data.baseRef || '',
-      model: data.model || 'pro',
+      model: data.model || '',
       createWorktree: data.createWorktree !== false && data.createWorktree !== 'false' && data.createWorktree !== '0',
     });
     return { ok: true, locale: resolveAppLocale(), thread };
@@ -293,6 +297,98 @@ async function handleSaveMemory(data = {}) {
   }
 }
 registerDualApi('/api/memory_save', handleSaveMemory);
+
+function buildSettingsScopeOpts(data = {}) {
+  return {
+    workspacePath: data.workspacePath || data.workspace || '',
+    conversationId: data.conversationId || '',
+    coordinatorId: data.coordinatorId || '',
+    projectId: data.projectId || '',
+  };
+}
+
+async function resolveSettingsScopeKey(data = {}) {
+  const explicitKey = String(data.workspaceKey || '').trim();
+  if (explicitKey) return explicitKey;
+  const scope = await resolveProjectScope(buildSettingsScopeOpts(data));
+  return scope.scopeKey || '';
+}
+
+async function handleSettings(data = {}) {
+  try {
+    const scopeOpts = buildSettingsScopeOpts(data);
+    const scopeKey = await resolveSettingsScopeKey(data);
+    const settings = loadSettings();
+    const effective = await getEffectiveSettings({
+      ...scopeOpts,
+      workspaceKey: scopeKey,
+      coordinatorId: scopeOpts.coordinatorId || scopeOpts.conversationId,
+    });
+    return {
+      ok: true,
+      locale: resolveAppLocale(),
+      settings,
+      effective,
+      scopeKey: effective.scopeKey || scopeKey || '',
+    };
+  } catch (err) {
+    return { ok: false, error: err.message, locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/settings', handleSettings);
+
+async function handleSaveSettings(data = {}) {
+  try {
+    const scope = data.scope === 'project' ? 'project' : 'global';
+    const reset = parseBool(data.reset, false);
+    const scopeOpts = buildSettingsScopeOpts(data);
+    const scopeKey = await resolveSettingsScopeKey(data);
+    if (scope === 'project' && !scopeKey) {
+      return {
+        ok: false,
+        error: 'No active project scope to save project override.',
+        locale: resolveAppLocale(),
+      };
+    }
+
+    const models = await getSelectableModels({ timeoutMs: 2500 });
+    const labels = {};
+    const patch = {
+      scope,
+      reset,
+      ...(scope === 'project' ? { workspaceKey: scopeKey } : {}),
+    };
+
+    if (!reset) {
+      for (const field of ['worktreeModel', 'readOnlyModel']) {
+        if (!(field in data)) continue;
+        const { value, label } = canonicalizeModelForSettings(data[field], models);
+        patch[field] = value;
+        if (value && label) labels[value] = label;
+      }
+      if (Object.keys(labels).length > 0) {
+        patch.labels = labels;
+      }
+    }
+
+    const settings = saveSettings(patch);
+    const effective = await getEffectiveSettings({
+      ...scopeOpts,
+      workspaceKey: scopeKey,
+      coordinatorId: scopeOpts.coordinatorId || scopeOpts.conversationId,
+    });
+    return {
+      ok: true,
+      locale: resolveAppLocale(),
+      settings,
+      effective,
+      scopeKey: effective.scopeKey || scopeKey || '',
+    };
+  } catch (err) {
+    return { ok: false, error: err.message, locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/settings_save', handleSaveSettings);
 
 // Background watcher: ensures thread completions sync back to Coordinator even when side panel is collapsed
 setInterval(() => {

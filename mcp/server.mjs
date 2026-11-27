@@ -92,7 +92,8 @@ const TOOLS = [
         },
         model: {
           type: 'string',
-          description: 'Model tier alias ("flash", "pro", "flash_lite") or model ID. Defaults to "flash".',
+          description:
+            'Optional model override: tier alias ("pro", "flash", "flash_lite") or concrete model ID / enum. Omit by default to use the user\'s configured default model in Settings (worktree vs read-only); pass only when overriding.',
         },
         createWorktree: {
           type: 'boolean',
@@ -296,7 +297,9 @@ async function handleToolCall(name, args = {}) {
     }
 
     case 'dispatch_thread': {
-      const t = await dispatchThread(args);
+      const dispatchArgs = { ...args };
+      if (!dispatchArgs.model) delete dispatchArgs.model;
+      const t = await dispatchThread(dispatchArgs);
       const text = [
         `Dispatched Worker Thread **\`${t.threadId}\`**: [${t.title}](conversation://${t.conversationId})`,
         `- Conversation ID: \`${t.conversationId}\``,
