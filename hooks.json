@@ -4,7 +4,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "scripts\\run-hook.cmd PreInvocation || sh ./scripts/run-hook.sh PreInvocation",
+        "command": "set _=' & call \"scripts\\run-hook.cmd\" PreInvocation & exit ' && sh \"./scripts/run-hook.sh\" PreInvocation",
         "timeout": 5
       }
     ],
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "scripts\\run-hook.cmd PreToolUse || sh ./scripts/run-hook.sh PreToolUse",
+            "command": "set _=' & call \"scripts\\run-hook.cmd\" PreToolUse & exit ' && sh \"./scripts/run-hook.sh\" PreToolUse",
             "timeout": 5
           }
         ]
@@ -23,7 +23,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "scripts\\run-hook.cmd Stop || sh ./scripts/run-hook.sh Stop",
+        "command": "set _=' & call \"scripts\\run-hook.cmd\" Stop & exit ' && sh \"./scripts/run-hook.sh\" Stop",
         "timeout": 8
       }
     ]

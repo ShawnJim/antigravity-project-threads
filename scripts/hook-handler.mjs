@@ -122,6 +122,7 @@ async function main() {
             threadId: thread.threadId,
             transcriptPath: input.transcriptPath || '',
             force: false,
+            timeoutMs: 6000,
           });
         } catch {
           // Fallback: still persist local summary & state if LS/agentapi was unreachable (unless waiting on bg task)
