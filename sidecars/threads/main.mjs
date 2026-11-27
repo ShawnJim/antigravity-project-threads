@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Response, SidecarApp } from 'sidecar_sdk';
-import { resolveLsEndpoint } from '../../lib/ls-client.mjs';
+import { getCascadeModelCatalog, resolveLsEndpoint } from '../../lib/ls-client.mjs';
 import {
   archiveThread,
   cleanupThreadWorktree,
@@ -103,11 +103,48 @@ app.api(
   'GET',
 );
 
+async function handleModels(data = {}) {
+  try {
+    const forceRefresh = parseBool(data.refresh, false);
+    const catalog = await getCascadeModelCatalog({ forceRefresh });
+    return {
+      ok: catalog.ok,
+      models: catalog.models,
+      defaultModelId: catalog.defaultModel?.id || '',
+      defaultModelEnum: catalog.defaultModel?.modelEnum || '',
+      error: catalog.error || '',
+      locale: resolveAppLocale(),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      models: [],
+      defaultModelId: '',
+      defaultModelEnum: '',
+      error: err.message,
+      locale: resolveAppLocale(),
+    };
+  }
+}
+registerDualApi('/api/models', handleModels);
+
 async function handleThreadSend(data = {}) {
   try {
+    let parsedModelOrAlias = data.modelOrAlias || null;
+    if (typeof parsedModelOrAlias === 'string') {
+      try {
+        parsedModelOrAlias = JSON.parse(parsedModelOrAlias);
+      } catch {
+        parsedModelOrAlias = null;
+      }
+    }
     const res = await sendThreadMessage({
       threadId: data.threadId || '',
       message: data.message || '',
+      model: data.model || '',
+      modelEnum: data.modelEnum || '',
+      modelOrAlias: parsedModelOrAlias,
+      modelDisplayName: data.modelDisplayName || '',
     });
     return { ...res, locale: resolveAppLocale() };
   } catch (err) {

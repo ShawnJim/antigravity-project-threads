@@ -94,7 +94,7 @@ test('formatModelDisplay handles concrete display names, slugs, enums, and tier 
   // Verify UI templates wire modelDisplayName/resolvedModel and title tooltips
   assert.match(appSource, /th\.modelDisplayName\s*\|\|\s*th\.resolvedModel\s*\|\|\s*th\.model/);
   assert.match(appSource, /<span class="o2-wchip" title="\$\{esc\(modelLabel\)\}">/);
-  assert.match(appSource, /<span class="comp-model-pill" title="\$\{esc\(modelLabel\)\}">/);
+  assert.match(appSource, /<button type="button" id="btn-comp-model" class="\$\{modelBtnCls\}" title="\$\{esc\(modelTitle\)\}"/);
 });
 
 test('extractModelInfoFromGeneratorMetadata handles empty, single, trailing non-chat, and mid-thread switches', () => {

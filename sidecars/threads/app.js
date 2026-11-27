@@ -202,6 +202,19 @@
         tool: 'tool',
       },
       composerPh: 'Ask anything, @ to mention, / for actions',
+      modelSwitchTip: 'Switch model for next message',
+      modelPendingTip: 'Pending — applies on next message',
+      modelMenuTitle: 'Select model',
+      modelRunningHint: 'Thread is running — new model applies on your next message',
+      modelNextMsgHint: 'Applies on your next message',
+      modelLoading: 'Loading models…',
+      modelEmpty: 'Live model catalog unavailable',
+      modelDefaultBadge: 'Default',
+      modelGroupTiers: 'Tier Defaults',
+      modelGroupModels: 'Available Models',
+      tierPro: 'Pro',
+      tierFlash: 'Flash',
+      tierFlashLite: 'Flash Lite',
       roleWorker: 'Worker',
       roleReadOnly: 'Read-only',
       readOnlyMode: 'Shared session',
@@ -395,6 +408,19 @@
         tool: '工具',
       },
       composerPh: '输入追问或补充指令（Enter 发送）…',
+      modelSwitchTip: '切换下条消息使用的模型',
+      modelPendingTip: '已选待生效 — 将在下条消息应用',
+      modelMenuTitle: '选择模型',
+      modelRunningHint: '线程正在运行 — 新模型将在下条消息生效',
+      modelNextMsgHint: '将在下条消息生效',
+      modelLoading: '正在加载模型列表…',
+      modelEmpty: '暂无法获取实时模型列表',
+      modelDefaultBadge: '默认',
+      modelGroupTiers: '默认档位',
+      modelGroupModels: '可选模型',
+      tierPro: 'Pro',
+      tierFlash: 'Flash',
+      tierFlashLite: 'Flash Lite',
       roleWorker: '工作线程',
       roleReadOnly: '只读排查',
       readOnlyMode: '共享会话',
@@ -591,6 +617,19 @@
         tool: '工具',
       },
       composerPh: '輸入追問或補充指令（Enter 傳送）…',
+      modelSwitchTip: '切換下則訊息使用的模型',
+      modelPendingTip: '已選待生效 — 將在下則訊息套用',
+      modelMenuTitle: '選擇模型',
+      modelRunningHint: '執行緒正在執行 — 新模型將在下則訊息生效',
+      modelNextMsgHint: '將在下則訊息生效',
+      modelLoading: '正在載入模型清單…',
+      modelEmpty: '暫無法取得即時模型清單',
+      modelDefaultBadge: '預設',
+      modelGroupTiers: '預設層級',
+      modelGroupModels: '可用模型',
+      tierPro: 'Pro',
+      tierFlash: 'Flash',
+      tierFlashLite: 'Flash Lite',
       roleWorker: '工作執行緒',
       roleReadOnly: '唯讀排查',
       readOnlyMode: '共享會話',
@@ -661,6 +700,12 @@
   let isImeComposing = false;
   let toastTimer = null;
   let activeModalCtx = null;
+  let selectableModels = [];
+  let selectableModelsLoadedAt = 0;
+  let selectableModelsLoading = false;
+  let selectableModelsPromise = null;
+  let modelMenuOpen = false;
+  const pendingModelByThread = new Map(); // threadId -> selected model object
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
@@ -679,6 +724,7 @@
   const elChatInput = document.getElementById('chat-input');
   const elSendBtn = document.getElementById('btn-send');
   const elLiveBar = document.getElementById('live-bar');
+  const elModelMenu = document.getElementById('pt-model-menu');
   const elModalBackdrop = document.getElementById('pt-modal-backdrop');
   const elModalTitle = document.getElementById('pt-modal-title');
   const elModalClose = document.getElementById('pt-modal-close');
@@ -913,10 +959,12 @@
 
     updateCoordinatorControls();
     syncSendButtonState();
+    populateDispatchModelSelect();
 
     if (changed) {
       if (lastSnap) renderBoard(lastSnap);
       if (openThreadObj) renderThreadHeader(openThreadObj);
+      if (modelMenuOpen) renderModelMenu();
       if (openThreadId && Array.isArray(lastRenderedItems)) {
         renderThreadItems(lastRenderedItems, false);
       }
@@ -1366,7 +1414,9 @@
     }
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(payload)) {
-      if (v !== undefined && v !== null) qs.set(k, String(v));
+      if (v !== undefined && v !== null) {
+        qs.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
+      }
     }
     const res2 = await doFetch(`${getFallbackPath}?${qs}`);
     const json2 = await res2.json();
@@ -2398,6 +2448,224 @@
       .join('');
   }
 
+  function populateDispatchModelSelect() {
+    const sel = document.getElementById('f-model');
+    if (!sel) return;
+    const t = L();
+    const prevVal = sel.value || 'pro';
+    const tiers = [
+      { value: 'pro', label: t.tierPro },
+      { value: 'flash', label: t.tierFlash },
+      { value: 'flash_lite', label: t.tierFlashLite },
+    ];
+    const validValues = new Set(tiers.map((x) => x.value));
+    let html = `<optgroup label="${esc(t.modelGroupTiers)}">${tiers
+      .map((x) => `<option value="${esc(x.value)}">${esc(x.label)}</option>`)
+      .join('')}</optgroup>`;
+
+    if (Array.isArray(selectableModels) && selectableModels.length > 0) {
+      const liveOpts = selectableModels
+        .map((m) => {
+          const val = String(m.id || m.modelId || m.modelEnum || '').trim();
+          if (!val) return '';
+          validValues.add(val);
+          return `<option value="${esc(val)}">${esc(m.label || formatModelDisplay(val))}</option>`;
+        })
+        .filter(Boolean)
+        .join('');
+      if (liveOpts) {
+        html += `<optgroup label="${esc(t.modelGroupModels)}">${liveOpts}</optgroup>`;
+      }
+    }
+
+    sel.innerHTML = html;
+    sel.value = validValues.has(prevVal) ? prevVal : 'pro';
+  }
+
+  async function loadSelectableModels(force = false) {
+    const now = Date.now();
+    if (!force && selectableModels.length > 0 && now - selectableModelsLoadedAt < 45_000) {
+      return selectableModels;
+    }
+    if (selectableModelsPromise && !force) return selectableModelsPromise;
+    selectableModelsLoading = true;
+    if (modelMenuOpen) renderModelMenu();
+
+    const req = (async () => {
+      try {
+        const qs = force ? '?refresh=1' : '';
+        const res = await doFetch(`/api/models${qs}`);
+        const data = await res.json();
+        if (data?.locale) applyLocale(data.locale);
+        if (Array.isArray(data?.models)) {
+          selectableModels = data.models;
+          selectableModelsLoadedAt = Date.now();
+          populateDispatchModelSelect();
+        }
+      } catch {
+        // Keep fallback options if /api/models is temporarily unavailable
+      } finally {
+        selectableModelsLoading = false;
+        selectableModelsPromise = null;
+        if (modelMenuOpen) renderModelMenu();
+      }
+      return selectableModels;
+    })();
+    selectableModelsPromise = req;
+    return req;
+  }
+
+  function matchesLiveThreadModel(m, th) {
+    if (!m || !th) return false;
+    if (th.modelEnum && m.modelEnum && m.modelEnum === th.modelEnum) return true;
+    if (th.resolvedModel) {
+      const resLow = String(th.resolvedModel).toLowerCase();
+      const resUntiered = resLow.replace(/-tiered-/g, '-');
+      if (
+        m.modelId &&
+        (m.modelId.toLowerCase() === resLow || m.modelId.toLowerCase() === resUntiered)
+      ) {
+        return true;
+      }
+      if (m.modelEnum && m.modelEnum === th.resolvedModel) return true;
+    }
+    const liveLabel = formatModelDisplay(th.modelDisplayName || th.resolvedModel || th.model);
+    return Boolean(liveLabel && m.label === liveLabel);
+  }
+
+  function isModelActiveForThread(m, th) {
+    if (!m || !th) return false;
+    const pending = pendingModelByThread.get(th.threadId);
+    if (pending) {
+      if (pending.modelEnum && m.modelEnum) return m.modelEnum === pending.modelEnum;
+      return (pending.id && m.id === pending.id) || (pending.label && m.label === pending.label);
+    }
+    return matchesLiveThreadModel(m, th);
+  }
+
+  function getModelByIdFromCatalog(modelKey) {
+    return (
+      selectableModels.find(
+        (m) => m.id === modelKey || m.modelId === modelKey || m.modelEnum === modelKey,
+      ) || null
+    );
+  }
+
+  function closeModelMenu({ restoreHeader = true } = {}) {
+    if (!modelMenuOpen) return;
+    modelMenuOpen = false;
+    if (elModelMenu) {
+      elModelMenu.hidden = true;
+      delete elModelMenu.dataset.renderKey;
+    }
+    if (restoreHeader && openThreadObj) renderThreadHeader(openThreadObj);
+  }
+
+  function renderModelMenu() {
+    if (!elModelMenu || !modelMenuOpen || !openThreadObj) return;
+    const t = L();
+    const th = openThreadObj;
+    const isRunning = !th.archived && th.runState === 'RUN_STATE_RUNNING';
+    const pending = pendingModelByThread.get(th.threadId) || null;
+    const activeKey = pending
+      ? pending.modelEnum || pending.id || pending.label
+      : th.modelEnum || th.resolvedModel || th.modelDisplayName || th.model || '';
+    const renderKey = [
+      curLocale,
+      th.threadId,
+      isRunning ? 'run' : 'idle',
+      activeKey,
+      selectableModelsLoading ? 'loading' : 'ready',
+      selectableModels.map((m) => `${m.id}:${m.quotaInfo?.remainingFraction ?? ''}`).join(','),
+    ].join('|');
+
+    if (elModelMenu.dataset.renderKey === renderKey && !elModelMenu.hidden) {
+      return;
+    }
+    const prevList = elModelMenu.querySelector('.pt-model-menu-list');
+    const prevScroll = prevList ? prevList.scrollTop : 0;
+
+    let bodyHtml = '';
+    if (selectableModelsLoading && selectableModels.length === 0) {
+      bodyHtml = `<div class="pt-model-menu-empty">${esc(t.modelLoading)}</div>`;
+    } else if (!selectableModels.length) {
+      bodyHtml = `<div class="pt-model-menu-empty">${esc(t.modelEmpty)}</div>`;
+    } else {
+      bodyHtml = `<div class="pt-model-menu-list">${selectableModels
+        .map((m) => {
+          const isSelected = isModelActiveForThread(m, th);
+          const optKey = m.id || m.modelId || m.modelEnum || m.label;
+          const metaBadges = [];
+          if (m.tagTitle) {
+            const warnTag = /leaving|notice|deprecat/i.test(m.tagTitle);
+            metaBadges.push(
+              `<span class="pt-model-tag${warnTag ? ' warn' : ''}">${esc(m.tagTitle)}</span>`,
+            );
+          } else if (m.isDefault) {
+            metaBadges.push(`<span class="pt-model-tag">${esc(t.modelDefaultBadge)}</span>`);
+          }
+          if (m.quotaInfo && typeof m.quotaInfo.remainingFraction === 'number') {
+            const pct = Math.max(0, Math.min(100, Math.round(m.quotaInfo.remainingFraction * 100)));
+            metaBadges.push(
+              `<span class="pt-model-quota${pct <= 20 ? ' low' : ''}">${pct}%</span>`,
+            );
+          }
+          const tipParts = [m.label, m.tagDescription || m.description || ''].filter(Boolean);
+          return `<button type="button" class="pt-model-opt${isSelected ? ' active' : ''}" role="option" aria-selected="${isSelected ? 'true' : 'false'}" data-model-key="${esc(optKey)}" title="${esc(tipParts.join(' — '))}"><span class="pt-model-chk" aria-hidden="true">${isSelected ? ICONS.check : ''}</span><span class="pt-model-name">${esc(m.label)}</span>${metaBadges.length ? `<span class="pt-model-meta">${metaBadges.join('')}</span>` : ''}</button>`;
+        })
+        .join('')}</div>`;
+    }
+
+    const hintText = isRunning ? t.modelRunningHint : t.modelNextMsgHint;
+    elModelMenu.innerHTML = `
+      <div class="pt-model-menu-hdr">
+        <span class="pt-model-menu-title">${esc(t.modelMenuTitle)}</span>
+        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+      </div>
+      ${bodyHtml}
+    `;
+    elModelMenu.dataset.renderKey = renderKey;
+    elModelMenu.hidden = false;
+
+    const nextList = elModelMenu.querySelector('.pt-model-menu-list');
+    if (nextList && prevScroll > 0) {
+      nextList.scrollTop = prevScroll;
+    }
+  }
+
+  function openModelMenu() {
+    if (!openThreadObj || openThreadObj.archived) return;
+    modelMenuOpen = true;
+    renderThreadHeader(openThreadObj);
+    renderModelMenu();
+    if (!selectableModels.length || Date.now() - selectableModelsLoadedAt > 30_000) {
+      loadSelectableModels(!selectableModels.length);
+    }
+    const activeOpt =
+      elModelMenu?.querySelector('.pt-model-opt.active') ||
+      elModelMenu?.querySelector('.pt-model-opt');
+    if (activeOpt) {
+      activeOpt.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function toggleModelMenu() {
+    if (modelMenuOpen) closeModelMenu();
+    else openModelMenu();
+  }
+
+  function selectThreadModel(modelItem) {
+    if (!openThreadId || !openThreadObj || !modelItem) return;
+    if (matchesLiveThreadModel(modelItem, openThreadObj)) {
+      pendingModelByThread.delete(openThreadId);
+    } else {
+      pendingModelByThread.set(openThreadId, modelItem);
+    }
+    closeModelMenu({ restoreHeader: false });
+    renderThreadHeader(openThreadObj);
+    elChatInput.focus();
+  }
+
   function renderThreadHeader(th) {
     const t = L();
     openThreadObj = th;
@@ -2423,7 +2691,13 @@
     updateCoordinatorControls();
 
     const compMeta = document.getElementById('composer-meta');
-    const modelLabel = formatModelDisplay(th.modelDisplayName || th.resolvedModel || th.model);
+    const liveModelLabel = formatModelDisplay(th.modelDisplayName || th.resolvedModel || th.model);
+    const pendingModel = th.threadId ? pendingModelByThread.get(th.threadId) || null : null;
+    const modelLabel = pendingModel
+      ? pendingModel.label || formatModelDisplay(pendingModel)
+      : liveModelLabel;
+    const switchHint = pendingModel ? t.modelPendingTip : t.modelSwitchTip;
+    const modelTitle = th.archived ? modelLabel : `${modelLabel} — ${switchHint}`;
     const roleLabel = th.worktreePath || th.branch ? t.roleWorker : t.roleReadOnly;
     const stepsHtml =
       th.toolStepCount > 0
@@ -2432,11 +2706,17 @@
     const wtBtn = th.worktreePath
       ? `<button type="button" id="btn-comp-wt" class="ghost" title="${esc(th.worktreePath)}">${ICONS.folder} <span>${esc(t.actFolder)}</span></button>`
       : '';
+    const modelBtnCls = `comp-model-pill${pendingModel ? ' pending' : ''}${modelMenuOpen ? ' open' : ''}`;
+    const modelBtnHtml = `<button type="button" id="btn-comp-model" class="${modelBtnCls}" title="${esc(modelTitle)}" aria-haspopup="listbox" aria-expanded="${modelMenuOpen ? 'true' : 'false'}"${th.archived ? ' disabled' : ''}><span class="comp-model-lbl">${esc(modelLabel)}</span><span class="comp-model-chev" aria-hidden="true">${ICONS.chevronDown}</span></button>`;
 
-    compMeta.innerHTML = `<span class="comp-plus-ico" aria-hidden="true">${ICONS.plus}</span><span class="comp-role-lbl">${esc(roleLabel)}</span><span class="comp-model-pill" title="${esc(modelLabel)}">${esc(modelLabel)}</span>${stepsHtml}${wtBtn}`;
-    const compWtBtn = document.getElementById('btn-comp-wt');
-    if (compWtBtn) {
-      compWtBtn.addEventListener('click', () => copyText(th.worktreePath, L().copiedPath));
+    const nextMetaHtml = `<span class="comp-plus-ico" aria-hidden="true">${ICONS.plus}</span><span class="comp-role-lbl">${esc(roleLabel)}</span>${modelBtnHtml}${stepsHtml}${wtBtn}`;
+    if (compMeta.dataset.renderedHtml !== nextMetaHtml) {
+      compMeta.innerHTML = nextMetaHtml;
+      compMeta.dataset.renderedHtml = nextMetaHtml;
+    }
+
+    if (modelMenuOpen) {
+      renderModelMenu();
     }
 
     // Active running trace renders inline at the bottom of #chat-stream matching Native Chat
@@ -2679,6 +2959,7 @@
 
   async function openThreadDrawer(threadId) {
     if (!threadId) return;
+    closeModelMenu({ restoreHeader: false });
     boardScrollTop = elBoardBody.scrollTop;
     openThreadId = threadId;
     lastThreadStamp = '';
@@ -2719,6 +3000,7 @@
   }
 
   function closeThreadDrawer() {
+    closeModelMenu({ restoreHeader: false });
     openThreadId = '';
     openThreadObj = null;
     lastThreadStamp = '';
@@ -2779,6 +3061,9 @@
     const text = elChatInput.value.trim();
     if (!text) return;
     const t = L();
+    const targetThreadId = openThreadId;
+    const chosenModel = pendingModelByThread.get(targetThreadId) || null;
+    closeModelMenu();
 
     elSendBtn.disabled = true;
     elChatInput.value = '';
@@ -2792,13 +3077,26 @@
     elLiveBar.hidden = true;
 
     try {
-      const res = await postApi('/api/thread_send', '/api/thread_send_get', {
-        threadId: openThreadId,
+      const sendPayload = {
+        threadId: targetThreadId,
         message: text,
-      });
+      };
+      if (chosenModel) {
+        sendPayload.model = chosenModel.id || chosenModel.modelId || chosenModel.modelEnum || '';
+        sendPayload.modelEnum = chosenModel.modelEnum || '';
+        if (chosenModel.modelOrAlias) sendPayload.modelOrAlias = chosenModel.modelOrAlias;
+        sendPayload.modelDisplayName = chosenModel.label || '';
+      }
+      const res = await postApi('/api/thread_send', '/api/thread_send_get', sendPayload);
       if (!res.ok) {
         tempWrap.innerHTML = `<div class="msg-user">${esc(text)}</div><div class="err">${esc(res.error || 'Error')}</div>`;
       } else {
+        if (chosenModel) {
+          pendingModelByThread.delete(targetThreadId);
+        }
+        if (res.thread && openThreadId === targetThreadId) {
+          renderThreadHeader(res.thread);
+        }
         lastThreadStamp = '';
         await refreshOpenThread(true, false);
       }
@@ -2872,6 +3170,7 @@
         openThreadId &&
         !(data.threads || []).some((x) => x.threadId === openThreadId)
       ) {
+        closeModelMenu({ restoreHeader: false });
         openThreadId = '';
         openThreadObj = null;
         lastThreadStamp = '';
@@ -2911,6 +3210,7 @@
       if (currentTab !== 'threads') {
         document.getElementById('tab-threads').click();
       }
+      loadSelectableModels(false);
       document.getElementById('f-title').focus();
     }
   }
@@ -3023,14 +3323,68 @@
     syncModalConfirmButton();
   });
 
+  document.getElementById('composer-meta').addEventListener('click', (e) => {
+    const modelBtn = e.target.closest('#btn-comp-model');
+    if (modelBtn && !modelBtn.disabled) {
+      e.stopPropagation();
+      toggleModelMenu();
+      return;
+    }
+    const wtBtn = e.target.closest('#btn-comp-wt');
+    if (wtBtn && openThreadObj?.worktreePath) {
+      copyText(openThreadObj.worktreePath, L().copiedPath);
+    }
+  });
+
+  if (elModelMenu) {
+    elModelMenu.addEventListener('click', (e) => {
+      const opt = e.target.closest('.pt-model-opt');
+      if (!opt) return;
+      e.stopPropagation();
+      const chosen = getModelByIdFromCatalog(opt.dataset.modelKey || '');
+      if (chosen) selectThreadModel(chosen);
+    });
+    elModelMenu.addEventListener('keydown', (e) => {
+      if (!modelMenuOpen) return;
+      const opts = [...elModelMenu.querySelectorAll('.pt-model-opt')];
+      if (!opts.length) return;
+      const idx = opts.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        opts[(idx + 1) % opts.length].focus();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        opts[(idx - 1 + opts.length) % opts.length].focus();
+      } else if (e.key === 'Enter' && idx >= 0) {
+        e.preventDefault();
+        opts[idx].click();
+      }
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!modelMenuOpen) return;
+    if (e.target.closest('#pt-model-menu') || e.target.closest('#btn-comp-model')) return;
+    closeModelMenu();
+  });
+
   elModalCancel.addEventListener('click', () => closePtModal());
   elModalClose.addEventListener('click', () => closePtModal());
   elModalBackdrop.addEventListener('click', (e) => {
     if (e.target === elModalBackdrop) closePtModal();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && activeModalCtx && !activeModalCtx.busy) {
-      closePtModal();
+    if (e.key === 'Escape') {
+      if (modelMenuOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModelMenu();
+        document.getElementById('btn-comp-model')?.focus();
+        return;
+      }
+      if (activeModalCtx && !activeModalCtx.busy) {
+        closePtModal();
+      }
     }
   });
 
@@ -3249,6 +3603,8 @@
         // Ignore optional listener errors
       }
     }
+    populateDispatchModelSelect();
+    loadSelectableModels(false);
     await refreshBoard(true);
     setInterval(() => {
       refreshBoard(false);
