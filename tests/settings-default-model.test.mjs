@@ -6,15 +6,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 import { resetModelConfigCache } from '../lib/ls-client.mjs';
 import {
+  buildModelFamilyGroups,
+  formatModelDisplay,
+  resolveModelFamilySelection,
+} from '../lib/model-format.mjs';
+import {
+  canonicalizeModelForSettings,
   dispatchThread,
   getEffectiveSettings,
   loadRegistry,
   loadSettings,
   normalizeKey,
   resolveDefaultDispatchModel,
+  resolveInheritedCoordinatorModel,
   saveRegistry,
   saveSettings,
 } from '../lib/store.mjs';
@@ -84,9 +92,13 @@ const SAMPLE_MODEL_CONFIG_DATA = {
   },
 };
 
-function startMockLs(t, { withCatalog = true } = {}) {
+function startMockLs(
+  t,
+  { withCatalog = true, generatorMetadataByCascade = null } = {},
+) {
   const createRequests = [];
   const cascadeSendPayloads = [];
+  const genMetaByCascade = generatorMetadataByCascade || new Map();
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => {
@@ -102,6 +114,24 @@ function startMockLs(t, { withCatalog = true } = {}) {
           return;
         }
         res.end(JSON.stringify(SAMPLE_MODEL_CONFIG_DATA));
+        return;
+      }
+      if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeTrajectoryGeneratorMetadata') {
+        const metaEntry = genMetaByCascade.get(payload.cascadeId);
+        if (metaEntry && metaEntry.errorStatus) {
+          res.statusCode = metaEntry.errorStatus;
+          res.end(JSON.stringify({ message: metaEntry.message || 'metadata unavailable' }));
+          return;
+        }
+        res.end(
+          JSON.stringify({
+            generatorMetadata: Array.isArray(metaEntry)
+              ? metaEntry
+              : Array.isArray(metaEntry?.generatorMetadata)
+                ? metaEntry.generatorMetadata
+                : [],
+          }),
+        );
         return;
       }
       if (req.url === '/product.v1.ConversationService/CreateConversation') {
@@ -147,12 +177,12 @@ function startMockLs(t, { withCatalog = true } = {}) {
       process.env.ANTIGRAVITY_LS_ADDRESS = `127.0.0.1:${port}`;
       process.env.ANTIGRAVITY_CSRF_TOKEN = 'csrf-settings-test';
       t.after(() => new Promise((r) => server.close(r)));
-      resolveListen({ port, createRequests, cascadeSendPayloads });
+      resolveListen({ port, createRequests, cascadeSendPayloads, genMetaByCascade });
     });
   });
 }
 
-test('loadSettings / saveSettings persist global defaults, project overrides, corrupt fallbacks, and clears cleanly', (t) => {
+test('loadSettings / saveSettings persist global defaults, project overrides, inherit mode, corrupt fallbacks, and clears cleanly', (t) => {
   const { stateDir } = createTempEnv(t, 'pt-set-persist-');
 
   // 1. Missing settings.json falls back cleanly to pro/pro
@@ -165,7 +195,7 @@ test('loadSettings / saveSettings persist global defaults, project overrides, co
   const recovered = loadSettings();
   assert.deepEqual(recovered.defaults, { worktreeModel: 'pro', readOnlyModel: 'pro' });
 
-  // 3. Save global defaults via patch
+  // 3. Save global defaults via patch (including 'inherit')
   const savedGlobal = saveSettings({
     defaults: {
       worktreeModel: 'gemini-4-hydrogen-xhigh',
@@ -182,7 +212,19 @@ test('loadSettings / saveSettings persist global defaults, project overrides, co
   assert.equal(partialGlobal.defaults.worktreeModel, 'gemini-4-hydrogen-xhigh');
   assert.equal(partialGlobal.defaults.readOnlyModel, 'flash_lite');
 
-  // 4. Per-project overrides merge & clear cleanly
+  // 'inherit' is preserved as a first-class canonical value (distinct from "" and 'pro')
+  const inheritGlobal = saveSettings({
+    defaults: { worktreeModel: 'inherit', readOnlyModel: 'INHERIT' },
+  });
+  assert.equal(inheritGlobal.defaults.worktreeModel, 'inherit');
+  assert.equal(inheritGlobal.defaults.readOnlyModel, 'inherit');
+  assert.deepEqual(canonicalizeModelForSettings('inherit'), {
+    value: 'inherit',
+    label: 'Follow Coordinator (inherit)',
+  });
+  assert.deepEqual(canonicalizeModelForSettings(''), { value: '', label: '' });
+
+  // 4. Per-project overrides merge, preserve 'inherit', & clear cleanly
   const wk = normalizeKey(join(stateDir, 'proj-a'));
   saveSettings({
     scope: 'project',
@@ -192,6 +234,17 @@ test('loadSettings / saveSettings persist global defaults, project overrides, co
   });
   let loaded = loadSettings();
   assert.equal(loaded.projects[wk].worktreeModel, 'gemini-4-neon-high');
+  assert.equal(loaded.projects[wk].readOnlyModel, '');
+
+  // Project override 'inherit' stays persisted and distinct from "" (Follow Global Default)
+  saveSettings({
+    scope: 'project',
+    workspaceKey: wk,
+    worktreeModel: 'inherit',
+    readOnlyModel: '',
+  });
+  loaded = loadSettings();
+  assert.equal(loaded.projects[wk].worktreeModel, 'inherit');
   assert.equal(loaded.projects[wk].readOnlyModel, '');
 
   // Clearing single field back to "" when no other override remains removes empty project entry
@@ -218,14 +271,56 @@ test('loadSettings / saveSettings persist global defaults, project overrides, co
   assert.deepEqual(loadSettings().defaults, { worktreeModel: 'pro', readOnlyModel: 'pro' });
 });
 
-test('getEffectiveSettings and resolveDefaultDispatchModel enforce project precedence and separate worktree vs readOnly', async (t) => {
+test('getEffectiveSettings and resolveDefaultDispatchModel enforce project precedence, expose coordinator model, and resolve inherit', async (t) => {
   const { tempRoot } = createTempEnv(t, 'pt-set-eff-');
-  await startMockLs(t, { withCatalog: true });
+  const genMetaByCascade = new Map();
+  await startMockLs(t, { withCatalog: true, generatorMetadataByCascade: genMetaByCascade });
 
   const repoRoot = join(tempRoot, 'demo-repo');
   mkdirSync(repoRoot, { recursive: true });
   execFileSync('git', ['init', '-b', 'main'], { cwd: repoRoot });
   const wk = normalizeKey(repoRoot);
+
+  const reg = loadRegistry();
+  reg.coordinators[wk] = {
+    key: wk,
+    conversationId: 'conv-coord-eff',
+    workspacePath: repoRoot,
+    repoRoot,
+    defaultBranch: 'main',
+    title: '[Coordinator] demo',
+  };
+  reg.threads['thr-099'] = {
+    threadId: 'thr-099',
+    conversationId: 'conv-worker-eff',
+    coordinatorId: 'conv-coord-eff',
+    workspaceKey: wk,
+    title: 'Popped-out worker',
+    model: 'flash',
+    archived: false,
+  };
+  saveRegistry(reg);
+
+  genMetaByCascade.set('conv-coord-eff', [
+    {
+      stepIndices: [1, 2],
+      chatModel: {
+        model: 'MODEL_PLACEHOLDER_M528',
+        responseModel: 'gemini-4-hydrogen-tiered-xhigh',
+        modelDisplayName: 'Gemini 4 Hydrogen (XHigh)',
+      },
+    },
+  ]);
+  genMetaByCascade.set('conv-worker-eff', [
+    {
+      stepIndices: [1],
+      chatModel: {
+        model: 'MODEL_PLACEHOLDER_M319',
+        responseModel: 'gemini-3.8-flash-medium',
+        modelDisplayName: 'Gemini 3.8 Flash (Medium)',
+      },
+    },
+  ]);
 
   saveSettings({
     defaults: {
@@ -249,6 +344,17 @@ test('getEffectiveSettings and resolveDefaultDispatchModel enforce project prece
   assert.equal(eff.worktreeModelLabel, 'Gemini 4 Neon (High)');
   assert.equal(eff.readOnlyModel, 'gemini-3.8-flash-medium');
   assert.equal(eff.readOnlyModelLabel, 'Gemini 3.8 Flash (Medium)');
+  assert.equal(eff.coordinatorId, 'conv-coord-eff');
+  assert.equal(eff.coordinatorModel, 'gemini-4-hydrogen-xhigh');
+  assert.equal(eff.coordinatorModelDisplayName, 'Gemini 4 Hydrogen (XHigh)');
+
+  // Even when Sidecar passes a popped-out worker's conversationId, coordinator resolution picks the bound Coordinator
+  const effFromWorker = await getEffectiveSettings({
+    workspacePath: repoRoot,
+    conversationId: 'conv-worker-eff',
+  });
+  assert.equal(effFromWorker.coordinatorId, 'conv-coord-eff');
+  assert.equal(effFromWorker.coordinatorModelDisplayName, 'Gemini 4 Hydrogen (XHigh)');
 
   assert.equal(
     await resolveDefaultDispatchModel({ createWorktree: true, workspacePath: repoRoot }),
@@ -259,15 +365,38 @@ test('getEffectiveSettings and resolveDefaultDispatchModel enforce project prece
     'gemini-3.8-flash-medium',
   );
 
+  // When project sets 'inherit', effective keeps 'inherit' for UI while resolveDefaultDispatchModel resolves Coordinator's model
+  saveSettings({ scope: 'project', workspaceKey: wk, worktreeModel: 'inherit' });
+  const effInherit = await getEffectiveSettings({ workspacePath: repoRoot });
+  assert.equal(effInherit.worktreeModel, 'inherit');
+  assert.equal(effInherit.worktreeSource, 'project');
+  assert.match(effInherit.worktreeModelLabel, /Gemini 4 Hydrogen \(XHigh\)/);
+  assert.equal(
+    await resolveDefaultDispatchModel({ createWorktree: true, workspacePath: repoRoot }),
+    'gemini-4-hydrogen-xhigh',
+  );
+
   // Clearing project worktreeModel reverts createWorktree: true back to global default
   saveSettings({ scope: 'project', workspaceKey: wk, worktreeModel: '' });
   assert.equal(
     await resolveDefaultDispatchModel({ createWorktree: true, workspacePath: repoRoot }),
     'gemini-4-hydrogen-xhigh',
   );
+
+  // If Coordinator has no metadata yet, coordinatorModelDisplayName is empty and inherit resolves safely to 'pro'
+  genMetaByCascade.delete('conv-coord-eff');
+  saveSettings({ defaults: { worktreeModel: 'inherit', readOnlyModel: 'pro' } });
+  const effNoCoordModel = await getEffectiveSettings({ workspacePath: repoRoot });
+  assert.equal(effNoCoordModel.worktreeModel, 'inherit');
+  assert.equal(effNoCoordModel.coordinatorModel, '');
+  assert.equal(effNoCoordModel.coordinatorModelDisplayName, '');
+  assert.equal(
+    await resolveDefaultDispatchModel({ createWorktree: true, workspacePath: repoRoot }),
+    'pro',
+  );
 });
 
-test('dispatchThread honors Settings defaults for omitted/default/auto/inherit, separates modes, respects overrides, and never sends display labels', async (t) => {
+test('dispatchThread honors Settings defaults for omitted/default/auto, separates modes, respects overrides, and never sends display labels', async (t) => {
   const { tempRoot } = createTempEnv(t, 'pt-set-dispatch-');
   const ls = await startMockLs(t, { withCatalog: true });
 
@@ -311,8 +440,8 @@ test('dispatchThread honors Settings defaults for omitted/default/auto/inherit, 
   assert.equal(tWt.model, 'gemini-4-hydrogen-xhigh');
   assert.equal(tWt.modelDisplayName, 'Gemini 4 Hydrogen (XHigh)');
 
-  // 2. Omitted / "default" / "auto" / "inherit" with createWorktree: false uses readOnlyModel
-  for (const sentinel of [undefined, '', 'default', 'auto', 'inherit']) {
+  // 2. Omitted / "default" / "auto" with createWorktree: false uses readOnlyModel
+  for (const sentinel of [undefined, '', 'default', 'auto']) {
     const tRo = await dispatchThread({
       workspacePath: repoRoot,
       coordinatorId: 'conv-coord-set',
@@ -325,7 +454,6 @@ test('dispatchThread honors Settings defaults for omitted/default/auto/inherit, 
     assert.equal(tRo.model, 'gemini-4-neon-low');
     assert.equal(tRo.modelDisplayName, 'Gemini 4 Neon (Low)');
     assert.notEqual(ls.createRequests.at(-1).model, 'auto');
-    assert.notEqual(ls.createRequests.at(-1).model, 'inherit');
     assert.notEqual(ls.createRequests.at(-1).model, 'default');
   }
 
@@ -373,6 +501,378 @@ test('dispatchThread honors Settings defaults for omitted/default/auto/inherit, 
   assert.equal(tHumanOffline.model, 'pro');
 });
 
+test('dispatchThread with inherit dynamically resolves Coordinator LS & transcript models and never sends literal inherit', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-set-inherit-');
+  const genMetaByCascade = new Map();
+  const ls = await startMockLs(t, { withCatalog: true, generatorMetadataByCascade: genMetaByCascade });
+
+  const repoRoot = join(tempRoot, 'inherit-repo');
+  mkdirSync(repoRoot, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main'], { cwd: repoRoot });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repoRoot });
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repoRoot });
+  writeFileSync(join(repoRoot, 'README.md'), '# Inherit\n', 'utf8');
+  execFileSync('git', ['add', 'README.md'], { cwd: repoRoot });
+  execFileSync('git', ['commit', '-m', 'init'], { cwd: repoRoot });
+
+  const coordConvId = 'conv-coord-inh-001';
+  const wk = normalizeKey(repoRoot);
+  const reg = loadRegistry();
+  reg.coordinators[wk] = {
+    key: wk,
+    conversationId: coordConvId,
+    workspacePath: repoRoot,
+    repoRoot,
+    defaultBranch: 'main',
+    title: '[Coordinator] InheritDemo',
+  };
+  saveRegistry(reg);
+
+  // 1. No LS metadata & no transcript yet -> safely falls back to 'pro' (never sends 'inherit')
+  saveSettings({
+    defaults: {
+      worktreeModel: 'inherit',
+      readOnlyModel: 'flash',
+    },
+  });
+  const tNoModel = await dispatchThread({
+    workspacePath: repoRoot,
+    coordinatorId: coordConvId,
+    title: 'Inherit empty fallback',
+    taskPrompt: 'Check fallback',
+    createWorktree: true,
+  });
+  assert.equal(ls.createRequests.at(-1).model, 'pro');
+  assert.notEqual(ls.createRequests.at(-1).model, 'inherit');
+  assert.equal(tNoModel.model, 'pro');
+
+  // 2. Live Coordinator metadata resolves via catalog -> valid CreateConversation modelId
+  genMetaByCascade.set(coordConvId, [
+    {
+      stepIndices: [1, 2],
+      chatModel: {
+        model: 'MODEL_PLACEHOLDER_M528',
+        responseModel: 'gemini-4-hydrogen-tiered-xhigh',
+        modelDisplayName: 'Gemini 4 Hydrogen (XHigh)',
+      },
+    },
+  ]);
+  const tFromSettings = await dispatchThread({
+    workspacePath: repoRoot,
+    coordinatorId: coordConvId,
+    title: 'Inherit from Settings',
+    taskPrompt: 'Use coordinator Hydrogen',
+    createWorktree: true,
+  });
+  assert.equal(ls.createRequests.at(-1).model, 'gemini-4-hydrogen-xhigh');
+  assert.equal(tFromSettings.model, 'gemini-4-hydrogen-xhigh');
+  assert.equal(tFromSettings.modelDisplayName, 'Gemini 4 Hydrogen (XHigh)');
+  assert.equal(tFromSettings.modelEnum, 'MODEL_PLACEHOLDER_M528');
+
+  // 3. Coordinator switches model mid-session -> explicit model: 'inherit' picks up new model dynamically
+  genMetaByCascade.set(coordConvId, [
+    {
+      stepIndices: [1, 2],
+      chatModel: {
+        model: 'MODEL_PLACEHOLDER_M528',
+        responseModel: 'gemini-4-hydrogen-tiered-xhigh',
+        modelDisplayName: 'Gemini 4 Hydrogen (XHigh)',
+      },
+    },
+    {
+      stepIndices: [3, 4],
+      chatModel: {
+        model: 'MODEL_PLACEHOLDER_M534',
+        responseModel: 'gemini-4-neon-low',
+        modelDisplayName: 'Gemini 4 Neon (Low)',
+      },
+    },
+  ]);
+  const tExplicitInherit = await dispatchThread({
+    workspacePath: repoRoot,
+    coordinatorId: coordConvId,
+    title: 'Explicit inherit override',
+    taskPrompt: 'Override flash readOnly with inherit',
+    model: 'inherit',
+    createWorktree: false,
+  });
+  assert.equal(ls.createRequests.at(-1).model, 'gemini-4-neon-low');
+  assert.equal(tExplicitInherit.model, 'gemini-4-neon-low');
+  assert.equal(tExplicitInherit.modelDisplayName, 'Gemini 4 Neon (Low)');
+
+  // 4. LS metadata unavailable -> fallback to transcript.jsonl PLANNER_RESPONSE.model
+  genMetaByCascade.set(coordConvId, { errorStatus: 503, message: 'LS metadata busy' });
+  const txDir = join(appDataDir, 'brain', coordConvId, '.system_generated', 'logs');
+  mkdirSync(txDir, { recursive: true });
+  const txPath = join(txDir, 'transcript.jsonl');
+  writeFileSync(
+    txPath,
+    [
+      JSON.stringify({ step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Hi</USER_REQUEST>' }),
+      JSON.stringify({ step_index: 1, type: 'PLANNER_RESPONSE', model: 'gemini-4-neon-high', content: 'ok' }),
+    ].join('\n'),
+    'utf8',
+  );
+  const tFromTxPlanner = await dispatchThread({
+    workspacePath: repoRoot,
+    coordinatorId: coordConvId,
+    title: 'Inherit transcript planner',
+    taskPrompt: 'Read transcript fallback',
+    model: 'inherit',
+    createWorktree: false,
+  });
+  assert.equal(ls.createRequests.at(-1).model, 'gemini-4-neon-high');
+  assert.equal(tFromTxPlanner.modelDisplayName, 'Gemini 4 Neon (High)');
+
+  // 5. Transcript has <USER_SETTINGS_CHANGE> display label after PLANNER_RESPONSE:
+  //    online catalog normalizes it to 'gemini-3.8-flash-medium'; offline catalog falls back to 'pro' (never sends label!)
+  writeFileSync(
+    txPath,
+    [
+      JSON.stringify({ step_index: 0, type: 'PLANNER_RESPONSE', model: 'gemini-4-neon-high', content: 'step 1' }),
+      JSON.stringify({
+        step_index: 1,
+        type: 'USER_INPUT',
+        content:
+          '<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from Gemini 4 Neon (High) to Gemini 3.8 Flash (Medium).\n</USER_SETTINGS_CHANGE>\n<USER_REQUEST>Next</USER_REQUEST>',
+      }),
+    ].join('\n'),
+    'utf8',
+  );
+  const tFromTxBannerOnline = await dispatchThread({
+    workspacePath: repoRoot,
+    coordinatorId: coordConvId,
+    title: 'Inherit transcript settings online',
+    taskPrompt: 'Normalize display name via catalog',
+    model: 'inherit',
+    createWorktree: false,
+  });
+  assert.equal(ls.createRequests.at(-1).model, 'gemini-3.8-flash-medium');
+  assert.equal(tFromTxBannerOnline.modelDisplayName, 'Gemini 3.8 Flash (Medium)');
+
+  // Offline catalog with only <USER_SETTINGS_CHANGE> display label -> never leaks human label, falls back to 'pro'
+  resetModelConfigCache();
+  const lsOffline = await startMockLs(t, { withCatalog: false, generatorMetadataByCascade: genMetaByCascade });
+  writeFileSync(
+    txPath,
+    JSON.stringify({
+      step_index: 0,
+      type: 'USER_INPUT',
+      content:
+        '<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from None to Gemini 4 Neon (High).\n</USER_SETTINGS_CHANGE>\n<USER_REQUEST>Hi</USER_REQUEST>',
+    }),
+    'utf8',
+  );
+  const resolvedOffline = await resolveInheritedCoordinatorModel({
+    workspacePath: repoRoot,
+    coordinatorId: coordConvId,
+    catalogModels: [],
+  });
+  assert.equal(resolvedOffline.model, 'pro');
+  const tFromTxBannerOffline = await dispatchThread({
+    workspacePath: repoRoot,
+    coordinatorId: coordConvId,
+    title: 'Inherit transcript offline safe',
+    taskPrompt: 'Never send display label',
+    model: 'inherit',
+    createWorktree: false,
+  });
+  assert.equal(lsOffline.createRequests.at(-1).model, 'pro');
+  assert.notEqual(lsOffline.createRequests.at(-1).model, 'inherit');
+  assert.notEqual(lsOffline.createRequests.at(-1).model, 'Gemini 4 Neon (High)');
+  assert.equal(tFromTxBannerOffline.model, 'pro');
+});
+
+function loadUiModelHelpers() {
+  const src = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
+  const start = src.indexOf('function formatModelDisplay(');
+  const endMarker = 'function normalizeActivityText(';
+  const end = src.indexOf(endMarker, start);
+  assert.notEqual(start, -1, 'formatModelDisplay must exist in app.js');
+  assert.notEqual(end, -1, 'normalizeActivityText must follow model helpers in app.js');
+  const code = src.slice(start, end);
+  const ctx = {};
+  vm.runInNewContext(
+    `${code}
+     this.formatModelDisplay = formatModelDisplay;
+     this.isSameModelFamily = isSameModelFamily;
+     this.buildModelFamilyGroups = buildModelFamilyGroups;
+     this.resolveModelFamilySelection = resolveModelFamilySelection;`,
+    ctx,
+  );
+  return ctx;
+}
+
+test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier models, single-variant models, special modes, and match UI identically', () => {
+  const ui = loadUiModelHelpers();
+
+  const richCatalog = [
+    {
+      id: 'gemini-4-neon-high',
+      modelId: 'gemini-4-neon-high',
+      modelEnum: 'MODEL_PLACEHOLDER_M532',
+      label: 'Gemini 4 Neon (High)',
+      familyId: 'gemini-4-neon',
+      familyName: 'Gemini 4 Neon',
+      thinkingLevel: 'High',
+      isDefault: true,
+    },
+    {
+      id: 'gemini-4-neon-low',
+      modelId: 'gemini-4-neon-low',
+      modelEnum: 'MODEL_PLACEHOLDER_M534',
+      label: 'Gemini 4 Neon (Low)',
+      familyId: 'gemini-4-neon',
+      familyName: 'Gemini 4 Neon',
+      thinkingLevel: 'Low',
+      isDefault: false,
+    },
+    {
+      id: 'gemini-4-hydrogen-xhigh',
+      modelId: 'gemini-4-hydrogen-xhigh',
+      modelEnum: 'MODEL_PLACEHOLDER_M528',
+      label: 'Gemini 4 Hydrogen (XHigh)',
+      isDefault: false,
+    },
+    {
+      id: 'gemini-4-hydrogen-low',
+      modelId: 'gemini-4-hydrogen-low',
+      modelEnum: 'MODEL_PLACEHOLDER_M527',
+      label: 'Gemini 4 Hydrogen (Low)',
+      isDefault: false,
+    },
+    {
+      id: 'gemini-4-hydrogen-high',
+      modelId: 'gemini-4-hydrogen-high',
+      modelEnum: 'MODEL_PLACEHOLDER_M529',
+      label: 'Gemini 4 Hydrogen (High)',
+      isDefault: false,
+    },
+    {
+      id: 'gemini-4-hydrogen-medium',
+      modelId: 'gemini-4-hydrogen-medium',
+      modelEnum: 'MODEL_PLACEHOLDER_M530',
+      label: 'Gemini 4 Hydrogen (Medium)',
+      isDefault: false,
+    },
+    {
+      id: 'claude-sonnet-4-6',
+      modelId: 'claude-sonnet-4-6',
+      modelEnum: 'MODEL_PLACEHOLDER_M34',
+      label: 'Claude Sonnet 4.6',
+      isDefault: false,
+    },
+    {
+      id: 'claude-sonnet-4-6-thinking',
+      modelId: 'claude-sonnet-4-6-thinking',
+      modelEnum: 'MODEL_PLACEHOLDER_M35',
+      label: 'Claude Sonnet 4.6 (Thinking)',
+      isDefault: false,
+    },
+    {
+      id: 'gpt-oss-120b-medium',
+      modelId: 'gpt-oss-120b-medium',
+      modelEnum: 'MODEL_OPENAI_GPT_OSS_120B_MEDIUM',
+      label: 'GPT-OSS 120B (Medium)',
+      isDefault: false,
+    },
+    {
+      id: 'gemini-3.8-flash-medium',
+      modelId: 'gemini-3.8-flash-medium',
+      modelEnum: 'MODEL_PLACEHOLDER_M319',
+      label: 'Gemini 3.8 Flash (Medium)',
+      isDefault: false,
+    },
+  ];
+
+  const groupOpts = {
+    includeFollowGlobal: true,
+    followGlobalLabel: 'Follow Global Default (Gemini Pro)',
+    includeInherit: true,
+    inheritLabel: 'Follow Coordinator (Gemini 4 Neon (High))',
+    includeTierAliases: true,
+    tierAliasGroupLabel: 'Auto Tier',
+  };
+
+  const libGroups = buildModelFamilyGroups(richCatalog, groupOpts);
+  const uiGroups = ui.buildModelFamilyGroups(richCatalog, groupOpts);
+  assert.deepEqual(JSON.parse(JSON.stringify(uiGroups)), JSON.parse(JSON.stringify(libGroups)));
+
+  // Verify special modes order at top
+  assert.equal(libGroups[0].kind, 'follow_global');
+  assert.equal(libGroups[0].hasTiers, false);
+  assert.equal(libGroups[1].kind, 'inherit');
+  assert.equal(libGroups[1].hasTiers, false);
+  assert.equal(libGroups[2].kind, 'tier');
+  assert.equal(libGroups[2].hasTiers, true);
+  assert.deepEqual(
+    libGroups[2].tiers.map((x) => x.value),
+    ['pro', 'flash', 'flash_lite'],
+  );
+
+  // Multi-tier family grouping & Low -> Medium -> High -> XHigh ordering + defaultValue
+  const neonGrp = libGroups.find((g) => g.label === 'Gemini 4 Neon');
+  assert.ok(neonGrp);
+  assert.equal(neonGrp.hasTiers, true);
+  assert.deepEqual(
+    neonGrp.tiers.map((x) => x.label),
+    ['Low', 'High'],
+  );
+  assert.equal(neonGrp.defaultValue, 'gemini-4-neon-high');
+
+  const hydroGrp = libGroups.find((g) => g.label === 'Gemini 4 Hydrogen');
+  assert.ok(hydroGrp);
+  assert.equal(hydroGrp.hasTiers, true);
+  assert.deepEqual(
+    hydroGrp.tiers.map((x) => x.label),
+    ['Low', 'Medium', 'High', 'XHigh'],
+  );
+  assert.equal(hydroGrp.defaultValue, 'gemini-4-hydrogen-high');
+
+  // Mixed bare + (Thinking) family grouping
+  const claudeGrp = libGroups.find((g) => g.label === 'Claude Sonnet 4.6');
+  assert.ok(claudeGrp);
+  assert.equal(claudeGrp.hasTiers, true);
+  assert.deepEqual(
+    claudeGrp.tiers.map((x) => x.label),
+    ['Standard', 'Thinking'],
+  );
+
+  // Single-variant models stay intact in Base Model with Tier disabled (hasTiers: false)
+  const gptGrp = libGroups.find((g) => g.label === 'GPT-OSS 120B (Medium)');
+  assert.ok(gptGrp);
+  assert.equal(gptGrp.hasTiers, false);
+  assert.equal(gptGrp.defaultValue, 'gpt-oss-120b-medium');
+
+  const flash38Grp = libGroups.find((g) => g.label === 'Gemini 3.8 Flash (Medium)');
+  assert.ok(flash38Grp);
+  assert.equal(flash38Grp.hasTiers, false);
+
+  // Reverse-lookup round-trip across stored variants
+  const roundTripCases = [
+    ['', '__follow_global__', ''],
+    ['inherit', '__inherit__', 'inherit'],
+    ['pro', '__tier__', 'pro'],
+    ['flash-lite', '__tier__', 'flash_lite'],
+    ['gemini-4-hydrogen-xhigh', 'family:gemini 4 hydrogen', 'gemini-4-hydrogen-xhigh'],
+    ['gemini-4-hydrogen-tiered-xhigh', 'family:gemini 4 hydrogen', 'gemini-4-hydrogen-xhigh'],
+    ['MODEL_PLACEHOLDER_M528', 'family:gemini 4 hydrogen', 'gemini-4-hydrogen-xhigh'],
+    ['Gemini 4 Neon (Low)', 'family:gemini 4 neon', 'gemini-4-neon-low'],
+    ['MODEL_OPENAI_GPT_OSS_120B_MEDIUM', 'family:gpt-oss 120b', 'gpt-oss-120b-medium'],
+    ['claude-sonnet-4-6-thinking', 'family:claude sonnet 4.6', 'claude-sonnet-4-6-thinking'],
+    ['gemini-5-alpha-high', 'custom:gemini-5-alpha-high', 'gemini-5-alpha-high'],
+  ];
+
+  for (const [input, expectedGroupKey, expectedValue] of roundTripCases) {
+    const libSel = resolveModelFamilySelection(input, libGroups);
+    const uiSel = ui.resolveModelFamilySelection(input, uiGroups);
+    assert.equal(libSel.groupKey, expectedGroupKey, `groupKey for ${input}`);
+    assert.equal(libSel.value, expectedValue, `value for ${input}`);
+    assert.equal(uiSel.groupKey, libSel.groupKey, `UI parity groupKey for ${input}`);
+    assert.equal(uiSel.value, libSel.value, `UI parity value for ${input}`);
+  }
+});
+
 test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar API/UI, I18N, and LF endings', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
@@ -396,18 +896,30 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar 
   // 4. Sidecar backend routes and handleDispatch
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/settings['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/settings_save['"]/);
+  assert.match(mainMjs, /coordinatorModelDisplayName/);
   assert.match(mainMjs, /model:\s*data\.model\s*\|\|\s*''/);
   assert.equal(/model:\s*data\.model\s*\|\|\s*'pro'/.test(mainMjs), false);
 
-  // 5. Sidecar UI structure, zero native dialogs, I18N across 3 locales
+  // 5. Sidecar UI structure: preview card removed, two-level Model+Tier controls & inherit mode wired, zero native dialogs, I18N across 3 locales
   assert.equal(/\b(?:window\.)?(?:confirm|alert|prompt)\s*\(/.test(appJs), false);
   assert.match(indexHtml, /id="btn-settings"/);
   assert.match(indexHtml, /id="settings-screen"/);
   assert.match(indexHtml, /class="seg-group settings-seg"/);
   assert.match(indexHtml, /id="set-worktree-model"/);
+  assert.match(indexHtml, /id="set-worktree-tier"/);
   assert.match(indexHtml, /id="set-readonly-model"/);
+  assert.match(indexHtml, /id="set-readonly-tier"/);
   assert.match(indexHtml, /<option value="">/);
+  assert.match(indexHtml, /<option value="inherit">/);
+
+  // Redundant effective-models preview card removed from HTML, JS, and CSS
+  assert.equal(/settings-preview-card|val-preview-wt|val-preview-ro|src-preview-wt|src-preview-ro|settings-unsaved-badge/.test(indexHtml), false);
+  assert.equal(/renderSettingsPreview|val-preview-|src-preview-|settings-unsaved-badge/.test(appJs), false);
+  assert.equal(/\.settings-preview-|\.settings-src-pill|\.settings-unsaved-pill/.test(themeCss), false);
+
   assert.match(themeCss, /#settings-screen|\.settings-body/);
+  assert.match(themeCss, /\.settings-model-row/);
+  assert.match(themeCss, /@media\s*\(max-width:\s*320px\)/);
 
   for (const key of [
     'settingsTip',
@@ -416,6 +928,15 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar 
     'settingsScopeProject',
     'settingsWorktreeLabel',
     'settingsReadOnlyLabel',
+    'settingsModelColLabel',
+    'settingsTierColLabel',
+    'settingsTierDefault',
+    'settingsTierStandard',
+    'settingsTierNone',
+    'settingsTierAutoGroup',
+    'settingsInheritOption',
+    'settingsInheritWithModel',
+    'settingsInheritShort',
     'settingsFollowGlobal',
     'settingsSave',
     'settingsSavedToast',
@@ -487,10 +1008,12 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar 
 
   // 8. LF line endings on all modified/added .mjs files
   for (const rel of [
+    '../lib/model-format.mjs',
     '../lib/store.mjs',
     '../scripts/hook-handler.mjs',
     '../mcp/server.mjs',
     '../sidecars/threads/main.mjs',
+    '../tests/model-display.test.mjs',
     '../tests/settings-default-model.test.mjs',
   ]) {
     const raw = readFileSync(new URL(rel, import.meta.url));

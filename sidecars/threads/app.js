@@ -248,13 +248,15 @@
       settingsResetProject: 'Clear Project Override',
       settingsResetToast: 'Settings reset to defaults',
       settingsClearedProjectToast: 'Cleared project overrides',
-      settingsPreviewTitle: 'EFFECTIVE FOR CURRENT PROJECT',
-      settingsPreviewTitleGlobal: 'EFFECTIVE GLOBAL DEFAULTS',
-      settingsPreviewWorktree: 'Worktree',
-      settingsPreviewReadOnly: 'Read-Only',
-      settingsSrcGlobal: 'Global',
-      settingsSrcProject: 'Project',
-      settingsUnsaved: 'Unsaved',
+      settingsModelColLabel: 'Model',
+      settingsTierColLabel: 'Tier',
+      settingsTierDefault: 'Default',
+      settingsTierStandard: 'Standard',
+      settingsTierNone: '—',
+      settingsTierAutoGroup: 'Auto Tier',
+      settingsInheritOption: 'Follow Coordinator (inherit)',
+      settingsInheritWithModel: (lbl) => `Follow Coordinator (${lbl})`,
+      settingsInheritShort: 'Follow Coordinator',
       settingsRefreshModelsTip: 'Refresh live model catalog',
       useSettingsDefault: (lbl) => `Use Settings Default (${lbl})`,
     },
@@ -491,13 +493,15 @@
       settingsResetProject: '清除项目覆盖',
       settingsResetToast: '已恢复默认设置',
       settingsClearedProjectToast: '已清除当前项目覆盖',
-      settingsPreviewTitle: '当前项目实际生效模型',
-      settingsPreviewTitleGlobal: '当前全局生效模型',
-      settingsPreviewWorktree: 'Worktree 编辑',
-      settingsPreviewReadOnly: '只读排查',
-      settingsSrcGlobal: '全局',
-      settingsSrcProject: '项目覆盖',
-      settingsUnsaved: '未保存',
+      settingsModelColLabel: '模型',
+      settingsTierColLabel: '档位',
+      settingsTierDefault: '默认',
+      settingsTierStandard: '标准',
+      settingsTierNone: '—',
+      settingsTierAutoGroup: '智能档位',
+      settingsInheritOption: '跟随主会话模型 (inherit)',
+      settingsInheritWithModel: (lbl) => `跟随主会话模型 (${lbl})`,
+      settingsInheritShort: '跟随主会话模型',
       settingsRefreshModelsTip: '刷新实时模型列表',
       useSettingsDefault: (lbl) => `使用设置默认 (${lbl})`,
     },
@@ -734,13 +738,15 @@
       settingsResetProject: '清除專案覆寫',
       settingsResetToast: '已恢復預設設定',
       settingsClearedProjectToast: '已清除目前專案覆寫',
-      settingsPreviewTitle: '目前專案實際生效模型',
-      settingsPreviewTitleGlobal: '目前全域生效模型',
-      settingsPreviewWorktree: 'Worktree 編輯',
-      settingsPreviewReadOnly: '唯讀排查',
-      settingsSrcGlobal: '全域',
-      settingsSrcProject: '專案覆寫',
-      settingsUnsaved: '未儲存',
+      settingsModelColLabel: '模型',
+      settingsTierColLabel: '檔位',
+      settingsTierDefault: '預設',
+      settingsTierStandard: '標準',
+      settingsTierNone: '—',
+      settingsTierAutoGroup: '智慧層級',
+      settingsInheritOption: '跟隨主會話模型 (inherit)',
+      settingsInheritWithModel: (lbl) => `跟隨主會話模型 (${lbl})`,
+      settingsInheritShort: '跟隨主會話模型',
       settingsRefreshModelsTip: '重新整理即時模型清單',
       useSettingsDefault: (lbl) => `使用設定預設 (${lbl})`,
     },
@@ -810,8 +816,10 @@
   const pendingModelByThread = new Map(); // threadId -> selected model object
   let settingsScreenOpen = false;
   let settingsScope = 'global'; // 'global' | 'project'
-  let loadedSettingsData = null; // { settings, effective, scopeKey }
+  let loadedSettingsData = null; // { settings, effective, scopeKey, coordinatorModelDisplayName, coordinatorModel }
   let settingsSaving = false;
+  let settingsWorktreeGroups = [];
+  let settingsReadOnlyGroups = [];
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
@@ -823,7 +831,9 @@
   const elBtnScopeGlobal = document.getElementById('btn-scope-global');
   const elBtnScopeProject = document.getElementById('btn-scope-project');
   const elSetWorktree = document.getElementById('set-worktree-model');
+  const elSetWorktreeTier = document.getElementById('set-worktree-tier');
   const elSetReadOnly = document.getElementById('set-readonly-model');
+  const elSetReadOnlyTier = document.getElementById('set-readonly-tier');
   const elBtnSettingsSave = document.getElementById('btn-settings-save');
   const elBtnSettingsReset = document.getElementById('btn-settings-reset');
   const elBtnSettingsRefreshModels = document.getElementById('btn-settings-refresh-models');
@@ -1359,7 +1369,7 @@
       'gemini pro': 'Gemini Pro',
       'gemini-pro': 'Gemini Pro',
       auto: 'Gemini Pro',
-      inherit: 'Gemini Pro',
+      inherit: 'Follow Coordinator (inherit)',
       flash: 'Gemini Flash',
       'gemini flash': 'Gemini Flash',
       'gemini-flash': 'Gemini Flash',
@@ -1421,6 +1431,403 @@
     const baseName = words.join(' ').trim();
     if (!baseName) return 'Gemini Pro';
     return effortSuffix ? `${baseName} (${effortSuffix})` : baseName;
+  }
+
+  function normalizeComparableTokens(str) {
+    return String(str || '')
+      .toLowerCase()
+      .replace(/\(thinking\)|[-_]thinking\b/g, ' ')
+      .replace(/\btiered\b|\bdisabled\b/g, ' ')
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
+  }
+
+  function isSameModelFamily(displayName, slug) {
+    const a = normalizeComparableTokens(displayName);
+    const b = normalizeComparableTokens(slug);
+    if (!a.length || a.length !== b.length) return false;
+    return a.every((tok, idx) => tok === b[idx]);
+  }
+
+  const TIER_SORT_RANK = {
+    minimal: 10,
+    low: 20,
+    standard: 25,
+    default: 25,
+    none: 25,
+    medium: 30,
+    high: 40,
+    xhigh: 50,
+    'extra high': 50,
+    max: 60,
+    thinking: 70,
+  };
+
+  function canonicalizeTierAliasKey(raw) {
+    const s = String(raw || '').trim().toLowerCase();
+    if (s === 'pro' || s === 'gemini pro' || s === 'gemini-pro') return 'pro';
+    if (s === 'flash' || s === 'gemini flash' || s === 'gemini-flash') return 'flash';
+    if (
+      s === 'flash_lite' ||
+      s === 'flash-lite' ||
+      s === 'lite' ||
+      s === 'gemini flash lite' ||
+      s === 'gemini-flash-lite'
+    ) {
+      return 'flash_lite';
+    }
+    return '';
+  }
+
+  function buildModelFamilyGroups(catalogModels = [], options = {}) {
+    const {
+      includeFollowGlobal = false,
+      followGlobalLabel = 'Follow Global Default',
+      followGlobalTierLabel = '—',
+      includeInherit = true,
+      inheritLabel = 'Follow Coordinator (inherit)',
+      inheritTierLabel = '—',
+      includeTierAliases = true,
+      tierAliasGroupLabel = 'Auto Tier',
+      tierLabels = { pro: 'Pro', flash: 'Flash', flash_lite: 'Flash Lite' },
+      defaultTierLabel = 'Default',
+      standardTierLabel = 'Standard',
+    } = options || {};
+
+    const groups = [];
+
+    if (includeFollowGlobal) {
+      groups.push({
+        key: '__follow_global__',
+        label: followGlobalLabel,
+        kind: 'follow_global',
+        hasTiers: false,
+        defaultValue: '',
+        tiers: [
+          {
+            value: '',
+            label: followGlobalTierLabel,
+            rawLabel: followGlobalLabel,
+            modelId: '',
+            modelEnum: '',
+            modelAlias: '',
+            isDefault: false,
+          },
+        ],
+      });
+    }
+
+    if (includeInherit) {
+      groups.push({
+        key: '__inherit__',
+        label: inheritLabel,
+        kind: 'inherit',
+        hasTiers: false,
+        defaultValue: 'inherit',
+        tiers: [
+          {
+            value: 'inherit',
+            label: inheritTierLabel,
+            rawLabel: inheritLabel,
+            modelId: '',
+            modelEnum: '',
+            modelAlias: '',
+            isDefault: false,
+          },
+        ],
+      });
+    }
+
+    if (includeTierAliases) {
+      groups.push({
+        key: '__tier__',
+        label: tierAliasGroupLabel,
+        kind: 'tier',
+        hasTiers: true,
+        defaultValue: 'pro',
+        tiers: [
+          {
+            value: 'pro',
+            label: tierLabels.pro || 'Pro',
+            rawLabel: 'Gemini Pro',
+            modelId: '',
+            modelEnum: '',
+            modelAlias: 'pro',
+            isDefault: false,
+          },
+          {
+            value: 'flash',
+            label: tierLabels.flash || 'Flash',
+            rawLabel: 'Gemini Flash',
+            modelId: '',
+            modelEnum: '',
+            modelAlias: 'flash',
+            isDefault: false,
+          },
+          {
+            value: 'flash_lite',
+            label: tierLabels.flash_lite || 'Flash Lite',
+            rawLabel: 'Gemini Flash Lite',
+            modelId: '',
+            modelEnum: '',
+            modelAlias: 'flash_lite',
+            isDefault: false,
+          },
+        ],
+      });
+    }
+
+    const buckets = [];
+    const bucketByKey = new Map();
+
+    for (const m of Array.isArray(catalogModels) ? catalogModels : []) {
+      if (!m || typeof m !== 'object') continue;
+      const val = String(m.id || m.modelId || m.modelEnum || m.modelAlias || '').trim();
+      if (!val) continue;
+      const rawLabel = String(m.label || formatModelDisplay(val)).trim();
+      const parenMatch = rawLabel.match(/^(.+?)\s*\(([^()]+)\)\s*$/);
+      const famName = String(m.familyName || '').trim();
+
+      let baseName = '';
+      let tierCandidate = '';
+      if (famName) {
+        baseName = famName;
+        if (parenMatch && parenMatch[1].trim().toLowerCase() === famName.toLowerCase()) {
+          tierCandidate = parenMatch[2].trim();
+        } else if (m.thinkingLevel) {
+          tierCandidate = String(m.thinkingLevel).trim();
+        } else if (parenMatch) {
+          tierCandidate = parenMatch[2].trim();
+        }
+      } else if (parenMatch) {
+        baseName = parenMatch[1].trim();
+        tierCandidate = parenMatch[2].trim();
+      } else {
+        baseName = rawLabel;
+        tierCandidate = '';
+      }
+
+      const bucketKey = `family:${baseName.toLowerCase()}`;
+      let bucket = bucketByKey.get(bucketKey);
+      if (!bucket) {
+        bucket = {
+          key: bucketKey,
+          baseName,
+          items: [],
+        };
+        bucketByKey.set(bucketKey, bucket);
+        buckets.push(bucket);
+      }
+      bucket.items.push({
+        value: val,
+        tierCandidate,
+        rawLabel,
+        modelId: String(m.modelId || '').trim(),
+        modelEnum: String(m.modelEnum || '').trim(),
+        modelAlias: String(m.modelAlias || '').trim(),
+        isDefault: Boolean(m.isDefault),
+        idx: bucket.items.length,
+      });
+    }
+
+    for (const bucket of buckets) {
+      if (bucket.items.length === 1) {
+        const only = bucket.items[0];
+        groups.push({
+          key: bucket.key,
+          label: only.rawLabel,
+          kind: 'family',
+          hasTiers: false,
+          defaultValue: only.value,
+          tiers: [
+            {
+              value: only.value,
+              label: defaultTierLabel,
+              rawLabel: only.rawLabel,
+              modelId: only.modelId,
+              modelEnum: only.modelEnum,
+              modelAlias: only.modelAlias,
+              isDefault: only.isDefault,
+            },
+          ],
+        });
+        continue;
+      }
+
+      const sorted = [...bucket.items].sort((a, b) => {
+        const ak = (a.tierCandidate || 'standard').toLowerCase();
+        const bk = (b.tierCandidate || 'standard').toLowerCase();
+        const ar = TIER_SORT_RANK[ak] ?? 100 + a.idx;
+        const br = TIER_SORT_RANK[bk] ?? 100 + b.idx;
+        return ar !== br ? ar - br : a.idx - b.idx;
+      });
+      const tiers = sorted.map((it) => ({
+        value: it.value,
+        label: it.tierCandidate || standardTierLabel,
+        rawLabel: it.rawLabel,
+        modelId: it.modelId,
+        modelEnum: it.modelEnum,
+        modelAlias: it.modelAlias,
+        isDefault: it.isDefault,
+      }));
+      const defaultValue =
+        tiers.find((t) => t.isDefault)?.value ||
+        tiers.find((t) => /^high$/i.test(t.label))?.value ||
+        tiers.find((t) => /^medium$/i.test(t.label))?.value ||
+        tiers[0].value;
+      groups.push({
+        key: bucket.key,
+        label: bucket.baseName,
+        kind: 'family',
+        hasTiers: true,
+        defaultValue,
+        tiers,
+      });
+    }
+
+    return groups;
+  }
+
+  function resolveModelFamilySelection(rawValue, groups = [], options = {}) {
+    const { savedLabels = {}, defaultTierLabel = 'Default', fallbackValue = 'pro' } = options || {};
+    const list = Array.isArray(groups) ? groups : [];
+    const raw = String(rawValue || '').trim();
+    const low = raw.toLowerCase();
+
+    if (!raw || low === 'default' || low === 'auto') {
+      const followGlobalGroup = list.find((g) => g.kind === 'follow_global');
+      if (followGlobalGroup) {
+        return {
+          groups: list,
+          groupKey: followGlobalGroup.key,
+          value: '',
+          group: followGlobalGroup,
+          tier: followGlobalGroup.tiers[0] || null,
+          isFallback: false,
+        };
+      }
+      if (fallbackValue && fallbackValue !== raw) {
+        return resolveModelFamilySelection(fallbackValue, list, options);
+      }
+    }
+
+    if (low === 'inherit') {
+      const inheritGroup = list.find((g) => g.kind === 'inherit');
+      if (inheritGroup) {
+        return {
+          groups: list,
+          groupKey: inheritGroup.key,
+          value: 'inherit',
+          group: inheritGroup,
+          tier: inheritGroup.tiers[0] || null,
+          isFallback: false,
+        };
+      }
+    }
+
+    const tierKey = canonicalizeTierAliasKey(raw);
+    if (tierKey) {
+      const tierGroup = list.find((g) => g.kind === 'tier');
+      const matchedTier = tierGroup?.tiers?.find((t) => t.value === tierKey);
+      if (tierGroup && matchedTier) {
+        return {
+          groups: list,
+          groupKey: tierGroup.key,
+          value: matchedTier.value,
+          group: tierGroup,
+          tier: matchedTier,
+          isFallback: false,
+        };
+      }
+    }
+
+    const familyGroups = list.filter((g) => g.kind === 'family');
+    if (raw) {
+      for (const g of familyGroups) {
+        for (const t of g.tiers || []) {
+          if (
+            t.value === raw ||
+            (t.modelId && t.modelId === raw) ||
+            (t.modelEnum && t.modelEnum === raw) ||
+            (t.modelAlias && t.modelAlias === raw) ||
+            (t.rawLabel && t.rawLabel === raw)
+          ) {
+            return { groups: list, groupKey: g.key, value: t.value, group: g, tier: t, isFallback: false };
+          }
+        }
+      }
+
+      const untiered = low.replace(/-tiered-/g, '-');
+      for (const g of familyGroups) {
+        for (const t of g.tiers || []) {
+          const valLow = String(t.value || '').toLowerCase();
+          const idLow = String(t.modelId || '').toLowerCase();
+          const lblLow = String(t.rawLabel || '').toLowerCase();
+          if (
+            valLow === low ||
+            idLow === low ||
+            (idLow && idLow.replace(/-tiered-/g, '-') === untiered) ||
+            (valLow && valLow.replace(/-tiered-/g, '-') === untiered) ||
+            lblLow === low
+          ) {
+            return { groups: list, groupKey: g.key, value: t.value, group: g, tier: t, isFallback: false };
+          }
+        }
+      }
+
+      if (!/^MODEL_PLACEHOLDER_/i.test(raw)) {
+        for (const g of familyGroups) {
+          for (const t of g.tiers || []) {
+            if (isSameModelFamily(raw, t.modelId || t.value || t.rawLabel)) {
+              return { groups: list, groupKey: g.key, value: t.value, group: g, tier: t, isFallback: false };
+            }
+          }
+        }
+      }
+    }
+
+    if (raw) {
+      const customLabel =
+        (savedLabels && savedLabels[raw]) ||
+        (/^MODEL_PLACEHOLDER_/i.test(raw) ? raw : formatModelDisplay(raw));
+      const customGroup = {
+        key: `custom:${raw}`,
+        label: customLabel,
+        kind: 'family',
+        hasTiers: false,
+        defaultValue: raw,
+        tiers: [
+          {
+            value: raw,
+            label: defaultTierLabel,
+            rawLabel: customLabel,
+            modelId: /^MODEL_/i.test(raw) ? '' : raw,
+            modelEnum: /^MODEL_(?!ALIAS_)/i.test(raw) ? raw : '',
+            modelAlias: '',
+            isDefault: false,
+          },
+        ],
+      };
+      return {
+        groups: [...list, customGroup],
+        groupKey: customGroup.key,
+        value: raw,
+        group: customGroup,
+        tier: customGroup.tiers[0],
+        isFallback: true,
+      };
+    }
+
+    const firstGroup = list[0] || null;
+    const firstTier = firstGroup?.tiers?.[0] || null;
+    return {
+      groups: list,
+      groupKey: firstGroup?.key || '',
+      value: firstGroup?.defaultValue ?? firstTier?.value ?? '',
+      group: firstGroup,
+      tier: firstTier,
+      isFallback: true,
+    };
   }
 
   function normalizeActivityText(raw) {
@@ -2588,6 +2995,9 @@
       scopeKind: scopeKey ? 'workspace' : 'unscoped',
       scopeLabel: '',
       hasProjectOverride: false,
+      coordinatorId: '',
+      coordinatorModel: '',
+      coordinatorModelDisplayName: '',
       worktreeModel: 'pro',
       readOnlyModel: 'pro',
       worktreeModelLabel: 'Gemini Pro',
@@ -2609,21 +3019,38 @@
     };
   }
 
+  function getCoordinatorModelDisplayName() {
+    return String(
+      loadedSettingsData?.coordinatorModelDisplayName ||
+        loadedSettingsData?.effective?.coordinatorModelDisplayName ||
+        '',
+    ).trim();
+  }
+
   function resolveSettingsOptionValue(rawVal) {
     const val = String(rawVal || '').trim();
     if (!val) return '';
     const low = val.toLowerCase();
+    if (low === 'inherit') return 'inherit';
     if (low === 'pro' || low === 'flash' || low === 'flash_lite') return low;
     if (low === 'flash-lite' || low === 'lite') return 'flash_lite';
-    if (low === 'default' || low === 'auto' || low === 'inherit') return '';
+    if (low === 'default' || low === 'auto') return '';
     const matched = getModelByIdFromCatalog(val);
     if (matched) return matched.id || matched.modelId || matched.modelEnum || val;
     return val;
   }
 
-  function resolveSettingsModelDisplay(rawVal) {
+  function resolveSettingsModelDisplay(rawVal, { compactInherit = false } = {}) {
     const val = String(rawVal || '').trim();
     if (!val) return 'Gemini Pro';
+    if (val.toLowerCase() === 'inherit') {
+      const t = L();
+      const coordName = getCoordinatorModelDisplayName();
+      if (compactInherit) {
+        return coordName ? `${t.settingsInheritShort} · ${coordName}` : t.settingsInheritShort;
+      }
+      return coordName ? t.settingsInheritWithModel(coordName) : t.settingsInheritOption;
+    }
     const matched = getModelByIdFromCatalog(val);
     if (matched?.label) return matched.label;
     const savedLabels = loadedSettingsData?.settings?.labels;
@@ -2639,6 +3066,13 @@
       validValues.add(topOption.value);
       html += `<option value="${esc(topOption.value)}">${esc(topOption.label)}</option>`;
     }
+    const coordName = getCoordinatorModelDisplayName();
+    const inheritLabel = coordName
+      ? t.settingsInheritWithModel(coordName)
+      : t.settingsInheritOption;
+    validValues.add('inherit');
+    html += `<option value="inherit">${esc(inheritLabel)}</option>`;
+
     const tiers = [
       { value: 'pro', label: t.tierPro },
       { value: 'flash', label: t.tierFlash },
@@ -2675,9 +3109,12 @@
     const isWt = wtChk ? !wtChk.disabled && wtChk.checked : true;
     const eff = getCurrentEffectiveSettings();
     const effModelId = isWt ? eff.worktreeModel : eff.readOnlyModel;
-    const effLabel = isWt
-      ? eff.worktreeModelLabel || resolveSettingsModelDisplay(effModelId)
-      : eff.readOnlyModelLabel || resolveSettingsModelDisplay(effModelId);
+    const effLabel =
+      String(effModelId || '').toLowerCase() === 'inherit'
+        ? resolveSettingsModelDisplay('inherit', { compactInherit: true })
+        : isWt
+          ? eff.worktreeModelLabel || resolveSettingsModelDisplay(effModelId)
+          : eff.readOnlyModelLabel || resolveSettingsModelDisplay(effModelId);
 
     const { html, validValues } = buildModelSelectOptions({
       value: '',
@@ -2688,25 +3125,73 @@
     sel.value = resolvedPrev && validValues.has(resolvedPrev) ? resolvedPrev : '';
   }
 
-  function populateSettingsModelSelect(sel, { topOption = null, targetValue = '' } = {}) {
-    if (!sel) return;
-    const { html, validValues } = buildModelSelectOptions(topOption);
-    const resolvedTarget = resolveSettingsOptionValue(targetValue);
-    let finalHtml = html;
-    if (resolvedTarget && !validValues.has(resolvedTarget)) {
-      validValues.add(resolvedTarget);
-      finalHtml =
-        `<option value="${esc(resolvedTarget)}">${esc(resolveSettingsModelDisplay(resolvedTarget))}</option>` +
-        html;
+  function buildSettingsSlotGroups(scope, followGlobalLabel = '') {
+    const t = L();
+    const coordName = getCoordinatorModelDisplayName();
+    const inheritLabel = coordName
+      ? t.settingsInheritWithModel(coordName)
+      : t.settingsInheritOption;
+    return buildModelFamilyGroups(selectableModels, {
+      includeFollowGlobal: scope === 'project',
+      followGlobalLabel,
+      followGlobalTierLabel: t.settingsTierNone,
+      includeInherit: true,
+      inheritLabel,
+      inheritTierLabel: t.settingsTierNone,
+      includeTierAliases: true,
+      tierAliasGroupLabel: t.settingsTierAutoGroup,
+      tierLabels: {
+        pro: t.tierPro,
+        flash: t.tierFlash,
+        flash_lite: t.tierFlashLite,
+      },
+      defaultTierLabel: t.settingsTierDefault,
+      standardTierLabel: t.settingsTierStandard,
+    });
+  }
+
+  function populateSettingsTierSelect(elTier, group, targetValue = '') {
+    if (!elTier) return;
+    const tiers = Array.isArray(group?.tiers) ? group.tiers : [];
+    elTier.innerHTML = tiers
+      .map((tier) => `<option value="${esc(tier.value)}">${esc(tier.label)}</option>`)
+      .join('');
+    const hasMatch = tiers.some((tier) => tier.value === targetValue);
+    if (hasMatch) {
+      elTier.value = targetValue;
+    } else if (tiers.some((tier) => tier.value === group?.defaultValue)) {
+      elTier.value = group.defaultValue;
+    } else if (tiers[0]) {
+      elTier.value = tiers[0].value;
     }
-    sel.innerHTML = finalHtml;
-    if (resolvedTarget && validValues.has(resolvedTarget)) {
-      sel.value = resolvedTarget;
-    } else if (topOption) {
-      sel.value = topOption.value;
-    } else {
-      sel.value = 'pro';
-    }
+    elTier.disabled = !group || !group.hasTiers || tiers.length <= 1;
+  }
+
+  function populateSettingsModelPair(elModel, elTier, groups, targetValue = '') {
+    if (!elModel) return groups;
+    const t = L();
+    const sel = resolveModelFamilySelection(targetValue, groups, {
+      savedLabels: loadedSettingsData?.settings?.labels,
+      defaultTierLabel: t.settingsTierDefault,
+      fallbackValue: settingsScope === 'project' ? '' : 'pro',
+    });
+    const nextGroups = sel.groups;
+    elModel.innerHTML = nextGroups
+      .map((g) => `<option value="${esc(g.key)}">${esc(g.label)}</option>`)
+      .join('');
+    elModel.value = sel.groupKey;
+    populateSettingsTierSelect(elTier, sel.group, sel.value);
+    return nextGroups;
+  }
+
+  function readSettingsSlotValue(kind) {
+    const elModel = kind === 'worktree' ? elSetWorktree : elSetReadOnly;
+    const elTier = kind === 'worktree' ? elSetWorktreeTier : elSetReadOnlyTier;
+    if (!elModel) return settingsScope === 'project' ? '' : 'pro';
+    if (elModel.value === '__follow_global__') return '';
+    if (elModel.value === '__inherit__') return 'inherit';
+    if (elTier && elTier.options.length > 0) return elTier.value;
+    return settingsScope === 'project' ? '' : 'pro';
   }
 
   function getSavedSettingForScope(kind, scope) {
@@ -2723,80 +3208,27 @@
     return resolveSettingsOptionValue(raw || 'pro') || 'pro';
   }
 
-  function renderSettingsPreview() {
+  function isSettingsDraftDirty() {
+    if (!settingsScreenOpen) return false;
+    const savedWtScope = getSavedSettingForScope('worktree', settingsScope);
+    const savedRoScope = getSavedSettingForScope('readOnly', settingsScope);
+    return (
+      readSettingsSlotValue('worktree') !== savedWtScope ||
+      readSettingsSlotValue('readOnly') !== savedRoScope
+    );
+  }
+
+  function syncSettingsActionState() {
     if (!elSettingsScreen) return;
     const t = L();
     const eff = getCurrentEffectiveSettings();
-    const scopeKey = loadedSettingsData?.scopeKey || eff.scopeKey || activeScopeKey || '';
-    const hasScope = Boolean(scopeKey);
-    const titleEl = document.getElementById('lbl-settings-preview-title');
-    if (titleEl) {
-      titleEl.textContent = hasScope ? t.settingsPreviewTitle : t.settingsPreviewTitleGlobal;
-    }
-
-    const savedWtScope = getSavedSettingForScope('worktree', settingsScope);
-    const savedRoScope = getSavedSettingForScope('readOnly', settingsScope);
-    const draftWt = elSetWorktree ? elSetWorktree.value : savedWtScope;
-    const draftRo = elSetReadOnly ? elSetReadOnly.value : savedRoScope;
-    const isDirty = draftWt !== savedWtScope || draftRo !== savedRoScope;
-
-    const unsavedEl = document.getElementById('settings-unsaved-badge');
-    if (unsavedEl) {
-      unsavedEl.hidden = !isDirty;
-      unsavedEl.textContent = t.settingsUnsaved;
-    }
-
-    const globalWt =
-      settingsScope === 'global'
-        ? draftWt || 'pro'
-        : resolveSettingsOptionValue(eff.global?.worktreeModel || '') || 'pro';
-    const globalRo =
-      settingsScope === 'global'
-        ? draftRo || 'pro'
-        : resolveSettingsOptionValue(eff.global?.readOnlyModel || '') || 'pro';
-    const projWt =
-      settingsScope === 'project'
-        ? draftWt
-        : resolveSettingsOptionValue(eff.project?.worktreeModel || '');
-    const projRo =
-      settingsScope === 'project'
-        ? draftRo
-        : resolveSettingsOptionValue(eff.project?.readOnlyModel || '');
-
-    const finalWt = projWt || globalWt || 'pro';
-    const finalRo = projRo || globalRo || 'pro';
-    const wtSrc = projWt ? 'project' : 'global';
-    const roSrc = projRo ? 'project' : 'global';
-
-    const valWtEl = document.getElementById('val-preview-wt');
-    const valRoEl = document.getElementById('val-preview-ro');
-    const srcWtEl = document.getElementById('src-preview-wt');
-    const srcRoEl = document.getElementById('src-preview-ro');
-
-    const wtLabel = resolveSettingsModelDisplay(finalWt);
-    const roLabel = resolveSettingsModelDisplay(finalRo);
-    if (valWtEl) {
-      valWtEl.textContent = wtLabel;
-      valWtEl.title = wtLabel;
-    }
-    if (valRoEl) {
-      valRoEl.textContent = roLabel;
-      valRoEl.title = roLabel;
-    }
-    if (srcWtEl) {
-      srcWtEl.textContent = wtSrc === 'project' ? t.settingsSrcProject : t.settingsSrcGlobal;
-      srcWtEl.className = `settings-src-pill${wtSrc === 'project' ? ' project' : ''}`;
-    }
-    if (srcRoEl) {
-      srcRoEl.textContent = roSrc === 'project' ? t.settingsSrcProject : t.settingsSrcGlobal;
-      srcRoEl.className = `settings-src-pill${roSrc === 'project' ? ' project' : ''}`;
-    }
-
+    const draftWt = readSettingsSlotValue('worktree');
+    const draftRo = readSettingsSlotValue('readOnly');
     if (elBtnSettingsReset && !settingsSaving) {
       elBtnSettingsReset.textContent =
         settingsScope === 'project' ? t.settingsResetProject : t.settingsResetGlobal;
       elBtnSettingsReset.disabled =
-        settingsScope === 'project' && !eff.hasProjectOverride && !projWt && !projRo;
+        settingsScope === 'project' && !eff.hasProjectOverride && !draftWt && !draftRo;
     }
   }
 
@@ -2850,41 +3282,60 @@
     document.getElementById('desc-set-worktree').textContent = t.settingsWorktreeDesc;
     document.getElementById('lbl-set-readonly').textContent = t.settingsReadOnlyLabel;
     document.getElementById('desc-set-readonly').textContent = t.settingsReadOnlyDesc;
-    document.getElementById('lbl-preview-wt').textContent = t.settingsPreviewWorktree;
-    document.getElementById('lbl-preview-ro').textContent = t.settingsPreviewReadOnly;
+    document.getElementById('lbl-set-worktree-model').textContent = t.settingsModelColLabel;
+    document.getElementById('lbl-set-worktree-tier').textContent = t.settingsTierColLabel;
+    document.getElementById('lbl-set-readonly-model').textContent = t.settingsModelColLabel;
+    document.getElementById('lbl-set-readonly-tier').textContent = t.settingsTierColLabel;
 
     if (elBtnSettingsSave && !settingsSaving) {
       elBtnSettingsSave.textContent = t.settingsSave;
     }
 
+    const globalWtRaw = eff.global?.worktreeModel || 'pro';
+    const globalRoRaw = eff.global?.readOnlyModel || 'pro';
     const globalWtLabel =
-      eff.global?.worktreeModelLabel || resolveSettingsModelDisplay(eff.global?.worktreeModel || 'pro');
+      String(globalWtRaw).toLowerCase() === 'inherit'
+        ? resolveSettingsModelDisplay('inherit', { compactInherit: true })
+        : eff.global?.worktreeModelLabel || resolveSettingsModelDisplay(globalWtRaw);
     const globalRoLabel =
-      eff.global?.readOnlyModelLabel || resolveSettingsModelDisplay(eff.global?.readOnlyModel || 'pro');
+      String(globalRoRaw).toLowerCase() === 'inherit'
+        ? resolveSettingsModelDisplay('inherit', { compactInherit: true })
+        : eff.global?.readOnlyModelLabel || resolveSettingsModelDisplay(globalRoRaw);
 
     const wtTarget = syncInputs
       ? getSavedSettingForScope('worktree', settingsScope)
-      : elSetWorktree?.value ?? getSavedSettingForScope('worktree', settingsScope);
+      : elSetWorktree?.options?.length
+        ? readSettingsSlotValue('worktree')
+        : getSavedSettingForScope('worktree', settingsScope);
     const roTarget = syncInputs
       ? getSavedSettingForScope('readOnly', settingsScope)
-      : elSetReadOnly?.value ?? getSavedSettingForScope('readOnly', settingsScope);
+      : elSetReadOnly?.options?.length
+        ? readSettingsSlotValue('readOnly')
+        : getSavedSettingForScope('readOnly', settingsScope);
 
-    populateSettingsModelSelect(elSetWorktree, {
-      topOption:
-        settingsScope === 'project'
-          ? { value: '', label: t.settingsFollowGlobal(globalWtLabel) }
-          : null,
-      targetValue: wtTarget,
-    });
-    populateSettingsModelSelect(elSetReadOnly, {
-      topOption:
-        settingsScope === 'project'
-          ? { value: '', label: t.settingsFollowGlobal(globalRoLabel) }
-          : null,
-      targetValue: roTarget,
-    });
+    const wtBaseGroups = buildSettingsSlotGroups(
+      settingsScope,
+      settingsScope === 'project' ? t.settingsFollowGlobal(globalWtLabel) : '',
+    );
+    const roBaseGroups = buildSettingsSlotGroups(
+      settingsScope,
+      settingsScope === 'project' ? t.settingsFollowGlobal(globalRoLabel) : '',
+    );
 
-    renderSettingsPreview();
+    settingsWorktreeGroups = populateSettingsModelPair(
+      elSetWorktree,
+      elSetWorktreeTier,
+      wtBaseGroups,
+      wtTarget,
+    );
+    settingsReadOnlyGroups = populateSettingsModelPair(
+      elSetReadOnly,
+      elSetReadOnlyTier,
+      roBaseGroups,
+      roTarget,
+    );
+
+    syncSettingsActionState();
   }
 
   async function loadSettingsData({ syncInputs = false } = {}) {
@@ -2899,6 +3350,9 @@
           settings: data.settings,
           effective: data.effective,
           scopeKey: data.scopeKey || data.effective?.scopeKey || '',
+          coordinatorModelDisplayName:
+            data.coordinatorModelDisplayName || data.effective?.coordinatorModelDisplayName || '',
+          coordinatorModel: data.coordinatorModel || data.effective?.coordinatorModel || '',
         };
         populateDispatchModelSelect();
         if (settingsScreenOpen) {
@@ -2964,8 +3418,8 @@
         reset,
       });
       if (!reset) {
-        payload.worktreeModel = elSetWorktree ? elSetWorktree.value : 'pro';
-        payload.readOnlyModel = elSetReadOnly ? elSetReadOnly.value : 'pro';
+        payload.worktreeModel = readSettingsSlotValue('worktree');
+        payload.readOnlyModel = readSettingsSlotValue('readOnly');
       }
       const res = await postApi('/api/settings_save', '/api/settings_save_get', payload);
       if (!res?.ok) {
@@ -2981,6 +3435,9 @@
         settings: res.settings,
         effective: res.effective,
         scopeKey: res.scopeKey || res.effective?.scopeKey || scopeKey,
+        coordinatorModelDisplayName:
+          res.coordinatorModelDisplayName || res.effective?.coordinatorModelDisplayName || '',
+        coordinatorModel: res.coordinatorModel || res.effective?.coordinatorModel || '',
       };
       populateDispatchModelSelect();
       renderSettingsScreen(true);
@@ -3002,7 +3459,7 @@
       settingsSaving = false;
       elBtnSettingsSave.disabled = false;
       elBtnSettingsSave.textContent = L().settingsSave;
-      renderSettingsPreview();
+      syncSettingsActionState();
     }
   }
 
@@ -3069,10 +3526,26 @@
   }
 
   function getModelByIdFromCatalog(modelKey) {
+    const raw = String(modelKey || '').trim();
+    if (!raw) return null;
+    const low = raw.toLowerCase();
+    const untiered = low.replace(/-tiered-/g, '-');
     return (
       selectableModels.find(
-        (m) => m.id === modelKey || m.modelId === modelKey || m.modelEnum === modelKey,
-      ) || null
+        (m) =>
+          m.id === raw ||
+          m.modelId === raw ||
+          m.modelEnum === raw ||
+          m.label === raw,
+      ) ||
+      selectableModels.find(
+        (m) =>
+          (m.id && m.id.toLowerCase() === low) ||
+          (m.modelId && m.modelId.toLowerCase() === low) ||
+          (m.modelId && m.modelId.toLowerCase().replace(/-tiered-/g, '-') === untiered) ||
+          (m.label && m.label.toLowerCase() === low),
+      ) ||
+      null
     );
   }
 
@@ -3697,7 +4170,7 @@
         !loadedSettingsData ||
         nextScopeKey !== String(loadedSettingsData.scopeKey || '')
       ) {
-        loadSettingsData({ syncInputs: settingsScreenOpen });
+        loadSettingsData({ syncInputs: settingsScreenOpen && !isSettingsDraftDirty() });
       }
 
       // Immediately close any open thread drawer that does not belong to the active project scope
@@ -4046,10 +4519,24 @@
     });
   }
   if (elSetWorktree) {
-    elSetWorktree.addEventListener('change', renderSettingsPreview);
+    elSetWorktree.addEventListener('change', () => {
+      const grp = settingsWorktreeGroups.find((g) => g.key === elSetWorktree.value) || null;
+      populateSettingsTierSelect(elSetWorktreeTier, grp, grp?.defaultValue ?? '');
+      syncSettingsActionState();
+    });
+  }
+  if (elSetWorktreeTier) {
+    elSetWorktreeTier.addEventListener('change', syncSettingsActionState);
   }
   if (elSetReadOnly) {
-    elSetReadOnly.addEventListener('change', renderSettingsPreview);
+    elSetReadOnly.addEventListener('change', () => {
+      const grp = settingsReadOnlyGroups.find((g) => g.key === elSetReadOnly.value) || null;
+      populateSettingsTierSelect(elSetReadOnlyTier, grp, grp?.defaultValue ?? '');
+      syncSettingsActionState();
+    });
+  }
+  if (elSetReadOnlyTier) {
+    elSetReadOnlyTier.addEventListener('change', syncSettingsActionState);
   }
   if (elBtnSettingsRefreshModels) {
     elBtnSettingsRefreshModels.addEventListener('click', () => {

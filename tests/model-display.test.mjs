@@ -53,7 +53,7 @@ test('formatModelDisplay handles concrete display names, slugs, enums, and tier 
     ['flash_lite', 'Gemini Flash Lite'],
     ['flash-lite', 'Gemini Flash Lite'],
     ['auto', 'Gemini Pro'],
-    ['inherit', 'Gemini Pro'],
+    ['inherit', 'Follow Coordinator (inherit)'],
     ['Gemini 4 Hydrogen (XHigh)', 'Gemini 4 Hydrogen (XHigh)'],
     ['Gemini 4 Neon (High)', 'Gemini 4 Neon (High)'],
     ['Gemini 4 Neon Low', 'Gemini 4 Neon Low'],

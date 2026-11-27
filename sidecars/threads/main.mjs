@@ -322,7 +322,6 @@ async function handleSettings(data = {}) {
     const effective = await getEffectiveSettings({
       ...scopeOpts,
       workspaceKey: scopeKey,
-      coordinatorId: scopeOpts.coordinatorId || scopeOpts.conversationId,
     });
     return {
       ok: true,
@@ -330,6 +329,8 @@ async function handleSettings(data = {}) {
       settings,
       effective,
       scopeKey: effective.scopeKey || scopeKey || '',
+      coordinatorModelDisplayName: effective.coordinatorModelDisplayName || '',
+      coordinatorModel: effective.coordinatorModel || '',
     };
   } catch (err) {
     return { ok: false, error: err.message, locale: resolveAppLocale() };
@@ -364,7 +365,7 @@ async function handleSaveSettings(data = {}) {
         if (!(field in data)) continue;
         const { value, label } = canonicalizeModelForSettings(data[field], models);
         patch[field] = value;
-        if (value && label) labels[value] = label;
+        if (value && value !== 'inherit' && label) labels[value] = label;
       }
       if (Object.keys(labels).length > 0) {
         patch.labels = labels;
@@ -375,7 +376,6 @@ async function handleSaveSettings(data = {}) {
     const effective = await getEffectiveSettings({
       ...scopeOpts,
       workspaceKey: scopeKey,
-      coordinatorId: scopeOpts.coordinatorId || scopeOpts.conversationId,
     });
     return {
       ok: true,
@@ -383,6 +383,8 @@ async function handleSaveSettings(data = {}) {
       settings,
       effective,
       scopeKey: effective.scopeKey || scopeKey || '',
+      coordinatorModelDisplayName: effective.coordinatorModelDisplayName || '',
+      coordinatorModel: effective.coordinatorModel || '',
     };
   } catch (err) {
     return { ok: false, error: err.message, locale: resolveAppLocale() };
