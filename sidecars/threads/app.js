@@ -458,8 +458,21 @@
         const kb = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${bytes}B`;
         return `${lines}L / ${kb}`;
       },
-      memBudgetWarnText: (lines, maxLines) =>
-        `Thin index is ${lines} lines (target <= ${maxLines}). Move domain details into topic files to keep worker prompts lean.`,
+      memBudgetWarnText: (lines, maxLines, bytes, maxBytes) => {
+        const limLines =
+          Number.isFinite(Number(maxLines)) && Number(maxLines) > 0 ? Number(maxLines) : 60;
+        const limBytes =
+          Number.isFinite(Number(maxBytes)) && Number(maxBytes) > 0 ? Number(maxBytes) : 4096;
+        const limKbNum = limBytes / 1024;
+        const limKb = Number.isInteger(limKbNum) ? `${limKbNum} KB` : `${limKbNum.toFixed(1)} KB`;
+        const hasBytes =
+          bytes !== undefined &&
+          bytes !== null &&
+          Number.isFinite(Number(bytes)) &&
+          Number(bytes) >= 0;
+        const sizePart = hasBytes ? ` / ${(Number(bytes) / 1024).toFixed(1)} KB` : '';
+        return `Thin index is ${lines} lines${sizePart} (target <= ${limLines} lines and <= ${limKb}). Move domain details into topic files to keep worker prompts lean.`;
+      },
       memMigrateTitle: 'Upgrade flat memory to two-tier knowledge',
       memMigrateDesc: (lines, legacyId) =>
         `project-memory.md has grown to ${lines} lines with no topic files yet. Split it semantically via Coordinator or losslessly archive it into "${legacyId}".`,
@@ -488,10 +501,13 @@
       wdPatrolStalledBtn: (n) => `Stalled ${n}`,
       wdPatrolOffBtn: 'Watchdog off',
       wdPatrolBusy: 'Patrolling…',
-      wdPatrolTip: (enabled, lastAgo, thrMin) =>
-        enabled
-          ? `Watchdog active (threshold ${thrMin}m, last patrol: ${lastAgo}) - click to patrol now`
-          : `Watchdog disabled (last patrol: ${lastAgo}) - click to run a one-time patrol`,
+      wdPatrolClockAgo: (clock, ago) => `${clock} (${ago})`,
+      wdPatrolTip: (enabled, lastPatrol, thrMin, intervalSec = 30) => {
+        const sec = Math.max(1, Math.round(Number(intervalSec) || 30));
+        return enabled
+          ? `Watchdog active (every ${sec}s, threshold ${thrMin}m, last patrol: ${lastPatrol}) - click to patrol now`
+          : `Watchdog disabled (last patrol: ${lastPatrol}) - click to run a one-time patrol`;
+      },
       wdPatrolOkToast: (checked, stalled) =>
         stalled > 0
           ? `Patrol finished: ${stalled} stalled (${checked} checked)`
@@ -543,8 +559,10 @@
       wdResetToast: 'Watchdog settings reset to defaults',
       wdClearedProjToast: 'Cleared project watchdog override',
       wdSaveErr: 'Failed to save watchdog settings',
-      wdMetaLine: (source, lastAgo, stalledCount) =>
-        `${source} | Last patrol: ${lastAgo}${stalledCount > 0 ? ` | Stalled: ${stalledCount}` : ''}`,
+      wdMetaLine: (source, lastPatrol, stalledCount, intervalSec = 30) => {
+        const sec = Math.max(1, Math.round(Number(intervalSec) || 30));
+        return `${source} | Every ${sec}s | Last patrol: ${lastPatrol}${stalledCount > 0 ? ` | Stalled: ${stalledCount}` : ''}`;
+      },
       wdSourceProject: 'Project override',
       wdSourceGlobal: 'Global defaults',
       wdNeverPatrolled: 'not yet patrolled',
@@ -795,7 +813,8 @@
       justNow: '刚刚',
       justNowAgo: '刚刚',
       agoTime: (val, unit) => {
-        const u = unit === 'm' ? ' 分钟前' : unit === 'h' ? ' 小时前' : ' 天前';
+        const u =
+          unit === 's' ? ' 秒前' : unit === 'm' ? ' 分钟前' : unit === 'h' ? ' 小时前' : ' 天前';
         return `${val}${u}`;
       },
       loadingChat: '正在读取会话记录…',
@@ -965,8 +984,21 @@
         const kb = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${bytes}B`;
         return `${lines}行 / ${kb}`;
       },
-      memBudgetWarnText: (lines, maxLines) =>
-        `当前薄索引已达 ${lines} 行（建议 <= ${maxLines} 行），建议将模块细节拆分至专题知识库以减少上下文膨胀。`,
+      memBudgetWarnText: (lines, maxLines, bytes, maxBytes) => {
+        const limLines =
+          Number.isFinite(Number(maxLines)) && Number(maxLines) > 0 ? Number(maxLines) : 60;
+        const limBytes =
+          Number.isFinite(Number(maxBytes)) && Number(maxBytes) > 0 ? Number(maxBytes) : 4096;
+        const limKbNum = limBytes / 1024;
+        const limKb = Number.isInteger(limKbNum) ? `${limKbNum} KB` : `${limKbNum.toFixed(1)} KB`;
+        const hasBytes =
+          bytes !== undefined &&
+          bytes !== null &&
+          Number.isFinite(Number(bytes)) &&
+          Number(bytes) >= 0;
+        const sizePart = hasBytes ? ` / ${(Number(bytes) / 1024).toFixed(1)} KB` : '';
+        return `当前薄索引已达 ${lines} 行${sizePart}（建议 <= ${limLines} 行且 <= ${limKb}），建议将模块细节拆分至专题知识库以减少上下文膨胀。`;
+      },
       memMigrateTitle: '升级为双层知识库（无损）',
       memMigrateDesc: (lines, legacyId) =>
         `当前 project-memory.md 已达 ${lines} 行且尚未拆分专题。可让总控按模块语义拆分，或先 100% 无损归档至「${legacyId}」专题。`,
@@ -995,10 +1027,13 @@
       wdPatrolStalledBtn: (n) => `疑似停滞 ${n}`,
       wdPatrolOffBtn: '巡检已关',
       wdPatrolBusy: '巡检中…',
-      wdPatrolTip: (enabled, lastAgo, thrMin) =>
-        enabled
-          ? `看门狗运行中（停滞阈值 ${thrMin} 分钟，上次巡检：${lastAgo}），点击立即巡检`
-          : `看门狗已关闭（上次巡检：${lastAgo}），点击执行单次手工巡检`,
+      wdPatrolClockAgo: (clock, ago) => `${clock}（${ago}）`,
+      wdPatrolTip: (enabled, lastPatrol, thrMin, intervalSec = 30) => {
+        const sec = Math.max(1, Math.round(Number(intervalSec) || 30));
+        return enabled
+          ? `看门狗运行中（每 ${sec} 秒巡检，停滞阈值 ${thrMin} 分钟，上次巡检：${lastPatrol}），点击立即巡检`
+          : `看门狗已关闭（上次巡检：${lastPatrol}），点击执行单次手工巡检`;
+      },
       wdPatrolOkToast: (checked, stalled) =>
         stalled > 0
           ? `巡检完成：发现 ${stalled} 个疑似停滞（共查 ${checked} 个）`
@@ -1050,8 +1085,10 @@
       wdResetToast: '已恢复看门狗默认配置',
       wdClearedProjToast: '已清除当前项目看门狗覆盖',
       wdSaveErr: '保存看门狗配置失败',
-      wdMetaLine: (source, lastAgo, stalledCount) =>
-        `${source} | 上次巡检：${lastAgo}${stalledCount > 0 ? ` | 疑似停滞：${stalledCount}` : ''}`,
+      wdMetaLine: (source, lastPatrol, stalledCount, intervalSec = 30) => {
+        const sec = Math.max(1, Math.round(Number(intervalSec) || 30));
+        return `${source} | 每 ${sec} 秒巡检 | 上次巡检：${lastPatrol}${stalledCount > 0 ? ` | 疑似停滞：${stalledCount}` : ''}`;
+      },
       wdSourceProject: '当前项目覆盖',
       wdSourceGlobal: '全局默认',
       wdNeverPatrolled: '尚未巡检',
@@ -1302,7 +1339,8 @@
       justNow: '剛剛',
       justNowAgo: '剛剛',
       agoTime: (val, unit) => {
-        const u = unit === 'm' ? ' 分鐘前' : unit === 'h' ? ' 小時前' : ' 天前';
+        const u =
+          unit === 's' ? ' 秒前' : unit === 'm' ? ' 分鐘前' : unit === 'h' ? ' 小時前' : ' 天前';
         return `${val}${u}`;
       },
       loadingChat: '正在讀取會話記錄…',
@@ -1472,8 +1510,21 @@
         const kb = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${bytes}B`;
         return `${lines}行 / ${kb}`;
       },
-      memBudgetWarnText: (lines, maxLines) =>
-        `目前薄索引已達 ${lines} 行（建議 <= ${maxLines} 行），建議將模組細節拆分至專題知識庫以防止上下文膨脹。`,
+      memBudgetWarnText: (lines, maxLines, bytes, maxBytes) => {
+        const limLines =
+          Number.isFinite(Number(maxLines)) && Number(maxLines) > 0 ? Number(maxLines) : 60;
+        const limBytes =
+          Number.isFinite(Number(maxBytes)) && Number(maxBytes) > 0 ? Number(maxBytes) : 4096;
+        const limKbNum = limBytes / 1024;
+        const limKb = Number.isInteger(limKbNum) ? `${limKbNum} KB` : `${limKbNum.toFixed(1)} KB`;
+        const hasBytes =
+          bytes !== undefined &&
+          bytes !== null &&
+          Number.isFinite(Number(bytes)) &&
+          Number(bytes) >= 0;
+        const sizePart = hasBytes ? ` / ${(Number(bytes) / 1024).toFixed(1)} KB` : '';
+        return `目前薄索引已達 ${lines} 行${sizePart}（建議 <= ${limLines} 行且 <= ${limKb}），建議將模組細節拆分至專題知識庫以防止上下文膨脹。`;
+      },
       memMigrateTitle: '升級為雙層知識庫（無損）',
       memMigrateDesc: (lines, legacyId) =>
         `目前 project-memory.md 已達 ${lines} 行且尚未拆分專題。可交由總控按模組語意拆分，或先 100% 無損歸檔至「${legacyId}」專題。`,
@@ -1502,10 +1553,13 @@
       wdPatrolStalledBtn: (n) => `疑似停滯 ${n}`,
       wdPatrolOffBtn: '巡檢已關',
       wdPatrolBusy: '巡檢中…',
-      wdPatrolTip: (enabled, lastAgo, thrMin) =>
-        enabled
-          ? `看門狗運行中（停滯閾值 ${thrMin} 分鐘，上次巡檢：${lastAgo}），點擊立即巡檢`
-          : `看門狗已關閉（上次巡檢：${lastAgo}），點擊執行單次手動巡檢`,
+      wdPatrolClockAgo: (clock, ago) => `${clock}（${ago}）`,
+      wdPatrolTip: (enabled, lastPatrol, thrMin, intervalSec = 30) => {
+        const sec = Math.max(1, Math.round(Number(intervalSec) || 30));
+        return enabled
+          ? `看門狗運行中（每 ${sec} 秒巡檢，停滯閾值 ${thrMin} 分鐘，上次巡檢：${lastPatrol}），點擊立即巡檢`
+          : `看門狗已關閉（上次巡檢：${lastPatrol}），點擊執行單次手動巡檢`;
+      },
       wdPatrolOkToast: (checked, stalled) =>
         stalled > 0
           ? `巡檢完成：發現 ${stalled} 個疑似停滯（共查 ${checked} 個）`
@@ -1557,8 +1611,10 @@
       wdResetToast: '已恢復看門狗預設設定',
       wdClearedProjToast: '已清除目前專案看門狗覆寫',
       wdSaveErr: '儲存看門狗設定失敗',
-      wdMetaLine: (source, lastAgo, stalledCount) =>
-        `${source} | 上次巡檢：${lastAgo}${stalledCount > 0 ? ` | 疑似停滯：${stalledCount}` : ''}`,
+      wdMetaLine: (source, lastPatrol, stalledCount, intervalSec = 30) => {
+        const sec = Math.max(1, Math.round(Number(intervalSec) || 30));
+        return `${source} | 每 ${sec} 秒巡檢 | 上次巡檢：${lastPatrol}${stalledCount > 0 ? ` | 疑似停滯：${stalledCount}` : ''}`;
+      },
       wdSourceProject: '目前專案覆寫',
       wdSourceGlobal: '全域預設',
       wdNeverPatrolled: '尚未巡檢',
@@ -3007,7 +3063,7 @@
     const ms = Date.now() - Date.parse(isoStr);
     if (!Number.isFinite(ms) || ms < 0) return L().justNow;
     const sec = Math.floor(ms / 1000);
-    if (sec < 45) return L().justNow;
+    if (sec < 60) return L().justNow;
     const min = Math.floor(sec / 60);
     if (min < 60) return `${min}m`;
     const hr = Math.floor(min / 60);
@@ -3021,12 +3077,40 @@
     const ms = Date.now() - Date.parse(isoStr);
     if (!Number.isFinite(ms) || ms < 0) return t.justNowAgo;
     const sec = Math.floor(ms / 1000);
-    if (sec < 45) return t.justNowAgo;
+    if (sec < 60) return t.justNowAgo;
     const min = Math.floor(sec / 60);
     if (min < 60) return t.agoTime(min, 'm');
     const hr = Math.floor(min / 60);
     if (hr < 24) return t.agoTime(hr, 'h');
     return t.agoTime(Math.floor(hr / 24), 'd');
+  }
+
+  function formatWatchdogPatrolTime(isoStr, t = L(), nowMs = Date.now()) {
+    const loc = t || L();
+    if (!isoStr) return loc.wdNeverPatrolled || '';
+    const ts = Date.parse(isoStr);
+    if (!Number.isFinite(ts)) return loc.wdNeverPatrolled || '';
+    const d = new Date(ts);
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const clock = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    const sec = Math.max(0, Math.floor((nowMs - ts) / 1000));
+    const fmtAgo = (val, unit) =>
+      typeof loc.agoTime === 'function' ? loc.agoTime(val, unit) : `${val}${unit} ago`;
+    let ago = '';
+    if (sec < 60) {
+      ago = fmtAgo(sec, 's');
+    } else {
+      const min = Math.floor(sec / 60);
+      if (min < 60) {
+        ago = fmtAgo(min, 'm');
+      } else {
+        const hr = Math.floor(min / 60);
+        ago = hr < 24 ? fmtAgo(hr, 'h') : fmtAgo(Math.floor(hr / 24), 'd');
+      }
+    }
+    return typeof loc.wdPatrolClockAgo === 'function'
+      ? loc.wdPatrolClockAgo(clock, ago)
+      : `${clock} (${ago})`;
   }
 
   function fmtWorkedDuration(sec) {
@@ -8301,7 +8385,12 @@
         const showWarn = Boolean(capOk && budget?.overBudget && !snap.migration?.needsMigration);
         elMemBudgetWarn.hidden = !showWarn;
         elMemBudgetWarn.textContent = showWarn
-          ? t.memBudgetWarnText(budget.lineCount, budget.softMaxLines || 60)
+          ? t.memBudgetWarnText(
+              budget.lineCount,
+              budget.softMaxLines || 60,
+              budget.byteSize,
+              budget.softMaxBytes || 4096,
+            )
           : '';
       }
       if (syncInputs && elMemEditor) {
@@ -9803,6 +9892,21 @@
     }
   }
 
+  function refreshWatchdogPatrolTooltip(snap = lastSnap) {
+    if (!elBtnWatchdogPatrol) return '';
+    const t = L();
+    const wd = snap?.watchdog || null;
+    const enabled = wd ? wd.enabled !== false : true;
+    const thrMin = Number(wd?.stallThresholdMin) || WD_DEFAULT_VALS.stallThresholdMin;
+    const intervalSec = Number(wd?.patrolIntervalSec) || WD_DEFAULT_VALS.patrolIntervalSec;
+    const lastPatrolText = wd?.lastPatrolAt
+      ? formatWatchdogPatrolTime(wd.lastPatrolAt, t)
+      : t.wdNeverPatrolled;
+    const tip = t.wdPatrolTip(enabled, lastPatrolText, thrMin, intervalSec);
+    elBtnWatchdogPatrol.title = tip;
+    return tip;
+  }
+
   function renderBoardWatchdogChip(snap) {
     if (!elBtnWatchdogPatrol || !elLblWdPatrol) return;
     const t = L();
@@ -9815,8 +9919,6 @@
     const wd = snap?.watchdog || null;
     const enabled = wd ? wd.enabled !== false : true;
     const stalledCount = Number(wd?.stalledCount) || 0;
-    const thrMin = Number(wd?.stallThresholdMin) || WD_DEFAULT_VALS.stallThresholdMin;
-    const lastAgo = wd?.lastPatrolAt ? relTimeAgo(wd.lastPatrolAt) : t.wdNeverPatrolled;
 
     elBtnWatchdogPatrol.hidden = false;
     elBtnWatchdogPatrol.disabled = wdPatrolling;
@@ -9830,7 +9932,7 @@
         : enabled
           ? t.wdPatrolBtn
           : t.wdPatrolOffBtn;
-    elBtnWatchdogPatrol.title = t.wdPatrolTip(enabled, lastAgo, thrMin);
+    refreshWatchdogPatrolTooltip(snap);
   }
 
   function getWatchdogEffectiveForSettings() {
@@ -9977,9 +10079,20 @@
     if (elWdSettingsMeta) {
       const snapWd = lastSnap?.watchdog || null;
       const srcLabel = effWd.hasProjectOverride ? t.wdSourceProject : t.wdSourceGlobal;
-      const lastAgo = snapWd?.lastPatrolAt ? relTimeAgo(snapWd.lastPatrolAt) : t.wdNeverPatrolled;
+      const intervalSec =
+        Number(effWd?.patrolIntervalSec) ||
+        Number(snapWd?.patrolIntervalSec) ||
+        WD_DEFAULT_VALS.patrolIntervalSec;
+      const lastPatrolText = snapWd?.lastPatrolAt
+        ? formatWatchdogPatrolTime(snapWd.lastPatrolAt, t)
+        : t.wdNeverPatrolled;
       const stalledCount = Number(snapWd?.stalledCount) || 0;
-      elWdSettingsMeta.textContent = t.wdMetaLine(srcLabel, lastAgo, stalledCount);
+      elWdSettingsMeta.textContent = t.wdMetaLine(
+        srcLabel,
+        lastPatrolText,
+        stalledCount,
+        intervalSec,
+      );
     }
 
     if (elBtnWdSave) {
@@ -10229,6 +10342,11 @@
       e.stopPropagation();
       runWatchdogManualPatrol({ triggerBtn: elBtnWatchdogPatrol });
     });
+    const syncPatrolTip = () => {
+      refreshWatchdogPatrolTooltip(lastSnap);
+    };
+    elBtnWatchdogPatrol.addEventListener('mouseenter', syncPatrolTip);
+    elBtnWatchdogPatrol.addEventListener('focus', syncPatrolTip);
   }
   for (const [btn, val] of [
     [elBtnWdEnabledInherit, 'inherit'],

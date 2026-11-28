@@ -29,7 +29,7 @@
 | 🌿 **三轨隔离并行** | Worktree 改代码、只读零拷贝调研与独立 Review 模型审查三轨并行。 |
 | 📥 **待决策一键收口** | 完工自动汇总置顶，支持快捷按钮一键响应或直接输入自定义指令。 |
 | 👀 **内联预览与防卡死** | 侧栏 1:1 预览进度、追问与切模型，后台非阻塞看门狗自动巡检防卡死。 |
-| 🧠 **分层共享记忆** | 多工程独立 `#N` 隔离，薄索引配按需专题知识库同步规范且防上下文膨胀。 |
+| 🧠 **分层共享记忆** | 多工程独立 `thr-NNN` 隔离，薄索引配按需专题知识库同步规范且防上下文膨胀。 |
 | 🔄 **换绑与安全更新** | 一键换绑总控，内置稳定版与开发版双渠道安全升级。 |
 
 ## 核心工作流
@@ -67,8 +67,8 @@ New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null; g
 | --- | --- |
 | `init_project_coordinator` | 将当前会话绑定为 `[Coordinator]`，注册生命周期钩子并初始化薄索引 `.agents/rules/project-memory.md` 与默认合入规范。 |
 | `dispatch_thread` | 通过 `ConversationService` 按 `threadType`（`worktree` / `readonly` / `review`）后台派发隔离 Git Worktree 或零拷贝线程，自动应用对应默认模型并按需推荐匹配专题。 |
-| `list_threads` | 按项目作用域同步并列出活跃或已归档线程，展示 `#N` / `thr-xxx`、实时 `runState`、步骤进度、Git 状态与最新摘要。 |
-| `get_thread_detail` | 仅局部刷新并查询单个线程的元数据、Git 状态与总结，支持 `thr-xxx`、项目内 `#N` 或会话 UUID。 |
+| `list_threads` | 按项目作用域同步并列出活跃或已归档线程，展示项目内 `thr-NNN` 编号、实时 `runState`、步骤进度、Git 状态与最新摘要。 |
+| `get_thread_detail` | 仅局部刷新并查询单个线程的元数据、Git 状态与总结，支持项目内 `thr-NNN`（兼容旧 `#N`）或会话 UUID。 |
 | `send_thread_message` | 不切走左侧总控会话，向既有工作线程后台发送追问、纠偏或补充指令。 |
 | `archive_thread` | 归档已完成或废弃的线程，并在工作区干净且已合并（含 `cherry-pick` 等价提交）时安全移除 Worktree 与分支。 |
 | `update_project_memory` | 读取、列出、追加、重写或删除双层共享记忆：薄索引（`.agents/rules/project-memory.md`，`<= 60` 行）与按需专题（`.agents/memory/<topic>.md`），自动同步至所有活跃 Worktree。 |
@@ -76,10 +76,10 @@ New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null; g
 
 ### 核心机制与工程约定
 
-- **`v17` 协议与总控换绑**：由 `PreInvocation` / `PreToolUse` / `Stop` 钩子守护；看板 **`切换总控`** / **`换绑当前`** 平滑迁移本项目活跃线程与显式待决策（避免触发历史空闲线程回调雪崩），退场旧总控收到提示并拦截过期单线程写操作。
+- **`v18` 协议与总控换绑**：由 `PreInvocation` / `PreToolUse` / `Stop` 钩子守护；看板 **`切换总控`** / **`换绑当前`** 平滑迁移本项目活跃线程与显式待决策（避免触发历史空闲线程回调雪崩），退场旧总控收到提示并拦截过期单线程写操作。
 - **按模式归档与待决策收口**：只读与 Review 线程汇报后可自主归档；Worktree 代码线程（位于 `../.worktrees/<repo>/<thread-slug>`）保留至用户验收通过后自动归档，并兼容常规合并与 `cherry-pick` 清理。显式决策支持 `send_coordinator` / `archive_thread` / `dismiss` 快捷按钮与内联 `custom_reply` 自定义指令回复（具备幂等认领与解决后 `merge_ready` 回弹抑制），并与 Worktree 自动提示按线程去重。
 - **双层共享项目记忆**：将 `.agents/rules/project-memory.md` 保持为常驻薄索引（`<= 60` 行 / `~4KB`），模块细节沉淀至按需 `.agents/memory/<topic>.md` 并在派发时按关键词自动推荐。支持存量单文件记忆一键无损升级（保留校验通过的 `legacy` 归档与原子回滚）、受控默认合入规范以及跨进程文件锁保护。
-- **Fail-Closed 隔离、后台看门狗与步骤追踪**：基于实时 `GetConversation` 元数据与 Git 主仓库根执行跨项目隔离（`get_thread_detail` / `send_thread_message` / `archive_thread` 默认强制校验作用域，除非显式传 `scope: "*"`；项目内 `#N` 检索须带前导 `#`）。内置按项目独立运行的非阻塞后台看门狗（`lib/watchdog.mjs`），巡检长时卡滞、异步 `run_command` 任务与状态失配并支持静默、冷却与原子认领去重；子线程提示词联动 `update_steps` 实现当前轮次实时步骤追踪。
+- **Fail-Closed 隔离、后台看门狗与步骤追踪**：基于实时 `GetConversation` 元数据与 Git 主仓库根执行跨项目隔离（`get_thread_detail` / `send_thread_message` / `archive_thread` 默认强制校验作用域，除非显式传 `scope: "*"`；项目内 `thr-NNN` 与兼容旧 `#N` 检索均严格限定于当前项目）。内置按项目独立运行的非阻塞后台看门狗（`lib/watchdog.mjs`），巡检长时卡滞、异步 `run_command` 任务与状态失配并支持静默、冷却与原子认领去重；子线程提示词联动 `update_steps` 实现当前轮次实时步骤追踪。
 - **三档默认模型、遥测与原生预览**：两级模型家族 + 思考档位悬浮选择器，支持线程中途切模型、`Extra High` 全链路归一化、三档独立默认模型（Worktree / 只读 / Review）与原生 **`inherit`（跟随总控）**；零额外 RPC 展示 Token 总量、压缩线进度与压缩次数（带缓存离线日志回退）。Swarm 风格看板采用 `--pt-*` 独立令牌、`ReadProject` 真实项目名、1:1 内联 **`Preview`** 抽屉与 **`Open ↗`** 弹出，界面自动跟随 `English / 简体中文 / 繁體中文`。
 - **双渠道安全更新器**：可在 Sidecar **设置 → 版本与更新** 中切换 **`stable`**（`origin/main` / `vX.Y.Z`）与 **`dev`**（`origin/dev` 先行版）；Git 一键更新强制校验干净工作区并仅执行 `--ff-only` 快进（绝不执行 `git reset --hard`），非 Git 安装安全跳转 Releases，并内置版本漂移检测与请求超时保护。
 
@@ -114,13 +114,13 @@ project-threads/
 ├── skills/coord/SKILL.md       # /coord 技能工作流指引
 ├── mcp/server.mjs              # Stdio MCP Server（8 个总控编排工具）
 ├── scripts/
-│   ├── hook-handler.mjs        # 完成提取、原子去重、旧总控保护与 v17 指令续期
+│   ├── hook-handler.mjs        # 完成提取、原子去重、旧总控保护与 v18 指令续期
 │   └── run-hook.{sh,cmd}       # 跨平台生命周期钩子启动封装脚本
 ├── lib/
 │   ├── ls-client.mjs           # 本地 ConversationService / LanguageServerService 客户端
 │   ├── memory.mjs              # 双层薄索引、按需专题记忆、并发锁与存量无损升级
 │   ├── model-format.mjs        # 两级模型目录、思考档位格式化与 inherit 解析
-│   ├── store.mjs               # 工程隔离注册表、#N 序号、待决策、换绑与 Worktree 同步
+│   ├── store.mjs               # 工程隔离注册表、thr-NNN 序号、待决策、换绑与 Worktree 同步
 │   ├── transcript.mjs          # 会话日志解析、异步任务/步骤检测与 Token/压缩遥测
 │   ├── updater.mjs             # 双渠道插件版本检查与安全快进本地更新器
 │   └── watchdog.mjs            # 按项目独立非阻塞后台看门狗巡检与卡滞恢复

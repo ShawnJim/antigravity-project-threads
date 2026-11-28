@@ -29,7 +29,7 @@
 | 🌿 **3-Track Parallelism** | Run Worktree edits, zero-copy research, and cross-model reviews with dedicated default models. |
 | 📥 **Pending Decisions** | Completed threads report back automatically; act with quick buttons or send custom instructions directly. |
 | 👀 **Inline Preview & Patrol** | Inspect live steps, follow up, or switch models inline while a background watchdog guards against stalls. |
-| 🧠 **Layered Project Memory** | Strict per-project `#N` isolation with a lean index and on-demand topic memory to prevent context bloat. |
+| 🧠 **Layered Project Memory** | Strict per-project `thr-NNN` isolation with a lean index and on-demand topic memory to prevent context bloat. |
 | 🔄 **Rebind & Safe Updates** | Switch Coordinators in one click and update safely across stable or dev channels. |
 
 ## Core Workflow
@@ -67,8 +67,8 @@ New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null; g
 | --- | --- |
 | `init_project_coordinator` | Bind the current session as `[Coordinator]`, attach lifecycle hooks, and initialize thin-index `.agents/rules/project-memory.md` with default merge/archive rules. |
 | `dispatch_thread` | Spawn a background thread via `ConversationService` with `threadType` (`worktree` / `readonly` / `review`), creating an isolated Git Worktree or zero-copy session and injecting matched topic recommendations. |
-| `list_threads` | Sync and list active or archived threads scoped to the current project with `#N` / `thr-xxx` IDs, `runState`, step progress, Git status, and latest summary. |
-| `get_thread_detail` | Refresh and inspect full metadata, Git status, and summary for a single thread by `thr-xxx`, project-local `#N`, or conversation UUID. |
+| `list_threads` | Sync and list active or archived threads scoped to the current project with per-project `thr-NNN` IDs, `runState`, step progress, Git status, and latest summary. |
+| `get_thread_detail` | Refresh and inspect full metadata, Git status, and summary for a single thread by project-local `thr-NNN` (legacy `#N` supported) or conversation UUID. |
 | `send_thread_message` | Send a follow-up instruction to an existing Worker Thread in the background without leaving `[Coordinator]`. |
 | `archive_thread` | Archive a thread and safely remove its clean, merged (including `cherry-pick` equivalent) Git Worktree and branch. |
 | `update_project_memory` | Read, list, append, replace, or delete two-tier memory: thin index (`.agents/rules/project-memory.md`, `<= 60` lines) and on-demand topic files (`.agents/memory/<topic>.md`), syncing active Worktrees automatically. |
@@ -76,10 +76,10 @@ New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null; g
 
 ### Architecture & Workflow Mechanics
 
-- **Protocol `v17` & Coordinator Rebinding**: Guarded by `PreInvocation` / `PreToolUse` / `Stop` hooks. Rebinding (**`Switch`** / **`Switch to This`**) migrates active threads and pending explicit decisions without replaying stale idle callbacks, while retired sessions receive a retired notice and write guard.
+- **Protocol `v18` & Coordinator Rebinding**: Guarded by `PreInvocation` / `PreToolUse` / `Stop` hooks. Rebinding (**`Switch`** / **`Switch to This`**) migrates active threads and pending explicit decisions without replaying stale idle callbacks, while retired sessions receive a retired notice and write guard.
 - **Mode-Aware Archiving & Decisions**: Read-only and Review threads can archive autonomously after reporting; Worktree threads remain open until user acceptance and recognize both regular merges and `cherry-pick` commits before removing clean Worktrees under `../.worktrees/<repo>/<thread-slug>`. Explicit decision cards support `send_coordinator`, `archive_thread`, `dismiss`, and inline `custom_reply` (with idempotent claiming and post-resolve `merge_ready` suppression), deduplicated against automatic Worktree hints.
 - **Two-Tier Shared Project Memory**: Keeps `.agents/rules/project-memory.md` as a concise thin index (`<= 60` lines / `~4KB`) with module details in on-demand `.agents/memory/<topic>.md` files matched by keywords on dispatch. Supports lossless one-click migration of legacy flat memory (preserving a verified `legacy` archive with atomic rollback), managed merge/archive conventions, and per-repo file locks.
-- **Fail-Closed Isolation, Watchdog Patrol & Live Steps**: Scopes threads, bindings, decisions, and memory via live `GetConversation` metadata and the Git repository root (`get_thread_detail`, `send_thread_message`, and `archive_thread` require project scope unless passing `scope: "*"`; `#N` lookup requires a leading `#`). A per-project non-blocking background watchdog (`lib/watchdog.mjs`) patrols stalled runs, long background `run_command` tasks, and state mismatches with snooze, cooldown, and atomic claim dedup, while worker prompts guide `update_steps` for latest-turn step progress tracking.
+- **Fail-Closed Isolation, Watchdog Patrol & Live Steps**: Scopes threads, bindings, decisions, and memory via live `GetConversation` metadata and the Git repository root (`get_thread_detail`, `send_thread_message`, and `archive_thread` require project scope unless passing `scope: "*"`; project-local `thr-NNN` and legacy `#N` lookups are strictly scoped to the project). A per-project non-blocking background watchdog (`lib/watchdog.mjs`) patrols stalled runs, long background `run_command` tasks, and state mismatches with snooze, cooldown, and atomic claim dedup, while worker prompts guide `update_steps` for latest-turn step progress tracking.
 - **3-Mode Models, Telemetry & Native Preview**: Two-tier model family + thinking effort selector with mid-thread switching, unified **`Extra High`** normalization, three independent mode defaults (Worktree / Read-Only / Review), first-class **`inherit` (Follow Coordinator)** resolution, and zero-extra-RPC token/compaction telemetry (cached offline transcript fallback). The Swarm-styled board uses `--pt-*` scoped tokens, real Antigravity project names via `ReadProject`, 1:1 inline **`Preview`** drawers, **`Open ↗`** pop-out, and automatic `English / 简体中文 / 繁體中文` locale sync.
 - **Safe Dual-Channel Updater**: Switch between **`stable`** (`origin/main` / `vX.Y.Z`) and **`dev`** (`origin/dev` pre-releases) from Sidecar Settings. One-click Git updates enforce clean-tree checks and `--ff-only` fast-forwards (never `git reset --hard`), non-Git installs link to GitHub Releases, and version-drift guards warn when the running sidecar lags behind updated files.
 
@@ -114,13 +114,13 @@ project-threads/
 ├── skills/coord/SKILL.md       # /coord skill workflow instructions
 ├── mcp/server.mjs              # Stdio MCP server (8 orchestration tools)
 ├── scripts/
-│   ├── hook-handler.mjs        # Completion extraction, atomic dedup, retired guard & v17 sync
+│   ├── hook-handler.mjs        # Completion extraction, atomic dedup, retired guard & v18 sync
 │   └── run-hook.{sh,cmd}       # Cross-platform hook launcher wrappers
 ├── lib/
 │   ├── ls-client.mjs           # Local ConversationService / LanguageServerService client
 │   ├── memory.mjs              # Two-tier thin index, on-demand topics, locks & lossless migration
 │   ├── model-format.mjs        # Two-tier model catalog, effort formatting & inherit resolution
-│   ├── store.mjs               # Scoped registry, #N sequences, decisions, rebinding & Worktree sync
+│   ├── store.mjs               # Scoped registry, thr-NNN sequences, decisions, rebinding & Worktree sync
 │   ├── transcript.mjs          # Transcript parser, async task/step detector & usage telemetry
 │   ├── updater.mjs             # Dual-channel update checker & safe fast-forward local updater
 │   └── watchdog.mjs            # Per-project non-blocking background patrol & stall recovery
