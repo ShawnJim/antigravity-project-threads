@@ -6787,6 +6787,9 @@
 
   function openSettingsScreen() {
     if (!elSettingsScreen) return;
+    if (openThreadId) {
+      closeThreadDrawer({ refresh: false });
+    }
     closeModelMenu({ restoreHeader: false });
     clearToast({ target: 'board' });
     boardScrollTop = elBoardBody.scrollTop;

@@ -10,6 +10,7 @@ import vm from 'node:vm';
 
 import { resetLsEndpointCache, resetModelConfigCache } from '../lib/ls-client.mjs';
 import {
+  archiveThread,
   getStorePerfCounters,
   getThreadMessages,
   inspectWorktreeGit,
@@ -21,6 +22,7 @@ import {
   resolveScopedThreadTarget,
   resolveThreadModelInfo,
   saveRegistry,
+  sendThreadMessage,
   syncThreads,
 } from '../lib/store.mjs';
 import {
@@ -106,6 +108,8 @@ function writeTranscriptPair(appDataDir, convId, compactSteps, fullSteps = null)
 function startMockLs(t, { delayMs = 0, runStates = {}, models = {} } = {}) {
   const getConvCalls = new Map();
   const genMetaCalls = new Map();
+  const updateConvCalls = [];
+  const sendMsgCalls = [];
   let totalGetConv = 0;
   let totalGenMeta = 0;
 
@@ -134,6 +138,16 @@ function startMockLs(t, { delayMs = 0, runStates = {}, models = {} } = {}) {
               },
             }),
           );
+          return;
+        }
+        if (req.url === '/product.v1.ConversationService/UpdateConversation') {
+          updateConvCalls.push(payload);
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+        if (req.url === '/exa.language_server_pb.LanguageServerService/SendUserCascadeMessage') {
+          sendMsgCalls.push(payload);
+          res.end(JSON.stringify({ ok: true }));
           return;
         }
         if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeTrajectoryGeneratorMetadata') {
@@ -188,10 +202,14 @@ function startMockLs(t, { delayMs = 0, runStates = {}, models = {} } = {}) {
         address,
         getConvCalls,
         genMetaCalls,
+        updateConvCalls,
+        sendMsgCalls,
         getTotals: () => ({ totalGetConv, totalGenMeta }),
         resetCounts: () => {
           getConvCalls.clear();
           genMetaCalls.clear();
+          updateConvCalls.length = 0;
+          sendMsgCalls.length = 0;
           totalGetConv = 0;
           totalGenMeta = 0;
         },
@@ -774,9 +792,13 @@ test('Issue #14 P2: parallelized inspectWorktreeGit() matches exact semantics ac
   assert.equal(dirtyInfo.merged, true);
   assert.match(dirtyInfo.lastCommit, /init$/);
 
-  // Commit in worktree -> unmerged aheadCount=1
+  // Commit in worktree -> unmerged aheadCount=1 (distinct timestamps prevent identical-second SHA collision on cherry-pick)
+  const commitDateEnv = (offsetSec) => {
+    const iso = new Date(1700000000000 + offsetSec * 1000).toISOString();
+    return { ...process.env, GIT_AUTHOR_DATE: iso, GIT_COMMITTER_DATE: iso };
+  };
   execFileSync('git', ['add', 'change.txt'], { cwd: wtDirty });
-  execFileSync('git', ['commit', '-m', 'Add change'], { cwd: wtDirty });
+  execFileSync('git', ['commit', '-m', 'Add change'], { cwd: wtDirty, env: commitDateEnv(10) });
   const unmergedInfo = await inspectWorktreeGit(wtDirty, { baseRef: 'main' }); // omit repoRoot to exercise parallel --git-common-dir
   assert.equal(unmergedInfo.exists, true);
   assert.equal(unmergedInfo.dirtyCount, 0);
@@ -786,7 +808,7 @@ test('Issue #14 P2: parallelized inspectWorktreeGit() matches exact semantics ac
 
   // Cherry-pick onto main -> merged=true, mergeMethod='cherry-pick'
   const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: wtDirty, encoding: 'utf8' }).trim();
-  execFileSync('git', ['cherry-pick', sha], { cwd: repoDir });
+  execFileSync('git', ['cherry-pick', sha], { cwd: repoDir, env: commitDateEnv(20) });
   const cherryInfo = await inspectWorktreeGit(wtDirty, { baseRef: 'main', repoRoot: repoDir });
   assert.equal(cherryInfo.exists, true);
   assert.equal(cherryInfo.dirtyCount, 0);
@@ -1360,4 +1382,445 @@ test('Issue #14 static hygiene: main.mjs single-flight, rev 8 / directive v18 pr
     assert.equal(text.includes('\u00B7'), false, `${rel} must never contain U+00B7 middle dot`);
   }
   assert.equal(appJs.includes('\u00B7'), false, 'sidecars/threads/app.js must never contain U+00B7 middle dot');
+});
+
+test('Issue #14 Review P0-1 & P2-1: tryFastResolveKnownScopeFromKey enforces fail-closed isolation for nested repos, sub-project subdirectories, and conflicting projectId', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-rev-p0-');
+  const monorepo = join(tempRoot, 'monorepo');
+  initGitRepo(monorepo, 'main');
+  const validSubdir = join(monorepo, 'src', 'utils');
+  mkdirSync(validSubdir, { recursive: true });
+
+  // Sub-project 1: registered nested repo (via coordinator) + deep subdirectory
+  const subRepoCoord = join(monorepo, 'packages', 'sub-coord');
+  initGitRepo(subRepoCoord, 'main');
+  const subRepoCoordSrc = join(subRepoCoord, 'src', 'nested');
+  mkdirSync(subRepoCoordSrc, { recursive: true });
+
+  // Sub-project 2: registered nested project (only in reg.threads, no coordinator) + subdirectory
+  const subDirThreadOnly = join(monorepo, 'packages', 'sub-thread-only');
+  mkdirSync(join(subDirThreadOnly, 'lib'), { recursive: true });
+  initGitRepo(subDirThreadOnly, 'main');
+  const subThreadSrc = join(subDirThreadOnly, 'lib');
+
+  // Sub-project 3: brand-new unregistered nested Git repo
+  const unregisteredNestedRepo = join(monorepo, 'packages', 'brand-new-repo');
+  initGitRepo(unregisteredNestedRepo, 'main');
+  const unregisteredNestedSrc = join(unregisteredNestedRepo, 'src');
+  mkdirSync(unregisteredNestedSrc, { recursive: true });
+
+  const parentKey = normalizeKey(monorepo);
+  const subCoordKey = normalizeKey(subRepoCoord);
+  const subThreadKey = normalizeKey(subDirThreadOnly);
+
+  const reg = loadRegistry();
+  reg.coordinators[parentKey] = {
+    key: parentKey,
+    conversationId: 'conv-mono-coord',
+    workspacePath: monorepo,
+    repoRoot: monorepo,
+    projectId: 'proj-mono',
+  };
+  reg.coordinators[subCoordKey] = {
+    key: subCoordKey,
+    conversationId: 'conv-sub-coord',
+    workspacePath: subRepoCoord,
+    repoRoot: subRepoCoord,
+    projectId: 'proj-sub',
+  };
+  reg.threads['thr-parent-1'] = {
+    threadId: 'thr-parent-1',
+    localId: 'thr-001',
+    projectSeq: 1,
+    conversationId: 'conv-parent-001',
+    coordinatorId: 'conv-mono-coord',
+    workspaceKey: parentKey,
+    workspacePath: monorepo,
+    repoRoot: monorepo,
+    projectId: 'proj-mono',
+    title: 'Parent thread',
+    archived: false,
+    createdAt: '2026-11-28T01:00:00Z',
+  };
+  reg.threads['thr-sub-only'] = {
+    threadId: 'thr-sub-only',
+    localId: 'thr-001',
+    projectSeq: 1,
+    conversationId: 'conv-subonly-001',
+    workspaceKey: subThreadKey,
+    workspacePath: subDirThreadOnly,
+    repoRoot: subDirThreadOnly,
+    title: 'Thread-only sub-project',
+    archived: false,
+    createdAt: '2026-11-28T01:00:00Z',
+  };
+  // Project-only scope without coordinator record
+  reg.threads['thr-proj-a'] = {
+    threadId: 'thr-proj-a',
+    localId: 'thr-001',
+    projectSeq: 1,
+    conversationId: 'conv-proja-001',
+    workspaceKey: 'project:proj-a',
+    projectId: 'proj-a',
+    title: 'Pure project A thread',
+    archived: false,
+    createdAt: '2026-11-28T01:00:00Z',
+  };
+  saveRegistry(reg);
+
+  // 1. Legitimate non-Git subdirectory of parent monorepo still hits zero-git fast path
+  resetRepoInfoCache();
+  const legitHit = await resolveScopedThreadTarget({
+    threadId: 'thr-parent-1',
+    workspacePath: validSubdir,
+    workspaceKey: parentKey,
+    requireScope: true,
+  });
+  assert.equal(legitHit.thread.threadId, 'thr-parent-1');
+  assert.equal(getStorePerfCounters().repoInfoGitSpawns, 0, 'legit parent subdir should stay on zero-git fast path');
+
+  // 2. Registered sub-project subdirectory (via coordinator) carrying stale parent workspaceKey MUST fail closed
+  await assert.rejects(
+    () =>
+      resolveScopedThreadTarget({
+        threadId: 'thr-parent-1',
+        workspacePath: subRepoCoordSrc,
+        workspaceKey: parentKey,
+        requireScope: true,
+      }),
+    /Cross-project access denied/,
+  );
+
+  // 3. Registered sub-project subdirectory (via reg.threads only) carrying stale parent workspaceKey MUST fail closed
+  await assert.rejects(
+    () =>
+      resolveScopedThreadTarget({
+        threadId: 'thr-parent-1',
+        workspacePath: subThreadSrc,
+        workspaceKey: parentKey,
+        requireScope: true,
+      }),
+    /Cross-project access denied/,
+  );
+
+  // 4. Unregistered brand-new nested Git repo (both root and subdir) carrying parent workspaceKey MUST fail closed
+  await assert.rejects(
+    () =>
+      resolveScopedThreadTarget({
+        threadId: 'thr-parent-1',
+        workspacePath: unregisteredNestedRepo,
+        workspaceKey: parentKey,
+        requireScope: true,
+      }),
+    /Cross-project access denied/,
+  );
+  await assert.rejects(
+    () =>
+      resolveScopedThreadTarget({
+        threadId: 'thr-parent-1',
+        workspacePath: unregisteredNestedSrc,
+        workspaceKey: parentKey,
+        requireScope: true,
+      }),
+    /Cross-project access denied/,
+  );
+
+  // 5. Coordinator-less project: scope with conflicting explicit projectId MUST fail closed
+  await assert.rejects(
+    () =>
+      resolveScopedThreadTarget({
+        threadId: 'thr-proj-a',
+        workspaceKey: 'project:proj-a',
+        projectId: 'proj-b',
+        requireScope: true,
+      }),
+    /Cross-project access denied/,
+  );
+
+  // 6. P2-1: resolveRepoInfo invalidates immediately when a cached parent subdir gains a new nested .git repo
+  //    AND empty git repo (currentBranch === 'HEAD') immediately picks up real branch after first commit
+  resetRepoInfoCache();
+  const cachedSubBefore = await resolveRepoInfo(validSubdir);
+  assert.equal(normalizeKey(cachedSubBefore.repoRoot), parentKey);
+  initGitRepo(validSubdir, 'nested-br');
+  const subAfterGitInit = await resolveRepoInfo(validSubdir);
+  assert.equal(normalizeKey(subAfterGitInit.repoRoot), normalizeKey(validSubdir));
+  assert.equal(subAfterGitInit.currentBranch, 'nested-br');
+
+  const emptyRepo = join(tempRoot, 'empty-repo');
+  mkdirSync(emptyRepo, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main'], { cwd: emptyRepo });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: emptyRepo });
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: emptyRepo });
+  const beforeCommit = await resolveRepoInfo(emptyRepo);
+  assert.equal(beforeCommit.currentBranch, 'HEAD');
+  writeFileSync(join(emptyRepo, 'first.txt'), 'hello\n', 'utf8');
+  execFileSync('git', ['add', 'first.txt'], { cwd: emptyRepo });
+  execFileSync('git', ['commit', '-m', 'first'], { cwd: emptyRepo });
+  const afterCommit = await resolveRepoInfo(emptyRepo);
+  assert.equal(afterCommit.currentBranch, 'main');
+});
+
+test('Issue #14 Review P1-2: archiveThread() seals terminal snapshot with zero LS RPC/full reads and archived getThreadMessages() extracts missing usage & heals legacy records', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-rev-p12-');
+  const repoDir = join(tempRoot, 'seal-repo');
+  initGitRepo(repoDir, 'main');
+  const scopeKey = normalizeKey(repoDir);
+  const ls = await startMockLs(t);
+
+  const convSeal = 'conv-seal-arch-0001';
+  const convLegacy = 'conv-legacy-arch-002';
+
+  for (const [cid, summary] of [
+    [convSeal, 'Sealed final conclusion cleanly.'],
+    [convLegacy, 'Legacy archived conclusion recovered.'],
+  ]) {
+    writeTranscriptPair(
+      appDataDir,
+      cid,
+      [
+        { step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Investigate issue</USER_REQUEST>' },
+        {
+          step_index: 1,
+          type: 'PLANNER_RESPONSE',
+          model: 'gemini-4-neon-high',
+          input_tokens: 12000,
+          cache_read_tokens: 48000,
+          output_tokens: 1500,
+          tool_calls: [{ name: 'read_file', args: { Path: '/demo/index.js' } }],
+        },
+        {
+          step_index: 2,
+          type: 'GENERIC',
+          status: 'DONE',
+          truncated_fields: ['content'],
+          content: 'Showing lines 1-50 <truncated 30000 bytes>',
+        },
+        {
+          step_index: 3,
+          type: 'PLANNER_RESPONSE',
+          model: 'gemini-4-neon-high',
+          input_tokens: 3000,
+          cache_read_tokens: 60000,
+          output_tokens: 900,
+          content: `### Thread Summary\n${summary}`,
+        },
+      ],
+      [{ step_index: 2, type: 'GENERIC', status: 'DONE', content: 'HUGE_GENERIC_FULL_OUTPUT' }],
+    );
+  }
+
+  const reg = loadRegistry();
+  reg.coordinators[scopeKey] = {
+    key: scopeKey,
+    conversationId: 'conv-coord-seal',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+  };
+  reg.threads['thr-seal'] = {
+    threadId: 'thr-seal',
+    localId: 'thr-001',
+    projectSeq: 1,
+    conversationId: convSeal,
+    coordinatorId: 'conv-coord-seal',
+    workspaceKey: scopeKey,
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Running thread archived immediately',
+    model: 'pro',
+    modelDisplayName: 'Gemini 4 Neon (High)',
+    runState: 'RUN_STATE_RUNNING',
+    bucket: 'working',
+    activeTool: 'read_file',
+    activeToolObj: { category: 'read', target: 'index.js' },
+    hasPendingBgTask: true,
+    lastSummary: '',
+    toolStepCount: 0,
+    usage: null,
+    archived: false,
+    createdAt: '2026-11-28T01:00:00Z',
+    updatedAt: '2026-11-28T01:00:00Z',
+  };
+  // Legacy already-archived thread with modelDisplayName present, but missing usage + stale running state
+  reg.threads['thr-legacy-arch'] = {
+    threadId: 'thr-legacy-arch',
+    localId: 'thr-002',
+    projectSeq: 2,
+    conversationId: convLegacy,
+    coordinatorId: 'conv-coord-seal',
+    workspaceKey: scopeKey,
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Legacy incomplete archived thread',
+    model: 'pro',
+    modelDisplayName: 'Gemini 4 Neon (High)',
+    runState: 'RUN_STATE_RUNNING',
+    bucket: 'working',
+    activeTool: 'run_command',
+    hasPendingBgTask: true,
+    lastSummary: '',
+    toolStepCount: 0,
+    usage: null,
+    archived: true,
+    createdAt: '2026-11-27T01:00:00Z',
+    updatedAt: '2026-11-27T01:00:00Z',
+  };
+  saveRegistry(reg);
+
+  // 1. archiveThread() seals terminal snapshot locally with 0 GetConversation / 0 GeneratorMetadata / 0 full reads
+  ls.resetCounts();
+  resetTranscriptCaches();
+  const archRes = await archiveThread('thr-seal', {
+    workspacePath: repoDir,
+    workspaceKey: scopeKey,
+    removeWorktree: false,
+  });
+  assert.equal(archRes.ok, true);
+  assert.equal(archRes.archived, true);
+  assert.equal(ls.getTotals().totalGetConv, 0, 'archiveThread must not call GetConversation');
+  assert.equal(ls.getTotals().totalGenMeta, 0, 'archiveThread must not call GeneratorMetadata');
+  assert.equal(getTranscriptCacheStats().fullTranscript, 0, 'archiveThread must not read transcript_full.jsonl');
+
+  const sealed = loadRegistry().threads['thr-seal'];
+  assert.equal(sealed.archived, true);
+  assert.equal(sealed.runState, 'RUN_STATE_IDLE');
+  assert.equal(sealed.bucket, 'archived');
+  assert.equal(sealed.activeTool, '');
+  assert.equal(sealed.hasPendingBgTask, false);
+  assert.match(sealed.lastSummary, /Sealed final conclusion cleanly/);
+  assert.ok(sealed.toolStepCount >= 1);
+  assert.equal(sealed.usage?.totalTokens, 12000 + 48000 + 1500 + 3000 + 60000 + 900);
+
+  // 2. getThreadMessages() on legacy archived thread (which already has modelDisplayName) extracts missing usage & heals state
+  ls.resetCounts();
+  resetTranscriptCaches();
+  const legacyMsg = await getThreadMessages({
+    threadId: 'thr-legacy-arch',
+    workspacePath: repoDir,
+    workspaceKey: scopeKey,
+  });
+  assert.equal(legacyMsg.ok, true);
+  assert.equal(ls.getTotals().totalGetConv, 0, 'archived getThreadMessages must make 0 GetConversation RPCs');
+  assert.equal(ls.getTotals().totalGenMeta, 0, 'archived getThreadMessages must make 0 GeneratorMetadata RPCs');
+  assert.equal(getTranscriptCacheStats().fullTranscript, 0, 'GENERIC-only archived preview must not read full');
+  assert.equal(legacyMsg.thread.runState, 'RUN_STATE_IDLE');
+  assert.equal(legacyMsg.thread.bucket, 'archived');
+  assert.equal(legacyMsg.thread.activeTool, '');
+  assert.equal(legacyMsg.thread.hasPendingBgTask, false);
+  assert.match(legacyMsg.thread.lastSummary, /Legacy archived conclusion recovered/);
+  assert.equal(legacyMsg.thread.usage?.totalTokens, 12000 + 48000 + 1500 + 3000 + 60000 + 900);
+
+  const healedDisk = loadRegistry().threads['thr-legacy-arch'];
+  assert.equal(healedDisk.runState, 'RUN_STATE_IDLE');
+  assert.equal(healedDisk.bucket, 'archived');
+  assert.equal(healedDisk.usage?.totalTokens, 125400);
+});
+
+test('Issue #14 Review P1-3: sendThreadMessage() automatically unarchives awakened archived threads so they re-enter active polling', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-rev-p13-');
+  const repoDir = join(tempRoot, 'wake-repo');
+  initGitRepo(repoDir, 'main');
+  const scopeKey = normalizeKey(repoDir);
+
+  const convWakePlain = 'conv-wake-plain-001';
+  const convWakeModel = 'conv-wake-model-002';
+  const ls = await startMockLs(t, {
+    runStates: {
+      [convWakePlain]: 'RUN_STATE_IDLE',
+      [convWakeModel]: 'RUN_STATE_IDLE',
+    },
+  });
+
+  const reg = loadRegistry();
+  reg.coordinators[scopeKey] = {
+    key: scopeKey,
+    conversationId: 'conv-coord-wake',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+  };
+  reg.threads['thr-wake-1'] = {
+    threadId: 'thr-wake-1',
+    localId: 'thr-001',
+    projectSeq: 1,
+    conversationId: convWakePlain,
+    coordinatorId: 'conv-coord-wake',
+    workspaceKey: scopeKey,
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Archived thread awakened via follow-up',
+    model: 'pro',
+    modelDisplayName: 'Gemini 4 Neon (High)',
+    runState: 'RUN_STATE_IDLE',
+    bucket: 'archived',
+    archived: true,
+    createdAt: '2026-11-28T01:00:00Z',
+    updatedAt: '2026-11-28T01:00:00Z',
+  };
+  reg.threads['thr-wake-2'] = {
+    threadId: 'thr-wake-2',
+    localId: 'thr-002',
+    projectSeq: 2,
+    conversationId: convWakeModel,
+    coordinatorId: 'conv-coord-wake',
+    workspaceKey: scopeKey,
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Archived thread awakened with model switch',
+    model: 'pro',
+    modelDisplayName: 'Gemini 4 Neon (High)',
+    runState: 'RUN_STATE_IDLE',
+    bucket: 'archived',
+    archived: true,
+    createdAt: '2026-11-28T01:01:00Z',
+    updatedAt: '2026-11-28T01:01:00Z',
+  };
+  saveRegistry(reg);
+
+  // 1. Plain follow-up message wakes archived thread and clears archived=false
+  const resPlain = await sendThreadMessage({
+    threadId: 'thr-wake-1',
+    message: 'Please run one more check',
+    workspacePath: repoDir,
+    workspaceKey: scopeKey,
+  });
+  assert.equal(resPlain.ok, true);
+  assert.equal(resPlain.thread.archived, false);
+  assert.equal(resPlain.thread.runState, 'RUN_STATE_RUNNING');
+  assert.equal(resPlain.thread.bucket, 'working');
+  assert.equal(loadRegistry().threads['thr-wake-1'].archived, false);
+
+  // 2. Follow-up message with explicit model override also clears archived=false
+  const resModel = await sendThreadMessage({
+    threadId: 'thr-wake-2',
+    message: 'Re-check with flash',
+    model: 'gemini-3.8-flash-high',
+    modelEnum: 'MODEL_PLACEHOLDER_M318',
+    modelDisplayName: 'Gemini 3.8 Flash (High)',
+    workspacePath: repoDir,
+    workspaceKey: scopeKey,
+  });
+  assert.equal(resModel.ok, true);
+  assert.equal(resModel.thread.archived, false);
+  assert.equal(resModel.thread.runState, 'RUN_STATE_RUNNING');
+  assert.equal(loadRegistry().threads['thr-wake-2'].archived, false);
+
+  // Wait briefly for fire-and-forget UpdateConversation({ archived: false }) calls
+  await new Promise((r) => setTimeout(r, 40));
+  assert.ok(
+    ls.updateConvCalls.some((c) => c.conversationId === convWakePlain && c.annotations?.archived === false),
+    'LS UpdateConversation must unarchive awakened plain thread',
+  );
+  assert.ok(
+    ls.updateConvCalls.some((c) => c.conversationId === convWakeModel && c.annotations?.archived === false),
+    'LS UpdateConversation must unarchive awakened model-switch thread',
+  );
+
+  // 3. Subsequent syncThreads() actively polls the awakened threads and transitions them back to RUN_STATE_IDLE
+  ls.resetCounts();
+  const snapAfterWake = await syncThreads({ workspacePath: repoDir, includeArchived: false });
+  assert.equal(snapAfterWake.threads.length, 2);
+  assert.equal(ls.getConvCalls.get(convWakePlain), 1, 'awakened thread must re-enter active syncThreads polling');
+  assert.equal(ls.getConvCalls.get(convWakeModel), 1);
+  assert.equal(loadRegistry().threads['thr-wake-1'].runState, 'RUN_STATE_IDLE');
+  assert.equal(loadRegistry().threads['thr-wake-2'].runState, 'RUN_STATE_IDLE');
 });
