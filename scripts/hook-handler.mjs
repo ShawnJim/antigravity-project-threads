@@ -137,7 +137,17 @@ async function main() {
             thread.lastCompletedAt = new Date().toISOString();
             thread.updatedAt = thread.lastCompletedAt;
             if (thread.worktreePath) {
-              thread.git = await inspectWorktreeGit(thread.worktreePath, thread.baseRef);
+              const coord =
+                (thread.workspaceKey && reg.coordinators?.[thread.workspaceKey]) ||
+                Object.values(reg.coordinators || {}).find(
+                  (c) => c.conversationId === thread.coordinatorId,
+                ) ||
+                null;
+              thread.git = await inspectWorktreeGit(thread.worktreePath, {
+                baseRef: thread.baseRef,
+                defaultBranch: coord?.defaultBranch || '',
+                repoRoot: thread.repoRoot || coord?.repoRoot || '',
+              });
             }
             saveRegistry(reg);
           }

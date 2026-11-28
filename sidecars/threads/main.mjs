@@ -208,6 +208,7 @@ async function handleDispatch(data = {}) {
       taskPrompt: data.taskPrompt || '',
       branch: data.branch || '',
       baseRef: data.baseRef || '',
+      worktreePath: data.worktreePath || '',
       model: data.model || '',
       createWorktree: data.createWorktree !== false && data.createWorktree !== 'false' && data.createWorktree !== '0',
     });

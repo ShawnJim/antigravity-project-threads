@@ -23,7 +23,7 @@ const TOOLS = [
   {
     name: 'init_project_coordinator',
     description:
-      'Initialize and pin the current conversation as the ongoing Project Coordinator (Claude Projects style), ensure isolated project memory exists, and return the project coordination summary.',
+      'Initialize and pin the current conversation as the ongoing Project Coordinator (Claude Projects style), ensure isolated project memory exists (including default Worktree merge & archive conventions), and return the project coordination summary.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -46,6 +46,10 @@ const TOOLS = [
         title: {
           type: 'string',
           description: 'Optional custom title for the Coordinator conversation.',
+        },
+        injectMergeConventions: {
+          type: 'boolean',
+          description: 'Whether to idempotently inject default Worktree merge & archive conventions into project-memory.md if not already present (default: true).',
         },
       },
       required: ['conversationId'],
@@ -84,11 +88,15 @@ const TOOLS = [
         },
         branch: {
           type: 'string',
-          description: 'Optional Git branch name (defaults to thread/<id>-<slug>).',
+          description: 'Optional Git branch name (defaults to thread/<id>-<slug>, or auto-detected when registering an existing worktreePath).',
         },
         baseRef: {
           type: 'string',
           description: 'Optional Git base branch or commit ref to branch from (defaults to current branch / HEAD).',
+        },
+        worktreePath: {
+          type: 'string',
+          description: 'Optional existing Git worktree directory path to register on this thread when createWorktree=false (enables Git status tracking and archive cleanup).',
         },
         model: {
           type: 'string',
@@ -265,7 +273,7 @@ function formatThreadsMarkdown(snapshot) {
     const link = `[${t.title}](conversation://${t.conversationId})`;
     const br = t.branch ? `\`${t.branch}\`` : '-';
     const git = t.git
-      ? `+${t.git.aheadCount || 0} commits, ${t.git.dirtyCount || 0} dirty`
+      ? `+${t.git.aheadCount || 0} commits${t.git.merged && t.git.aheadCount > 0 ? ` (${t.git.mergeMethod || 'merged'})` : ''}, ${t.git.dirtyCount || 0} dirty`
       : '-';
     const sum = (t.lastSummary || '').replace(/\r?\n+/g, ' ').slice(0, 90);
     lines.push(`| \`${t.threadId}\` | **${state}** | ${link} | ${br} | ${git} | ${sum || '-'} |`);
