@@ -4695,7 +4695,13 @@
       };
     }
     const baseOpts = Array.isArray(dec.options) ? dec.options : [];
-    const thTitle = dec.threadTitle || dec.threadId || '';
+    const thTitle =
+      dec.threadTitle ||
+      dec.threadLocalId ||
+      (dec.threadId && !/^pt-[a-f0-9]+-/i.test(String(dec.threadId)) ? dec.threadId : '') ||
+      (Number(dec.threadProjectSeq) > 0
+        ? `thr-${String(Number(dec.threadProjectSeq)).padStart(3, '0')}`
+        : dec.threadId || '');
     if (dec.autoKind === 'worktree_merge_ready') {
       return {
         title: t.decisionAutoMergeTitle,
@@ -5627,9 +5633,12 @@
         btn.disabled = true;
         btn.textContent = L().syncing;
         try {
-          const res = await postApi('/api/thread_sync_coord', '/api/thread_sync_coord_get', {
-            threadId: tid,
-          });
+          const res = await postApi(
+            '/api/thread_sync_coord',
+            '/api/thread_sync_coord_get',
+            buildScopePayload({ threadId: tid }),
+            { timeoutMs: 0, allowGetFallback: false },
+          );
           btn.textContent = res.ok && res.synced ? L().syncedOk : L().syncNone;
         } catch {
           btn.textContent = L().syncErr;
@@ -8578,9 +8587,12 @@
     btn.disabled = true;
     btn.textContent = L().syncing;
     try {
-      const res = await postApi('/api/thread_sync_coord', '/api/thread_sync_coord_get', {
-        threadId: openThreadObj.threadId,
-      });
+      const res = await postApi(
+        '/api/thread_sync_coord',
+        '/api/thread_sync_coord_get',
+        buildScopePayload({ threadId: openThreadObj.threadId }),
+        { timeoutMs: 0, allowGetFallback: false },
+      );
       btn.textContent = res.ok && res.synced ? L().syncedOk : L().syncNone;
     } catch {
       btn.textContent = L().syncErr;

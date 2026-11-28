@@ -273,6 +273,11 @@ async function handleThreadSyncCoord(data = {}) {
   try {
     const res = await syncCompletionToCoordinator({
       threadId: data.threadId || '',
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
       force: true,
     });
     return { ...res, locale: resolveAppLocale() };

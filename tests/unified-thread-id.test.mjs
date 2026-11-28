@@ -31,6 +31,7 @@ import {
   listDecisions,
   loadRegistry,
   normalizeKey,
+  resolveDecision,
   resolveScopedThreadTarget,
   saveRegistry,
   sendThreadMessage,
@@ -1064,7 +1065,7 @@ test('Issue #12: Sidecar UI unified thr-NNN rendering, zero U+00B7 middle dots a
     const renderModelMenu = () => {};
     const syncModalConfirmButton = () => {};
     ${fns}
-    this.api = { renderSwarmRow, renderDecisionsPanelHtml, renderO2ThreadCard, renderWorktreeCard, renderThreadHeader, openWorktreeModal };
+    this.api = { renderSwarmRow, getLocalizedDecisionDisplay, renderDecisionsPanelHtml, renderO2ThreadCard, renderWorktreeCard, renderThreadHeader, openWorktreeModal };
     `,
     ctx,
   );
@@ -1118,6 +1119,32 @@ test('Issue #12: Sidecar UI unified thr-NNN rendering, zero U+00B7 middle dots a
   ctx.api.openWorktreeModal({ mode: 'archive', thread: threadB1 });
   assert.equal(modalEls.elModalThread.textContent, '[thr-001] Beta unified thread');
 
+  // P2-1: getLocalizedDecisionDisplay empty threadTitle fallback never leaks internal pt-<hash>- key
+  const emptyTitleMerge = ctx.api.getLocalizedDecisionDisplay({
+    source: 'auto',
+    autoKind: 'worktree_merge_ready',
+    threadId: 'pt-bbbb2222-thr-001',
+    threadLocalId: 'thr-001',
+    threadTitle: '',
+    branch: 'thread/thr-001-x',
+    aheadCount: 2,
+    options: [],
+  });
+  assert.match(emptyTitleMerge.summary, /thr-001/);
+  assert.doesNotMatch(emptyTitleMerge.summary, /pt-bbbb2222/);
+  const emptyTitleArchive = ctx.api.getLocalizedDecisionDisplay({
+    source: 'auto',
+    autoKind: 'worktree_archive_ready',
+    threadId: 'pt-bbbb2222-thr-001',
+    threadProjectSeq: 1,
+    threadTitle: '',
+    branch: 'thread/thr-001-x',
+    aheadCount: 0,
+    options: [],
+  });
+  assert.match(emptyTitleArchive.summary, /thr-001/);
+  assert.doesNotMatch(emptyTitleArchive.summary, /pt-bbbb2222/);
+
   // Also verify buildStallAlertMessage & buildBatchStallAlertMessage display unified thr-001
   const singleWd = buildStallAlertMessage(
     {
@@ -1163,5 +1190,446 @@ test('Issue #12: Sidecar UI unified thr-NNN rendering, zero U+00B7 middle dots a
   for (const rel of allMjs) {
     const buf = readFileSync(join(REPO_ROOT, rel));
     assert.ok(!buf.includes(Buffer.from('\r')), `${rel} must use strict LF line endings`);
+  }
+});
+
+test('Issue #12 review (thr-101) mixed-topology regression: legacy global thr-001 + scoped pt-<hash>-thr-001 coexistence enforces strict isolation across MCP manage_decisions, executeDecisionAction, syncCompletionToCoordinator, Sidecar /api/thread_sync_coord, and saveRegistry', async (t) => {
+  const { tempRoot, geminiDir, appDataDir } = createTempEnv(t, 'pt-uni-mixed-');
+  const mockLs = await startMockLs(t);
+  const sendLog = join(tempRoot, 'mixed-agentapi-sends.jsonl');
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = writeMockAgentApi(tempRoot, sendLog);
+
+  const repoA = join(tempRoot, 'legacy-repo-a');
+  const repoB = join(tempRoot, 'new-repo-b');
+  const repoC = join(tempRoot, 'empty-repo-c');
+  initGitRepo(repoA);
+  initGitRepo(repoB);
+  initGitRepo(repoC);
+  const keyA = normalizeKey(repoA);
+  const keyB = normalizeKey(repoB);
+  const keyC = normalizeKey(repoC);
+
+  // Create real worktree with 1 ahead commit for Legacy Project A's global thr-001
+  const wtA = join(tempRoot, '.worktrees', 'legacy-repo-a', 'thr-001-legacy-a');
+  mkdirSync(join(tempRoot, '.worktrees', 'legacy-repo-a'), { recursive: true });
+  execFileSync('git', ['worktree', 'add', '-b', 'thread/thr-001-legacy-a', wtA, 'main'], { cwd: repoA });
+  writeFileSync(join(wtA, 'legacy-a.txt'), 'legacy work\n', 'utf8');
+  execFileSync('git', ['add', 'legacy-a.txt'], { cwd: wtA });
+  execFileSync('git', ['commit', '-m', 'legacy a commit'], { cwd: wtA });
+  const commitA = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: wtA, encoding: 'utf8' }).trim();
+
+  // Seed mixed topology: Legacy Project A global thr-001 & thr-083 (without localId) + Project B & C coordinators
+  const seed = loadRegistry();
+  seed.seq = 83;
+  seed.projectSeqs = { [keyA]: 71 };
+  seed.coordinators[keyA] = {
+    key: keyA,
+    conversationId: 'coord-legacy-a',
+    projectId: 'proj-legacy-a',
+    workspacePath: repoA,
+    repoRoot: repoA,
+    defaultBranch: 'main',
+    title: '[Coordinator] LegacyA',
+  };
+  seed.coordinators[keyB] = {
+    key: keyB,
+    conversationId: 'coord-new-b',
+    retiredCoordinatorIds: ['coord-b-retired'],
+    projectId: 'proj-new-b',
+    workspacePath: repoB,
+    repoRoot: repoB,
+    defaultBranch: 'main',
+    title: '[Coordinator] NewB',
+  };
+  seed.coordinators[keyC] = {
+    key: keyC,
+    conversationId: 'coord-empty-c',
+    projectId: 'proj-empty-c',
+    workspacePath: repoC,
+    repoRoot: repoC,
+    defaultBranch: 'main',
+    title: '[Coordinator] EmptyC',
+  };
+  seed.threads = {
+    'thr-001': {
+      threadId: 'thr-001',
+      projectSeq: 1,
+      localId: '#1',
+      conversationId: 'conv-legacy-a1',
+      coordinatorId: 'coord-legacy-a',
+      workspaceKey: keyA,
+      workspacePath: repoA,
+      repoRoot: repoA,
+      worktreePath: wtA,
+      branch: 'thread/thr-001-legacy-a',
+      projectId: 'proj-legacy-a',
+      title: 'Legacy A global 001',
+      runState: 'RUN_STATE_IDLE',
+      bucket: 'idle',
+      archived: false,
+      createdAt: '2026-10-01T00:00:00.000Z',
+      git: { exists: true, aheadCount: 1, dirtyCount: 0, merged: false, lastCommit: commitA },
+    },
+    'thr-083': {
+      threadId: 'thr-083',
+      projectSeq: 71,
+      // Deliberately omit localId to simulate historical pre-Issue-#12 global record with offset projectSeq
+      conversationId: 'conv-legacy-a83',
+      coordinatorId: 'coord-legacy-a',
+      workspaceKey: keyA,
+      workspacePath: repoA,
+      repoRoot: repoA,
+      projectId: 'proj-legacy-a',
+      title: 'Legacy A offset 83 without localId',
+      runState: 'RUN_STATE_IDLE',
+      bucket: 'idle',
+      archived: false,
+      createdAt: '2026-10-15T00:00:00.000Z',
+    },
+  };
+  saveRegistry(seed);
+
+  // Dispatch brand-new Project B thread -> internal key pt-<hashB>-thr-001, display localId thr-001
+  const b1 = await dispatchThread({
+    workspacePath: repoB,
+    coordinatorId: 'coord-new-b',
+    title: 'New B scoped 001',
+    taskPrompt: 'Implement B1.',
+    createWorktree: true,
+    model: 'pro',
+  });
+  assert.match(b1.threadId, /^pt-[a-f0-9]{8}-thr-001$/);
+  assert.equal(b1.localId, 'thr-001');
+
+  // Make 1 ahead commit inside b1 worktree so Project B also has a worktree_merge_ready auto card
+  writeFileSync(join(b1.worktreePath, 'new-b.txt'), 'new b work\n', 'utf8');
+  execFileSync('git', ['add', 'new-b.txt'], { cwd: b1.worktreePath });
+  execFileSync('git', ['commit', '-m', 'new b commit'], { cwd: b1.worktreePath });
+  const commitB = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: b1.worktreePath, encoding: 'utf8' }).trim();
+
+  const prepReg = loadRegistry();
+  prepReg.threads[b1.threadId].runState = 'RUN_STATE_IDLE';
+  prepReg.threads[b1.threadId].bucket = 'idle';
+  prepReg.threads[b1.threadId].git = {
+    exists: true,
+    aheadCount: 1,
+    dirtyCount: 0,
+    merged: false,
+    lastCommit: commitB,
+  };
+  saveRegistry(prepReg);
+
+  // 1. P1-3: saveRegistry() must NEVER backfill offset thr-071 onto legacy global thr-083 without localId,
+  //    while still safely backfilling localId for internal scoped pt-<hash>- threads.
+  const staleCopy = loadRegistry();
+  delete staleCopy.threads['thr-083'].localId;
+  delete staleCopy.threads[b1.threadId].localId;
+  saveRegistry(staleCopy);
+  const afterMergeReg = loadRegistry();
+  assert.equal(
+    afterMergeReg.threads['thr-083'].localId,
+    undefined,
+    'saveRegistry must not backfill offset thr-071 onto legacy global thr-083',
+  );
+  assert.equal(getThreadDisplayId(afterMergeReg.threads['thr-083']), 'thr-083');
+  assert.equal(
+    afterMergeReg.threads[b1.threadId].localId,
+    'thr-001',
+    'saveRegistry should preserve/backfill localId for pt-<hash>- scoped threads',
+  );
+  await assert.rejects(
+    () => resolveScopedThreadTarget({ threadId: 'thr-071', workspacePath: repoA }),
+    /Thread not found in project scope/,
+  );
+
+  // Seed unlinked explicit decisions in Project A & Project B (keeping thr-001 auto cards visible in both!)
+  const decA = addDecision({
+    workspacePath: repoA,
+    coordinatorId: 'coord-legacy-a',
+    title: 'Legacy A architecture call?',
+  });
+  const decB = addDecision({
+    workspacePath: repoB,
+    coordinatorId: 'coord-new-b',
+    title: 'New B release call?',
+  });
+
+  // Verify both projects currently expose their own worktree_merge_ready auto card
+  const boardABefore = buildBoardDecisions({ workspacePath: repoA });
+  const boardBBefore = buildBoardDecisions({ workspacePath: repoB });
+  assert.ok(boardABefore.some((d) => d.source === 'auto' && d.threadId === 'thr-001'));
+  assert.ok(boardBBefore.some((d) => d.source === 'auto' && d.threadId === b1.threadId && d.threadLocalId === 'thr-001'));
+
+  // 2. P0-1: MCP manage_decisions(dismiss / resolve) enforces strict project scope under mixed topology
+  const mcpRes = await runMcpStdio(
+    {
+      ...process.env,
+      ANTIGRAVITY_GEMINI_DIR: geminiDir,
+      ANTIGRAVITY_APP_DATA_DIR: appDataDir,
+      ANTIGRAVITY_LS_ADDRESS: mockLs.address,
+      ANTIGRAVITY_CSRF_TOKEN: mockLs.csrfToken,
+    },
+    [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
+      // Dismiss Project B's thr-001 auto card via local ID `thr-001`
+      {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: 'manage_decisions',
+          arguments: { action: 'dismiss', workspacePath: repoB, coordinatorId: 'coord-new-b', threadId: 'thr-001' },
+        },
+      },
+      // Cross-project dismiss of Project A's explicit decision from Project B -> MUST fail closed
+      {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tools/call',
+        params: {
+          name: 'manage_decisions',
+          arguments: { action: 'dismiss', workspacePath: repoB, coordinatorId: 'coord-new-b', decisionId: decA.id },
+        },
+      },
+      // Cross-project resolve of Project A's explicit decision from Project B -> MUST fail closed
+      {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: {
+          name: 'manage_decisions',
+          arguments: { action: 'resolve', workspacePath: repoB, coordinatorId: 'coord-new-b', decisionId: decA.id },
+        },
+      },
+      // Retired coordinator calling resolve on Project B -> MUST fail closed
+      {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'tools/call',
+        params: {
+          name: 'manage_decisions',
+          arguments: { action: 'resolve', workspacePath: repoB, coordinatorId: 'coord-b-retired', decisionId: decB.id },
+        },
+      },
+      // Empty Project C attempting to dismiss `thr-001` -> MUST reject (never touch Legacy A or write orphan key)
+      {
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'tools/call',
+        params: {
+          name: 'manage_decisions',
+          arguments: { action: 'dismiss', workspacePath: repoC, coordinatorId: 'coord-empty-c', threadId: 'thr-001' },
+        },
+      },
+      // Valid Project B resolve of decB -> MUST succeed
+      {
+        jsonrpc: '2.0',
+        id: 7,
+        method: 'tools/call',
+        params: {
+          name: 'manage_decisions',
+          arguments: {
+            action: 'resolve',
+            workspacePath: repoB,
+            coordinatorId: 'coord-new-b',
+            decisionId: decB.id,
+            optionLabel: 'Ship it',
+          },
+        },
+      },
+    ],
+  );
+  assert.equal(mcpRes.status, 0, mcpRes.stderr);
+  const mcpMsgs = mcpRes.stdout
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => JSON.parse(line));
+
+  const dismissBRes = mcpMsgs.find((m) => m.id === 2)?.result;
+  assert.notEqual(dismissBRes?.isError, true, dismissBRes?.content?.[0]?.text);
+  const dismissBText = dismissBRes?.content?.[0]?.text || '';
+  assert.match(dismissBText, /`thr-001`/);
+  assert.doesNotMatch(dismissBText, /\bpt-[a-f0-9]{8}-/);
+
+  const regAfterMcpDismiss = loadRegistry();
+  assert.ok(regAfterMcpDismiss.dismissedAutoDecisions[`${b1.threadId}:*`]);
+  assert.equal(regAfterMcpDismiss.dismissedAutoDecisions['thr-001:*'], undefined);
+  assert.ok(
+    buildBoardDecisions({ workspacePath: repoA }).some((d) => d.source === 'auto' && d.threadId === 'thr-001'),
+    'Legacy Project A auto decision for thr-001 must remain completely untouched',
+  );
+  assert.equal(
+    buildBoardDecisions({ workspacePath: repoB }).some((d) => d.source === 'auto' && d.threadId === b1.threadId),
+    false,
+    'Project B auto decision must be dismissed',
+  );
+
+  const crossDismissErr = mcpMsgs.find((m) => m.id === 3)?.result;
+  assert.equal(crossDismissErr?.isError, true);
+  assert.match(crossDismissErr?.content?.[0]?.text || '', /Cross-project access denied/);
+
+  const crossResolveErr = mcpMsgs.find((m) => m.id === 4)?.result;
+  assert.equal(crossResolveErr?.isError, true);
+  assert.match(crossResolveErr?.content?.[0]?.text || '', /Cross-project access denied/);
+
+  const retiredResolveErr = mcpMsgs.find((m) => m.id === 5)?.result;
+  assert.equal(retiredResolveErr?.isError, true);
+  assert.match(retiredResolveErr?.content?.[0]?.text || '', /retired|Coordinator/i);
+
+  const emptyCDismissErr = mcpMsgs.find((m) => m.id === 6)?.result;
+  assert.equal(emptyCDismissErr?.isError, true);
+  assert.match(emptyCDismissErr?.content?.[0]?.text || '', /Cross-project access denied/);
+
+  const validResolveB = mcpMsgs.find((m) => m.id === 7)?.result;
+  assert.notEqual(validResolveB?.isError, true);
+  assert.equal(listDecisions({ workspacePath: repoA }).length, 1, 'decA must stay pending');
+  assert.equal(listDecisions({ workspacePath: repoB }).length, 0, 'decB must be resolved');
+
+  assert.throws(
+    () => resolveDecision({ decisionId: decA.id, workspacePath: repoB }),
+    /Cross-project access denied/,
+  );
+
+  // 3. P1-1 & P2-1: executeDecisionAction(auto:worktree_merge_ready:thr-001) targets Project B, never Legacy A
+  // Make a new commit on b1 so the auto decision naturally re-triggers for commitB2
+  writeFileSync(join(b1.worktreePath, 'new-b-2.txt'), 'new b commit 2\n', 'utf8');
+  execFileSync('git', ['add', 'new-b-2.txt'], { cwd: b1.worktreePath });
+  execFileSync('git', ['commit', '-m', 'new b commit 2'], { cwd: b1.worktreePath });
+  const commitB2 = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: b1.worktreePath, encoding: 'utf8' }).trim();
+  const rearmAutoReg = loadRegistry();
+  rearmAutoReg.threads[b1.threadId].git = {
+    exists: true,
+    aheadCount: 2,
+    dirtyCount: 0,
+    merged: false,
+    lastCommit: commitB2,
+  };
+  saveRegistry(rearmAutoReg);
+
+  const execAutoB = await executeDecisionAction({
+    decisionId: 'auto:worktree_merge_ready:thr-001',
+    action: 'send_coordinator',
+    workspacePath: repoB,
+    coordinatorId: 'coord-new-b',
+  });
+  assert.equal(execAutoB.ok, true);
+  assert.equal(execAutoB.coordinatorId, 'coord-new-b');
+  assert.equal(execAutoB.threadId, b1.threadId);
+  const regAfterExecAuto = loadRegistry();
+  assert.ok(regAfterExecAuto.dismissedAutoDecisions[`${b1.threadId}:worktree_merge_ready`]);
+  assert.equal(regAfterExecAuto.dismissedAutoDecisions['thr-001:worktree_merge_ready'], undefined);
+
+  // P2-1: Duplicate auto decision claim conflict error must display `thr-001`, never internal `pt-<hash>-`
+  const dupAutoB = await executeDecisionAction({
+    decisionId: 'auto:worktree_merge_ready:thr-001',
+    action: 'send_coordinator',
+    workspacePath: repoB,
+    coordinatorId: 'coord-new-b',
+  });
+  assert.equal(dupAutoB.ok, false);
+  assert.equal(dupAutoB.alreadyResolved, true);
+  assert.match(dupAutoB.error || '', /"thr-001"/);
+  assert.doesNotMatch(dupAutoB.error || '', /\bpt-[a-f0-9]{8}-/);
+
+  // Empty Project C must fail closed on auto:worktree_merge_ready:thr-001
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: 'auto:worktree_merge_ready:thr-001',
+        action: 'send_coordinator',
+        workspacePath: repoC,
+        coordinatorId: 'coord-empty-c',
+      }),
+    /Cross-project access denied/,
+  );
+
+  // 4. P0-2 & P1-2: syncCompletionToCoordinator scoped-first resolution & Sidecar /api/thread_sync_coord wiring
+  writeTranscript(appDataDir, 'conv-legacy-a1', [
+    { step_index: 0, type: 'USER_INPUT', status: 'DONE', content: '<USER_REQUEST>A</USER_REQUEST>' },
+    {
+      step_index: 2,
+      type: 'PLANNER_RESPONSE',
+      status: 'DONE',
+      content: 'Finished.\n\n### Thread Summary\n- LEGACY_A_ONLY_MARKER',
+    },
+  ]);
+  writeTranscript(appDataDir, b1.conversationId, [
+    { step_index: 0, type: 'USER_INPUT', status: 'DONE', content: '<USER_REQUEST>B</USER_REQUEST>' },
+    {
+      step_index: 2,
+      type: 'PLANNER_RESPONSE',
+      status: 'DONE',
+      content: 'Finished.\n\n### Thread Summary\n- SCOPED_B_ONLY_MARKER',
+    },
+  ]);
+
+  const syncB = await syncCompletionToCoordinator({
+    threadId: 'thr-001',
+    workspacePath: repoB,
+    coordinatorId: 'coord-new-b',
+    force: true,
+  });
+  assert.equal(syncB.ok, true);
+  assert.equal(syncB.synced, true);
+  assert.equal(syncB.threadId, b1.threadId);
+  assert.equal(syncB.localId, 'thr-001');
+  assert.equal(syncB.coordinatorId, 'coord-new-b');
+
+  // Inspect actual agentapi deliveries: BOTH auto decision & completion sync went exclusively to coord-new-b
+  const sends = readFileSync(sendLog, 'utf8')
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => JSON.parse(line));
+  assert.equal(sends.length, 2, 'Expected 1 auto-decision send + 1 completion sync send');
+  for (const argv of sends) {
+    const joined = argv.join(' ');
+    assert.ok(joined.includes('coord-new-b'), 'Delivery must target coord-new-b');
+    assert.equal(joined.includes('coord-legacy-a'), false, 'Delivery must NEVER hit Legacy Project A coordinator');
+    assert.doesNotMatch(joined, /\bpt-[a-f0-9]{8}-/, 'Delivery must never expose internal scoped key');
+    assert.equal(joined.includes('\u00b7'), false, 'Delivery must contain zero middle dots');
+  }
+  const lastSyncPayload = sends[sends.length - 1].join(' ');
+  assert.ok(lastSyncPayload.includes('SCOPED_B_ONLY_MARKER'), 'Must deliver Project B transcript');
+  assert.equal(lastSyncPayload.includes('LEGACY_A_ONLY_MARKER'), false, 'Must NEVER deliver Legacy Project A transcript');
+
+  // Retired coordinator & cross-project caller must be rejected on syncCompletionToCoordinator
+  await assert.rejects(
+    () =>
+      syncCompletionToCoordinator({
+        threadId: 'thr-001',
+        workspacePath: repoB,
+        coordinatorId: 'coord-b-retired',
+        force: true,
+      }),
+    /retired|Coordinator/i,
+  );
+  await assert.rejects(
+    () =>
+      syncCompletionToCoordinator({
+        threadId: 'thr-001',
+        workspacePath: repoC,
+        coordinatorId: 'coord-empty-c',
+        force: true,
+      }),
+    /Cross-project access denied/,
+  );
+
+  // P1-2 static verification: Sidecar main.mjs forwards scope & app.js sends buildScopePayload + anti-replay opts
+  const mainSource = readFileSync(join(REPO_ROOT, 'sidecars/threads/main.mjs'), 'utf8');
+  const appSource = readFileSync(join(REPO_ROOT, 'sidecars/threads/app.js'), 'utf8');
+  const syncHandlerMatch = mainSource.match(/async function handleThreadSyncCoord\([\s\S]*?\n\}/);
+  assert.ok(syncHandlerMatch, 'handleThreadSyncCoord must exist in sidecars/threads/main.mjs');
+  for (const field of ['workspacePath', 'workspaceKey', 'coordinatorId', 'conversationId', 'projectId']) {
+    assert.ok(
+      syncHandlerMatch[0].includes(field),
+      `handleThreadSyncCoord must forward ${field} to syncCompletionToCoordinator`,
+    );
+  }
+  const syncCalls = [...appSource.matchAll(/postApi\(\s*['"]\/api\/thread_sync_coord['"][\s\S]*?\);/g)];
+  assert.equal(syncCalls.length, 2, 'sidecars/threads/app.js must have 2 /api/thread_sync_coord callers');
+  for (const m of syncCalls) {
+    assert.ok(m[0].includes('buildScopePayload('), '/api/thread_sync_coord caller must wrap payload with buildScopePayload');
+    assert.ok(m[0].includes('timeoutMs: 0'), '/api/thread_sync_coord caller must set timeoutMs: 0');
+    assert.ok(m[0].includes('allowGetFallback: false'), '/api/thread_sync_coord caller must set allowGetFallback: false');
   }
 });

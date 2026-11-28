@@ -836,10 +836,26 @@ async function handleToolCall(name, args = {}) {
             content: [{ type: 'text', text: '`decisionId` is required when action="resolve".' }],
           };
         }
+        const hasScopeArgs = Boolean(
+          args.workspacePath || args.coordinatorId || args.conversationId || args.projectId,
+        );
+        const scope = hasScopeArgs
+          ? await resolveProjectScope({
+              workspacePath: args.workspacePath || '',
+              conversationId: args.conversationId || args.coordinatorId || '',
+              coordinatorId: args.coordinatorId || '',
+              projectId: args.projectId || '',
+            })
+          : null;
         const updated = resolveDecision({
           decisionId,
           optionId: args.optionId || '',
           optionLabel: args.optionLabel || '',
+          coordinatorId: args.coordinatorId || '',
+          conversationId: args.conversationId || '',
+          workspacePath: args.workspacePath || scope?.baseDir || '',
+          projectId: args.projectId || scope?.projectId || '',
+          expectedScopeKey: scope?.scopeKey || '',
         });
         const text = `Resolved decision \`${updated.id}\` (${updated.title})${updated.resolvedOptionLabel ? ` — chosen: **${updated.resolvedOptionLabel}**` : ''}.`;
         return { content: [{ type: 'text', text }], structuredContent: updated };
@@ -858,8 +874,34 @@ async function handleToolCall(name, args = {}) {
           ],
         };
       }
-      const dismissed = dismissDecision(decisionId || { threadId: args.threadId });
-      const text = `Dismissed decision \`${dismissed.decisionId || dismissed.key || decisionId}\`.`;
+      const hasDismissScopeArgs = Boolean(
+        args.workspacePath || args.coordinatorId || args.conversationId || args.projectId,
+      );
+      const dismissScope = hasDismissScopeArgs
+        ? await resolveProjectScope({
+            workspacePath: args.workspacePath || '',
+            conversationId: args.conversationId || args.coordinatorId || '',
+            coordinatorId: args.coordinatorId || '',
+            projectId: args.projectId || '',
+          })
+        : null;
+      const dismissScopeOpts = {
+        workspaceKey: dismissScope?.scopeKey || '',
+        workspacePath: args.workspacePath || dismissScope?.baseDir || '',
+        projectId: args.projectId || dismissScope?.projectId || '',
+        coordinatorId: args.coordinatorId || '',
+        conversationId: args.conversationId || '',
+      };
+      const dismissed = dismissDecision(
+        decisionId || { threadId: args.threadId },
+        dismissScopeOpts,
+      );
+      const dismissedLabel =
+        dismissed.decisionId ||
+        (dismissed.threadLocalId
+          ? `${dismissed.threadLocalId}${dismissed.autoKind && dismissed.autoKind !== '*' ? `:${dismissed.autoKind}` : ''}`
+          : dismissed.key || decisionId);
+      const text = `Dismissed decision \`${dismissedLabel}\`.`;
       return { content: [{ type: 'text', text }], structuredContent: dismissed };
     }
 
