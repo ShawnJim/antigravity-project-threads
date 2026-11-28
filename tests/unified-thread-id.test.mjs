@@ -8,6 +8,8 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import http from 'node:http';
@@ -113,11 +115,15 @@ process.stdout.write(JSON.stringify({ response: { sendMessage: { recipientId: 'o
   return shFile;
 }
 
-function writeTranscript(appDataDir, convId, steps) {
+function writeTranscript(appDataDir, convId, steps, mtimeMs = null) {
   const txDir = join(appDataDir, 'brain', convId, '.system_generated', 'logs');
   mkdirSync(txDir, { recursive: true });
   const txPath = join(txDir, 'transcript.jsonl');
   writeFileSync(txPath, `${steps.map((s) => JSON.stringify(s)).join('\n')}\n`, 'utf8');
+  if (typeof mtimeMs === 'number' && Number.isFinite(mtimeMs)) {
+    const dt = new Date(mtimeMs);
+    utimesSync(txPath, dt, dt);
+  }
   return txPath;
 }
 
@@ -468,33 +474,45 @@ test('Issue #12 (dec-034): Two brand-new projects + non-Git project each start a
 
   // 5. Watchdog isolation for dual thr-001 + unified thr-001 alert output
   const t0 = Date.parse('2026-11-28T18:00:00.000Z');
+  const staleAtMs = t0 - 15 * 60_000;
   const wdReg = loadRegistry();
   wdReg.threads[a2.threadId].runState = 'RUN_STATE_RUNNING';
   wdReg.threads[a2.threadId].bucket = 'working';
   wdReg.threads[a2.threadId].createdAt = new Date(t0 - 20 * 60_000).toISOString();
-  wdReg.threads[a2.threadId].updatedAt = new Date(t0 - 15 * 60_000).toISOString();
+  wdReg.threads[a2.threadId].updatedAt = new Date(staleAtMs).toISOString();
   wdReg.threads[b2.threadId].runState = 'RUN_STATE_RUNNING';
   wdReg.threads[b2.threadId].bucket = 'working';
   wdReg.threads[b2.threadId].createdAt = new Date(t0 - 20 * 60_000).toISOString();
-  wdReg.threads[b2.threadId].updatedAt = new Date(t0 - 15 * 60_000).toISOString();
+  wdReg.threads[b2.threadId].updatedAt = new Date(staleAtMs).toISOString();
   saveRegistry(wdReg);
-  writeTranscript(appDataDir, a2.conversationId, [
-    { step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Stall A</USER_REQUEST>' },
-  ]);
-  writeTranscript(appDataDir, b2.conversationId, [
-    { step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Stall B</USER_REQUEST>' },
+  const txPathA2 = writeTranscript(
+    appDataDir,
+    a2.conversationId,
+    [{ step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Stall A</USER_REQUEST>' }],
+    staleAtMs,
+  );
+  const txPathB2 = writeTranscript(
+    appDataDir,
+    b2.conversationId,
+    [{ step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Stall B</USER_REQUEST>' }],
+    staleAtMs,
+  );
+  const txStatByConv = new Map([
+    [a2.conversationId, { exists: true, size: statSync(txPathA2).size, mtimeMs: staleAtMs }],
+    [b2.conversationId, { exists: true, size: statSync(txPathB2).size, mtimeMs: staleAtMs }],
   ]);
 
   const wdAlerts = [];
   const makeWdDeps = (coordId) => ({
     now: () => t0,
+    statTranscript: (cid) => txStatByConv.get(cid) || { exists: false, size: 0, mtimeMs: 0 },
     getConversation: async (cid) => ({
       conversation: {
         id: cid,
         state:
           cid === coordId
             ? { runState: 'RUN_STATE_IDLE' }
-            : { runState: 'RUN_STATE_RUNNING', updateTime: new Date(t0 - 15 * 60_000).toISOString() },
+            : { runState: 'RUN_STATE_RUNNING', updateTime: new Date(staleAtMs).toISOString() },
       },
     }),
     invokeAgentApiSend: async (args) => {
