@@ -8,7 +8,7 @@ import {
 } from '../lib/store.mjs';
 import { extractThreadCompletion } from '../lib/transcript.mjs';
 
-const DIRECTIVE_VERSION = 9;
+const DIRECTIVE_VERSION = 10;
 const LEADING_SLASH_COORD_RE = /^\s*\/coord(?=$|[\s:：，,。!?！？])/i;
 
 function readStdin() {
@@ -56,7 +56,7 @@ function buildCoordinatorDirective(coord) {
     '   - **3–5 concise takeaway bullets**: Summarize only root cause, key changes/findings, and any decision needed from the user. Do NOT dump long logs or large tables into the Coordinator session.',
     `   - **Trailing divider**: End the card with \`---\` (and if cross-cutting project conventions emerged, call \`update_project_memory\` passing \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`).`,
     '   - If a callback duplicates an already-reported conclusion, acknowledge briefly in one line or stay concise without exposing internal dedup metadata. **NEVER call `dispatch_thread` again in response to a completion sync!**',
-    `4. To check thread status, steer an existing thread, or archive finished work, call \`list_threads\` (always pass \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`), \`get_thread_detail\`, \`send_thread_message\`, or \`archive_thread\`.`,
+    `4. **Thread management & autonomous archiving**: To check thread status, steer an existing thread, or archive finished work, call \`list_threads\` (always pass \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`), \`get_thread_detail\`, \`send_thread_message\`, or \`archive_thread\`. Once a Worker Thread has completed and been reported, you may **autonomously decide** whether to call \`archive_thread\` without asking the user for permission each time (e.g. archive read-only investigation/check threads directly after reporting; archive Worktree code threads once confirmed merged into \`main\` or no longer needed, while keeping unmerged threads that still require follow-up edits).`,
   ].join('\n');
 }
 
