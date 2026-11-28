@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { Response, SidecarApp } from 'sidecar_sdk';
 import { getCascadeModelCatalog, getSelectableModels, resolveLsEndpoint } from '../../lib/ls-client.mjs';
 import {
+  applyPluginUpdate,
+  checkPluginUpdate,
+  getPluginUpdateStatus,
+} from '../../lib/updater.mjs';
+import {
   archiveThread,
   canonicalizeModelForSettings,
   cleanupThreadWorktree,
@@ -392,6 +397,46 @@ async function handleSaveSettings(data = {}) {
   }
 }
 registerDualApi('/api/settings_save', handleSaveSettings);
+
+async function handleUpdateStatus(data = {}) {
+  try {
+    const status = await getPluginUpdateStatus({
+      channel: data.channel || '',
+      backgroundRefresh: parseBool(data.bg, true),
+    });
+    return { ...status, locale: resolveAppLocale() };
+  } catch (err) {
+    return { ok: false, error: err.message, locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/update_status', handleUpdateStatus);
+
+async function handleUpdateCheck(data = {}) {
+  try {
+    const status = await checkPluginUpdate({
+      channel: data.channel || '',
+      force: parseBool(data.force, true),
+      persistChannel: parseBool(data.persistChannel, true),
+    });
+    return { ...status, locale: resolveAppLocale() };
+  } catch (err) {
+    return { ok: false, error: err.message, locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/update_check', handleUpdateCheck);
+
+async function handleUpdateApply(data = {}) {
+  try {
+    const res = await applyPluginUpdate({
+      channel: data.channel || '',
+      persistChannel: parseBool(data.persistChannel, true),
+    });
+    return { ...res, locale: resolveAppLocale() };
+  } catch (err) {
+    return { ok: false, error: err.message, locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/update_apply', handleUpdateApply);
 
 // Background watcher: ensures thread completions sync back to Coordinator even when side panel is collapsed
 setInterval(() => {

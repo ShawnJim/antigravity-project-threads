@@ -28,6 +28,7 @@
           </button>
           <button type="button" id="btn-settings" class="icon-ghost-btn" title="Settings" aria-label="Settings">
             <svg class="ico ico-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span id="settings-update-dot" class="settings-update-dot" hidden aria-hidden="true"></span>
           </button>
         </div>
       </div>
@@ -268,6 +269,47 @@
           <span id="settings-toast" class="toast" role="status" aria-live="polite"></span>
         </div>
         <div id="settings-err" class="err" hidden></div>
+      </div>
+
+      <div id="settings-update-card" class="pt-card update-card">
+        <div class="settings-card-hdr update-card-hdr">
+          <span id="lbl-update-hdr" class="settings-card-title">Version &amp; Updates</span>
+          <span id="update-status-badge" class="update-badge" hidden></span>
+        </div>
+
+        <div class="update-channel-row">
+          <span id="lbl-update-channel" class="settings-group-label update-channel-lbl">Update Channel</span>
+          <div id="update-channel-seg" class="seg-group update-channel-seg" role="tablist">
+            <button type="button" role="tab" class="seg-btn active" data-channel="stable" id="btn-channel-stable" aria-selected="true">Stable</button>
+            <button type="button" role="tab" class="seg-btn" data-channel="dev" id="btn-channel-dev" aria-selected="false">Dev / Pre-release</button>
+          </div>
+          <div id="desc-update-channel" class="settings-field-hint"></div>
+        </div>
+
+        <div id="update-detail-box" class="update-detail-box">
+          <div class="update-meta-row">
+            <span id="lbl-update-current" class="update-meta-key">Current</span>
+            <span id="val-update-current" class="update-meta-val"></span>
+          </div>
+          <div id="row-update-target" class="update-meta-row" hidden>
+            <span id="lbl-update-target" class="update-meta-key">Target</span>
+            <span id="val-update-target" class="update-meta-val"></span>
+          </div>
+          <div id="update-summary-text" class="update-summary-text" hidden></div>
+          <ul id="update-commits-list" class="update-commits-list" hidden></ul>
+          <div id="update-checked-meta" class="update-checked-meta"></div>
+        </div>
+
+        <div id="update-dirty-warn" class="pt-modal-warn update-dirty-warn" hidden></div>
+        <div id="update-nongit-hint" class="settings-field-hint update-nongit-hint" hidden></div>
+        <div id="update-reload-banner" class="update-reload-banner" hidden></div>
+        <div id="update-err" class="err update-err" hidden></div>
+
+        <div class="update-actions">
+          <button type="button" id="btn-update-check" class="btn-secondary">Check for Updates</button>
+          <button type="button" id="btn-update-apply" class="btn-solid" hidden>One-Click Update</button>
+          <a id="btn-update-release" class="btn-link-secondary" href="https://github.com/ShawnJim/antigravity-project-threads/releases" target="_blank" rel="noopener noreferrer" hidden>Open GitHub Releases ↗</a>
+        </div>
       </div>
     </div>
   </section>

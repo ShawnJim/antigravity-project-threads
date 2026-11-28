@@ -225,7 +225,53 @@
       loadingChat: 'Loading conversation…',
       emptyChat: 'Waiting for first response…',
       settingsTip: 'Settings',
-      settingsTitle: 'Default Models',
+      settingsTitle: 'Settings',
+      settingsTipWithUpdate: (ver) =>
+        ver ? `Settings — Update available (v${ver})` : 'Settings — Update available',
+      updateHdr: 'Version & Updates',
+      updateInstallGit: 'Git Install',
+      updateInstallRelease: 'Release Package',
+      updateChannelLabel: 'Update Channel',
+      updateChannelStable: 'Stable',
+      updateChannelDev: 'Dev / Pre-release',
+      updateChannelHintStable: 'Tracks origin/main and formal vX.Y.Z / stable releases.',
+      updateChannelHintDev: 'Tracks origin/dev for early previews and latest improvements.',
+      updateCurrentLabel: 'Current',
+      updateTargetLabel: 'Target',
+      updateBranchDetached: 'detached',
+      updateBadgeChecking: 'Checking…',
+      updateBadgeAvailable: 'Update available',
+      updateBadgeSwitch: 'Switch channel',
+      updateBadgeUpToDate: 'Up to date',
+      updateBadgeDirty: 'Uncommitted edits',
+      updateBadgeOffline: 'Offline',
+      updateBadgeUnchecked: 'Not checked',
+      updateBehindCommits: (n) => `${n} commit${n === 1 ? '' : 's'} behind`,
+      updateAheadCommits: (n) => `${n} commit${n === 1 ? '' : 's'} ahead`,
+      updateSwitchBranchHint: (cur, tgt) => `Switch ${cur || 'detached HEAD'} -> ${tgt}`,
+      updateCheckedAgo: (ago) => `Last checked ${ago}`,
+      updateNotCheckedYet: 'Click "Check for Updates" to query the latest version.',
+      updateCheckBtn: 'Check for Updates',
+      updateCheckingBtn: 'Checking…',
+      updateApplyBtn: 'One-Click Update',
+      updateSwitchApplyBtn: 'Switch & Update',
+      updateApplyingBtn: 'Updating…',
+      updateReleaseBtn: 'Open GitHub Releases ↗',
+      updateDirtyWarn: (n) =>
+        `Local plugin directory has ${n} uncommitted change${n === 1 ? '' : 's'}. One-click update is blocked to protect local edits (git reset --hard is never used).`,
+      updateNonGitHint:
+        'Non-Git installation detected. Local files will not be modified automatically; open GitHub Releases to download the latest version.',
+      updateReloadBanner: (ver) =>
+        `Updated to v${ver}. Toggle "project-threads" off and back on in the plugin manager, or reload the Antigravity window to take effect.`,
+      updateModalTitle: 'Confirm Plugin Update',
+      updateModalConfirm: 'Update Now',
+      updateModalNote:
+        'Runs a safe fast-forward Git update only when the working tree is clean. After updating, toggle project-threads or reload the Antigravity window to take effect.',
+      updateToastUpToDate: 'Already up to date',
+      updateToastAvailable: (ver) => `Update available (v${ver})`,
+      updateToastApplied: 'Updated — toggle plugin or reload window',
+      updateToastCheckErr: 'Update check failed',
+      updateToastApplyErr: 'Plugin update failed',
       settingsBack: 'Back',
       settingsScopeGlobal: 'Global',
       settingsScopeProject: 'This Project',
@@ -473,8 +519,54 @@
       },
       loadingChat: '正在读取会话记录…',
       emptyChat: '正在等待线程响应…',
-      settingsTip: '默认模型设置',
-      settingsTitle: '默认模型设置',
+      settingsTip: '设置',
+      settingsTitle: '设置',
+      settingsTipWithUpdate: (ver) =>
+        ver ? `设置 — 有新版本可用 (v${ver})` : '设置 — 有新版本可用',
+      updateHdr: '版本与更新',
+      updateInstallGit: 'Git 安装',
+      updateInstallRelease: '发行版安装',
+      updateChannelLabel: '跟踪渠道',
+      updateChannelStable: '稳定版 (stable)',
+      updateChannelDev: '先行版 (dev)',
+      updateChannelHintStable: '跟踪 origin/main 分支与最新正式版（vX.Y.Z / stable）。',
+      updateChannelHintDev: '跟踪 origin/dev 分支，抢先体验先行版与最新改进。',
+      updateCurrentLabel: '当前版本',
+      updateTargetLabel: '目标版本',
+      updateBranchDetached: '游离 HEAD',
+      updateBadgeChecking: '检查中…',
+      updateBadgeAvailable: '有新版本',
+      updateBadgeSwitch: '待切换渠道',
+      updateBadgeUpToDate: '已是最新',
+      updateBadgeDirty: '工作区未提交',
+      updateBadgeOffline: '离线',
+      updateBadgeUnchecked: '未检查',
+      updateBehindCommits: (n) => `落后 ${n} 个提交`,
+      updateAheadCommits: (n) => `领先 ${n} 个提交`,
+      updateSwitchBranchHint: (cur, tgt) => `将从 ${cur || '游离 HEAD'} 切换至 ${tgt}`,
+      updateCheckedAgo: (ago) => `上次检查：${ago}`,
+      updateNotCheckedYet: '点击「检查更新」检测最新版本。',
+      updateCheckBtn: '检查更新',
+      updateCheckingBtn: '检查中…',
+      updateApplyBtn: '一键更新',
+      updateSwitchApplyBtn: '切换渠道并更新',
+      updateApplyingBtn: '更新中…',
+      updateReleaseBtn: '前往 GitHub Release ↗',
+      updateDirtyWarn: (n) =>
+        `检测到本地插件目录存在 ${n} 处未提交修改。为防止覆盖本地改动，已禁用一键更新（绝不执行 git reset --hard）。请先提交或清理改动后重试。`,
+      updateNonGitHint:
+        '当前为非 Git 方式安装，不会修改本地文件；请前往 GitHub Release 下载最新版本。',
+      updateReloadBanner: (ver) =>
+        `已更新至 v${ver}，请在插件管理器中关闭再开启 project-threads 或重载 Antigravity 窗口生效。`,
+      updateModalTitle: '确认更新插件',
+      updateModalConfirm: '确认更新',
+      updateModalNote:
+        '仅在本地工作区干净时安全执行快进拉取（fast-forward），绝不强制重置改动。更新完成后请在插件管理器中关闭再开启 project-threads 或重载 Antigravity 窗口生效。',
+      updateToastUpToDate: '已是最新版本',
+      updateToastAvailable: (ver) => `发现新版本 v${ver}`,
+      updateToastApplied: '已更新至新版本，请重载插件或窗口生效',
+      updateToastCheckErr: '检查更新失败',
+      updateToastApplyErr: '插件更新失败',
       settingsBack: '返回',
       settingsScopeGlobal: '全局默认',
       settingsScopeProject: '当前项目',
@@ -722,8 +814,54 @@
       },
       loadingChat: '正在讀取會話記錄…',
       emptyChat: '正在等待執行緒回應…',
-      settingsTip: '預設模型設定',
-      settingsTitle: '預設模型設定',
+      settingsTip: '設定',
+      settingsTitle: '設定',
+      settingsTipWithUpdate: (ver) =>
+        ver ? `設定 — 有新版本可用 (v${ver})` : '設定 — 有新版本可用',
+      updateHdr: '版本與更新',
+      updateInstallGit: 'Git 安裝',
+      updateInstallRelease: '發行版安裝',
+      updateChannelLabel: '追蹤渠道',
+      updateChannelStable: '穩定版 (stable)',
+      updateChannelDev: '先行版 (dev)',
+      updateChannelHintStable: '追蹤 origin/main 分支與最新正式版（vX.Y.Z / stable）。',
+      updateChannelHintDev: '追蹤 origin/dev 分支，搶先體驗先行版與最新改進。',
+      updateCurrentLabel: '目前版本',
+      updateTargetLabel: '目標版本',
+      updateBranchDetached: '游離 HEAD',
+      updateBadgeChecking: '檢查中…',
+      updateBadgeAvailable: '有新版本',
+      updateBadgeSwitch: '待切換渠道',
+      updateBadgeUpToDate: '已是最新',
+      updateBadgeDirty: '工作區未提交',
+      updateBadgeOffline: '離線',
+      updateBadgeUnchecked: '未檢查',
+      updateBehindCommits: (n) => `落後 ${n} 個提交`,
+      updateAheadCommits: (n) => `領先 ${n} 個提交`,
+      updateSwitchBranchHint: (cur, tgt) => `將從 ${cur || '游離 HEAD'} 切換至 ${tgt}`,
+      updateCheckedAgo: (ago) => `上次檢查：${ago}`,
+      updateNotCheckedYet: '點擊「檢查更新」偵測最新版本。',
+      updateCheckBtn: '檢查更新',
+      updateCheckingBtn: '檢查中…',
+      updateApplyBtn: '一鍵更新',
+      updateSwitchApplyBtn: '切換渠道並更新',
+      updateApplyingBtn: '更新中…',
+      updateReleaseBtn: '前往 GitHub Release ↗',
+      updateDirtyWarn: (n) =>
+        `偵測到本地外掛目錄存在 ${n} 處未提交修改。為防止覆寫本地改動，已停用一鍵更新（絕不執行 git reset --hard）。請先提交或清理改動後重試。`,
+      updateNonGitHint:
+        '目前為非 Git 方式安裝，不會修改本地檔案；請前往 GitHub Release 下載最新版本。',
+      updateReloadBanner: (ver) =>
+        `已更新至 v${ver}，請在外掛管理器中關閉再開啟 project-threads 或重新載入 Antigravity 視窗生效。`,
+      updateModalTitle: '確認更新外掛',
+      updateModalConfirm: '確認更新',
+      updateModalNote:
+        '僅在本地工作區乾淨時安全執行快進拉取（fast-forward），絕不強制重設改動。更新完成後請在外掛管理器中關閉再開啟 project-threads 或重新載入 Antigravity 視窗生效。',
+      updateToastUpToDate: '已是最新版本',
+      updateToastAvailable: (ver) => `發現新版本 v${ver}`,
+      updateToastApplied: '已更新至新版本，請重新載入外掛或視窗生效',
+      updateToastCheckErr: '檢查更新失敗',
+      updateToastApplyErr: '外掛更新失敗',
       settingsBack: '返回',
       settingsScopeGlobal: '全域預設',
       settingsScopeProject: '目前專案',
@@ -836,12 +974,18 @@
   let settingsWorktreeGroups = [];
   let settingsReadOnlyGroups = [];
   let dispatchModelGroups = [];
+  let pluginUpdateState = null;
+  let pluginUpdateChecking = false;
+  let pluginUpdateApplying = false;
+  let pluginUpdateAppliedVersion = '';
+  let pluginUpdatePollTimer = null;
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
   const elThreadScreen = document.getElementById('thread-screen');
   const elSettingsScreen = document.getElementById('settings-screen');
   const elBtnSettings = document.getElementById('btn-settings');
+  const elSettingsUpdateDot = document.getElementById('settings-update-dot');
   const elBtnSettingsBack = document.getElementById('btn-settings-back');
   const elSettingsScopeToggle = document.getElementById('settings-scope-toggle');
   const elBtnScopeGlobal = document.getElementById('btn-scope-global');
@@ -857,6 +1001,17 @@
   const elBtnSettingsRefreshModels = document.getElementById('btn-settings-refresh-models');
   const elSettingsToast = document.getElementById('settings-toast');
   const elSettingsErr = document.getElementById('settings-err');
+  const elUpdateCard = document.getElementById('settings-update-card');
+  const elUpdateBadge = document.getElementById('update-status-badge');
+  const elBtnChannelStable = document.getElementById('btn-channel-stable');
+  const elBtnChannelDev = document.getElementById('btn-channel-dev');
+  const elBtnUpdateCheck = document.getElementById('btn-update-check');
+  const elBtnUpdateApply = document.getElementById('btn-update-apply');
+  const elBtnUpdateRelease = document.getElementById('btn-update-release');
+  const elUpdateDirtyWarn = document.getElementById('update-dirty-warn');
+  const elUpdateNonGitHint = document.getElementById('update-nongit-hint');
+  const elUpdateReloadBanner = document.getElementById('update-reload-banner');
+  const elUpdateErr = document.getElementById('update-err');
   const elBoardBody = document.getElementById('board-body');
   const elLivePill = document.getElementById('live-pill');
   const elLiveLabel = document.getElementById('live-label');
@@ -1066,10 +1221,7 @@
     document.getElementById('lbl-tab-archived').textContent = t.tabArchived;
     setLiveStatus(isLiveOk);
     document.getElementById('lbl-new').textContent = t.newBtn;
-    if (elBtnSettings) {
-      elBtnSettings.title = t.settingsTip;
-      elBtnSettings.setAttribute('aria-label', t.settingsTip);
-    }
+    syncSettingsUpdateDot();
     document.getElementById('btn-bind').textContent = t.bindBtn;
     document.getElementById('lbl-sort').textContent =
       sortMode === 'priority' ? t.sortPriority : t.sortRecent;
@@ -1113,7 +1265,10 @@
     updateCoordinatorControls();
     syncSendButtonState();
     populateDispatchModelSelect();
-    if (settingsScreenOpen && elSettingsScreen) renderSettingsScreen(false);
+    if (settingsScreenOpen && elSettingsScreen) {
+      renderSettingsScreen(false);
+      renderUpdateCard();
+    }
 
     if (changed) {
       if (lastSnap) renderBoard(lastSnap);
@@ -1195,6 +1350,11 @@
   function syncModalConfirmButton() {
     if (!activeModalCtx) return;
     const t = L();
+    if (activeModalCtx.mode === 'plugin_update') {
+      elModalConfirm.className = 'btn-solid';
+      elModalConfirm.textContent = activeModalCtx.busy ? t.updateApplyingBtn : t.updateModalConfirm;
+      return;
+    }
     const isForce = !elModalForceRow.hidden && elModalForceWt.checked;
     elModalConfirm.className = isForce ? 'btn-danger' : 'btn-solid';
     if (activeModalCtx.busy) {
@@ -3630,8 +3790,10 @@
     elSettingsScreen.classList.add('screen-slide');
 
     renderSettingsScreen(true);
+    renderUpdateCard();
     loadSelectableModels(false);
     loadSettingsData({ syncInputs: true });
+    loadPluginUpdateStatus({ bg: true });
   }
 
   function closeSettingsScreen() {
@@ -5235,6 +5397,46 @@
     syncModalConfirmButton();
 
     try {
+      if (ctx.mode === 'plugin_update') {
+        pluginUpdateApplying = true;
+        renderUpdateCard();
+        const res = await postApi('/api/update_apply', '/api/update_apply_get', {
+          channel: ctx.channel || '',
+          persistChannel: true,
+        });
+        pluginUpdateApplying = false;
+        if (!res?.ok) {
+          ctx.busy = false;
+          const errMsg = res?.error || L().updateToastApplyErr;
+          elModalErr.hidden = false;
+          elModalErr.textContent = errMsg;
+          elModalConfirm.disabled = false;
+          elModalCancel.disabled = false;
+          elModalClose.disabled = false;
+          syncModalConfirmButton();
+          if (res?.errorCode === 'dirty_worktree' && pluginUpdateState) {
+            pluginUpdateState = {
+              ...pluginUpdateState,
+              isDirty: true,
+              dirtyCount: res.dirtyCount || pluginUpdateState.dirtyCount || 1,
+              dirtyFiles: res.dirtyFiles || pluginUpdateState.dirtyFiles || [],
+            };
+          }
+          renderUpdateCard();
+          flashToast(errMsg, 'err', 4200);
+          return;
+        }
+        closePtModal(true);
+        if (res.status) {
+          pluginUpdateState = res.status;
+        }
+        pluginUpdateAppliedVersion =
+          res.currentVersion || res.status?.currentVersion || pluginUpdateState?.currentVersion || '';
+        syncSettingsUpdateDot();
+        renderUpdateCard();
+        flashToast(L().updateToastApplied, 'ok', 4800);
+        return;
+      }
       if (ctx.mode === 'archive') {
         const removeWorktree = elModalRemoveWt.checked;
         const forceWorktree = removeWorktree && elModalForceWt.checked;
@@ -5265,6 +5467,10 @@
       }
     } catch (err) {
       ctx.busy = false;
+      if (ctx.mode === 'plugin_update') {
+        pluginUpdateApplying = false;
+        renderUpdateCard();
+      }
       elModalErr.hidden = false;
       elModalErr.textContent = err?.message || 'Request failed';
       elModalConfirm.disabled = false;
@@ -5479,6 +5685,344 @@
     }
   });
 
+  // ---------- Plugin Version & Update Checker ----------
+  function syncSettingsUpdateDot() {
+    if (!elBtnSettings) return;
+    const t = L();
+    const hasUpdate = Boolean(pluginUpdateState?.hasUpdate);
+    if (elSettingsUpdateDot) {
+      elSettingsUpdateDot.hidden = !hasUpdate;
+    }
+    const tip = hasUpdate
+      ? t.settingsTipWithUpdate(pluginUpdateState?.targetVersion || '')
+      : t.settingsTip;
+    elBtnSettings.title = tip;
+    elBtnSettings.setAttribute('aria-label', tip);
+  }
+
+  function renderUpdateCard() {
+    if (!elUpdateCard) return;
+    const t = L();
+    const st = pluginUpdateState;
+    const activeChannel = st?.channel === 'dev' ? 'dev' : 'stable';
+    const isGit = st ? Boolean(st.isGitInstall) : true;
+    const isDirty = Boolean(isGit && st?.isDirty);
+    const hasChecked = Boolean(st?.checkedAt);
+    const busy = pluginUpdateChecking || pluginUpdateApplying;
+
+    const lblHdr = document.getElementById('lbl-update-hdr');
+    if (lblHdr) lblHdr.textContent = t.updateHdr;
+    const lblChan = document.getElementById('lbl-update-channel');
+    if (lblChan) lblChan.textContent = t.updateChannelLabel;
+    if (elBtnChannelStable && elBtnChannelDev) {
+      elBtnChannelStable.textContent = t.updateChannelStable;
+      elBtnChannelDev.textContent = t.updateChannelDev;
+      elBtnChannelStable.classList.toggle('active', activeChannel === 'stable');
+      elBtnChannelDev.classList.toggle('active', activeChannel === 'dev');
+      elBtnChannelStable.setAttribute('aria-selected', activeChannel === 'stable' ? 'true' : 'false');
+      elBtnChannelDev.setAttribute('aria-selected', activeChannel === 'dev' ? 'true' : 'false');
+      elBtnChannelStable.disabled = busy;
+      elBtnChannelDev.disabled = busy;
+    }
+    const descChan = document.getElementById('desc-update-channel');
+    if (descChan) {
+      descChan.textContent =
+        activeChannel === 'dev' ? t.updateChannelHintDev : t.updateChannelHintStable;
+    }
+
+    if (elUpdateBadge) {
+      elUpdateBadge.hidden = false;
+      if (pluginUpdateChecking || st?.checking) {
+        elUpdateBadge.className = 'update-badge';
+        elUpdateBadge.textContent = t.updateBadgeChecking;
+      } else if (isDirty) {
+        elUpdateBadge.className = 'update-badge warn';
+        elUpdateBadge.textContent = t.updateBadgeDirty;
+      } else if (st?.offline) {
+        elUpdateBadge.className = 'update-badge err';
+        elUpdateBadge.textContent = t.updateBadgeOffline;
+      } else if (st?.hasUpdate) {
+        elUpdateBadge.className = 'update-badge avail';
+        elUpdateBadge.textContent = t.updateBadgeAvailable;
+      } else if (st?.channelMismatch && isGit) {
+        elUpdateBadge.className = 'update-badge warn';
+        elUpdateBadge.textContent = t.updateBadgeSwitch;
+      } else if (hasChecked && st?.ok !== false) {
+        elUpdateBadge.className = 'update-badge ok';
+        elUpdateBadge.textContent = t.updateBadgeUpToDate;
+      } else {
+        elUpdateBadge.className = 'update-badge';
+        elUpdateBadge.textContent = t.updateBadgeUnchecked;
+      }
+    }
+
+    const lblCur = document.getElementById('lbl-update-current');
+    if (lblCur) lblCur.textContent = t.updateCurrentLabel;
+    const valCur = document.getElementById('val-update-current');
+    if (valCur) {
+      const curPills = [];
+      if (st?.currentVersion) {
+        curPills.push(`<span class="update-pill">v${esc(st.currentVersion)}</span>`);
+      }
+      if (st) {
+        if (isGit) {
+          const branchLabel = st.currentBranch || t.updateBranchDetached;
+          curPills.push(`<span class="update-pill">${esc(branchLabel)}</span>`);
+          if (st.currentShortSha) {
+            curPills.push(`<span class="update-pill">${esc(st.currentShortSha)}</span>`);
+          }
+        } else {
+          curPills.push(`<span class="update-pill">${esc(t.updateInstallRelease)}</span>`);
+        }
+      }
+      valCur.innerHTML = curPills.join('');
+    }
+
+    const rowTarget = document.getElementById('row-update-target');
+    const lblTgt = document.getElementById('lbl-update-target');
+    const valTgt = document.getElementById('val-update-target');
+    if (lblTgt) lblTgt.textContent = t.updateTargetLabel;
+    const showTarget = Boolean(
+      st && (st.targetVersion || st.targetShortSha || st.channelMismatch || st.behindCount > 0),
+    );
+    if (rowTarget) rowTarget.hidden = !showTarget;
+    if (valTgt && showTarget) {
+      const tgtPills = [];
+      if (st.targetVersion) {
+        tgtPills.push(
+          `<span class="update-pill${st.hasUpdate ? ' accent' : ''}">v${esc(st.targetVersion)}</span>`,
+        );
+      }
+      if (isGit && st.targetRef) {
+        tgtPills.push(`<span class="update-pill">${esc(st.targetRef)}</span>`);
+      }
+      if (isGit && st.targetShortSha) {
+        tgtPills.push(`<span class="update-pill">${esc(st.targetShortSha)}</span>`);
+      }
+      if (isGit && st.behindCount > 0) {
+        tgtPills.push(
+          `<span class="update-pill accent">${esc(t.updateBehindCommits(st.behindCount))}</span>`,
+        );
+      } else if (isGit && st.channelMismatch && st.targetBranch) {
+        tgtPills.push(
+          `<span class="update-pill warn">${esc(t.updateSwitchBranchHint(st.currentBranch, st.targetBranch))}</span>`,
+        );
+      }
+      valTgt.innerHTML = tgtPills.join('');
+    }
+
+    const elSummary = document.getElementById('update-summary-text');
+    if (elSummary) {
+      const summaryText = String(st?.summary || '').trim();
+      elSummary.hidden = !summaryText;
+      elSummary.textContent = summaryText;
+    }
+
+    const elCommits = document.getElementById('update-commits-list');
+    if (elCommits) {
+      const commits = Array.isArray(st?.recentCommits) ? st.recentCommits : [];
+      elCommits.hidden = commits.length === 0;
+      elCommits.innerHTML = commits.map((c) => `<li title="${esc(c)}">${esc(c)}</li>`).join('');
+    }
+
+    const elChecked = document.getElementById('update-checked-meta');
+    if (elChecked) {
+      elChecked.textContent = st?.checkedAt
+        ? t.updateCheckedAgo(relTimeAgo(st.checkedAt))
+        : t.updateNotCheckedYet;
+    }
+
+    if (elUpdateDirtyWarn) {
+      elUpdateDirtyWarn.hidden = !isDirty;
+      if (isDirty) {
+        elUpdateDirtyWarn.textContent = t.updateDirtyWarn(st?.dirtyCount || 1);
+      }
+    }
+
+    if (elUpdateNonGitHint) {
+      elUpdateNonGitHint.hidden = !st || isGit;
+      if (st && !isGit) {
+        elUpdateNonGitHint.textContent = t.updateNonGitHint;
+      }
+    }
+
+    if (elUpdateReloadBanner) {
+      const showReload = Boolean(pluginUpdateAppliedVersion);
+      elUpdateReloadBanner.hidden = !showReload;
+      if (showReload) {
+        elUpdateReloadBanner.textContent = t.updateReloadBanner(pluginUpdateAppliedVersion);
+      }
+    }
+
+    if (elUpdateErr) {
+      const errText = st && st.ok === false && st.error ? String(st.error) : '';
+      elUpdateErr.hidden = !errText;
+      elUpdateErr.textContent = errText;
+    }
+
+    if (elBtnUpdateCheck) {
+      elBtnUpdateCheck.disabled = busy;
+      elBtnUpdateCheck.textContent = pluginUpdateChecking ? t.updateCheckingBtn : t.updateCheckBtn;
+    }
+
+    if (elBtnUpdateApply) {
+      const showApply = Boolean(st && isGit && st.canApplyUpdate);
+      elBtnUpdateApply.hidden = !showApply;
+      elBtnUpdateApply.disabled = busy || isDirty;
+      elBtnUpdateApply.textContent = pluginUpdateApplying
+        ? t.updateApplyingBtn
+        : st?.channelMismatch && !st?.hasUpdate
+          ? t.updateSwitchApplyBtn
+          : t.updateApplyBtn;
+      elBtnUpdateApply.title = isDirty ? t.updateDirtyWarn(st?.dirtyCount || 1) : '';
+    }
+
+    if (elBtnUpdateRelease) {
+      const showRelease = Boolean(st && !isGit && st.releaseUrl);
+      elBtnUpdateRelease.hidden = !showRelease;
+      if (showRelease) {
+        elBtnUpdateRelease.href = st.releaseUrl;
+        elBtnUpdateRelease.textContent = t.updateReleaseBtn;
+        elBtnUpdateRelease.className = st.hasUpdate ? 'btn-link-primary' : 'btn-link-secondary';
+      }
+    }
+  }
+
+  async function loadPluginUpdateStatus({ bg = true, retryCount = 0 } = {}) {
+    if (pluginUpdatePollTimer) {
+      clearTimeout(pluginUpdatePollTimer);
+      pluginUpdatePollTimer = null;
+    }
+    try {
+      const qs = new URLSearchParams({ bg: bg ? '1' : '0' });
+      const res = await doFetch(`/api/update_status?${qs}`);
+      const data = await res.json();
+      if (data?.locale) applyLocale(data.locale);
+      if (data && typeof data === 'object' && ('currentVersion' in data || 'hasUpdate' in data)) {
+        pluginUpdateState = data;
+        syncSettingsUpdateDot();
+        if (settingsScreenOpen) renderUpdateCard();
+        if (data.checking && retryCount < 3) {
+          pluginUpdatePollTimer = setTimeout(() => {
+            loadPluginUpdateStatus({ bg: false, retryCount: retryCount + 1 });
+          }, 2500);
+        }
+      }
+    } catch {
+      // Non-fatal: keep last known update status
+    }
+  }
+
+  async function runManualUpdateCheck(channelOverride = '') {
+    if (pluginUpdateChecking || pluginUpdateApplying) return;
+    const t = L();
+    pluginUpdateChecking = true;
+    renderUpdateCard();
+    try {
+      const payload = { force: true, persistChannel: true };
+      if (channelOverride) payload.channel = channelOverride;
+      const res = await postApi('/api/update_check', '/api/update_check_get', payload);
+      if (res && typeof res === 'object') {
+        pluginUpdateState = res;
+      }
+      syncSettingsUpdateDot();
+      if (res?.ok === false) {
+        flashToast(res.error || t.updateToastCheckErr, 'err', 3800);
+      } else if (res?.hasUpdate) {
+        flashToast(t.updateToastAvailable(res.targetVersion || ''), 'ok', 3200);
+      } else {
+        flashToast(t.updateToastUpToDate, 'ok', 2400);
+      }
+    } catch (err) {
+      flashToast(err?.message || t.updateToastCheckErr, 'err', 3800);
+    } finally {
+      pluginUpdateChecking = false;
+      renderUpdateCard();
+    }
+  }
+
+  function openPluginUpdateModal(triggerBtn = null) {
+    const st = pluginUpdateState;
+    if (!st || !st.isGitInstall || st.isDirty || pluginUpdateApplying) return;
+    const t = L();
+    const targetChannel = st.channel === 'dev' ? 'dev' : 'stable';
+
+    activeModalCtx = {
+      mode: 'plugin_update',
+      channel: targetChannel,
+      triggerBtn,
+      busy: false,
+      onDone: null,
+    };
+
+    elModalTitle.textContent = t.updateModalTitle;
+    elModalClose.title = t.closeTip;
+    elModalCancel.textContent = t.fCancel;
+
+    const curVer = st.currentVersion ? `v${st.currentVersion}` : '';
+    const tgtVer = st.targetVersion ? `v${st.targetVersion}` : '';
+    elModalThread.textContent =
+      curVer && tgtVer && curVer !== tgtVer
+        ? `${st.displayName || 'Project Threads'}: ${curVer} -> ${tgtVer}`
+        : `${st.displayName || 'Project Threads'} (${targetChannel})`;
+
+    const pills = [];
+    pills.push(
+      `<span class="branch-pill">${ICONS.branch} <span>${esc(
+        st.currentBranch || t.updateBranchDetached,
+      )} -> ${esc(st.targetBranch || targetChannel)}</span></span>`,
+    );
+    if (st.behindCount > 0) {
+      pills.push(`<span class="commit-pill">${esc(t.updateBehindCommits(st.behindCount))}</span>`);
+    }
+    if (st.targetShortSha) {
+      pills.push(`<span class="wt-pill">${esc(st.targetShortSha)}</span>`);
+    }
+    elModalWtInfo.innerHTML = pills.join('');
+
+    const warnLines = [t.updateModalNote];
+    if (st.summary) warnLines.unshift(st.summary);
+    elModalWarn.hidden = false;
+    elModalWarn.textContent = warnLines.join(' ');
+
+    elModalRemoveRow.hidden = true;
+    elModalBranchRow.hidden = true;
+    elModalForceRow.hidden = true;
+
+    elModalErr.hidden = true;
+    elModalErr.textContent = '';
+    elModalConfirm.disabled = false;
+    elModalCancel.disabled = false;
+    elModalClose.disabled = false;
+
+    syncModalConfirmButton();
+    elModalBackdrop.hidden = false;
+    elModalConfirm.focus();
+  }
+
+  if (elBtnChannelStable) {
+    elBtnChannelStable.addEventListener('click', () => {
+      if (pluginUpdateState?.channel === 'stable' && pluginUpdateState?.checkedAt) return;
+      runManualUpdateCheck('stable');
+    });
+  }
+  if (elBtnChannelDev) {
+    elBtnChannelDev.addEventListener('click', () => {
+      if (pluginUpdateState?.channel === 'dev' && pluginUpdateState?.checkedAt) return;
+      runManualUpdateCheck('dev');
+    });
+  }
+  if (elBtnUpdateCheck) {
+    elBtnUpdateCheck.addEventListener('click', () => {
+      runManualUpdateCheck(pluginUpdateState?.channel || '');
+    });
+  }
+  if (elBtnUpdateApply) {
+    elBtnUpdateApply.addEventListener('click', (ev) => {
+      openPluginUpdateModal(ev.currentTarget);
+    });
+  }
+
   // ---------- Boot & Reactive Polling ----------
   async function start() {
     applyLocale('en');
@@ -5515,6 +6059,7 @@
     }
     populateDispatchModelSelect();
     loadSelectableModels(false);
+    loadPluginUpdateStatus({ bg: true });
     await refreshBoard(true);
     setInterval(() => {
       refreshBoard(false);
