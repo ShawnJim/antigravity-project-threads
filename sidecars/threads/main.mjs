@@ -161,34 +161,58 @@ app.page('/app.js', () =>
   }),
 );
 
+const stateApiInFlight = new Map(); // scopeSig -> Promise
+
 app.api(
   '/api/state',
   async (data = {}) => {
-    try {
-      resolveLsEndpoint();
-      const workspacePath = data.workspace || '';
-      const conversationId = data.conversationId || '';
-      const coordinatorId = data.coordinatorId || '';
-      const projectId = data.projectId || '';
-      const includeArchived = data.includeArchived === '1' || data.includeArchived === 'true';
-      const allWorkspaces = data.allWorkspaces === '1' || data.allWorkspaces === 'true';
-      const snap = await syncThreads({
-        workspacePath,
-        conversationId,
-        coordinatorId,
-        projectId,
-        includeArchived,
-        allWorkspaces,
-      });
-      return { ...snap, serverInfo: buildServerInfo() };
-    } catch (err) {
-      return {
-        error: 'sync_failed',
-        message: err.message,
-        locale: resolveAppLocale(),
-        serverInfo: buildServerInfo(),
-      };
+    resolveLsEndpoint();
+    const workspacePath = data.workspace || '';
+    const conversationId = data.conversationId || '';
+    const coordinatorId = data.coordinatorId || '';
+    const projectId = data.projectId || '';
+    const includeArchived = data.includeArchived === '1' || data.includeArchived === 'true';
+    const allWorkspaces = data.allWorkspaces === '1' || data.allWorkspaces === 'true';
+    const scopeSig = JSON.stringify([
+      String(workspacePath || '').trim().toLowerCase(),
+      String(conversationId || '').trim(),
+      String(coordinatorId || '').trim(),
+      String(projectId || '').trim(),
+      includeArchived,
+      allWorkspaces,
+    ]);
+    const existing = stateApiInFlight.get(scopeSig);
+    if (existing) {
+      return existing;
     }
+
+    const flight = (async () => {
+      try {
+        const snap = await syncThreads({
+          workspacePath,
+          conversationId,
+          coordinatorId,
+          projectId,
+          includeArchived,
+          allWorkspaces,
+          backgroundSideEffects: true,
+        });
+        return { ...snap, serverInfo: buildServerInfo() };
+      } catch (err) {
+        return {
+          error: 'sync_failed',
+          message: err.message,
+          locale: resolveAppLocale(),
+          serverInfo: buildServerInfo(),
+        };
+      }
+    })().finally(() => {
+      if (stateApiInFlight.get(scopeSig) === flight) {
+        stateApiInFlight.delete(scopeSig);
+      }
+    });
+    stateApiInFlight.set(scopeSig, flight);
+    return flight;
   },
   'GET',
 );
@@ -793,8 +817,15 @@ async function handleUpdateApply(data = {}) {
 registerDualApi('/api/update_apply', handleUpdateApply);
 
 // Background watcher: ensures thread completions sync back to Coordinator even when side panel is collapsed
+let completionSyncInFlight = false;
 const completionSyncTimer = setInterval(() => {
-  syncThreads({ allWorkspaces: true }).catch(() => {});
+  if (completionSyncInFlight) return;
+  completionSyncInFlight = true;
+  syncThreads({ allWorkspaces: true, backgroundSideEffects: true })
+    .catch(() => {})
+    .finally(() => {
+      completionSyncInFlight = false;
+    });
 }, 3500);
 completionSyncTimer.unref?.();
 

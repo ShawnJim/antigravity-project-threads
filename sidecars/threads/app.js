@@ -2,6 +2,7 @@
   'use strict';
 
   const BOARD_POLL_MS = 2200;
+  const BOARD_POLL_WHILE_THREAD_OPEN_MS = 10_000;
   const CHAT_POLL_MS = 1200;
   const EXPECTED_SERVER_API_REVISION = 8;
   const MAX_DECISION_CUSTOM_MESSAGE_LEN = 2000;
@@ -292,6 +293,9 @@
       agoTime: (val, unit) => `${val}${unit} ago`,
       loadingChat: 'Loading conversation…',
       emptyChat: 'Waiting for first response…',
+      threadLoadErrTitle: 'Failed to load conversation',
+      threadLoadErrFallback: 'Could not load thread messages. Please try again.',
+      threadLoadRetryBtn: 'Retry',
       settingsTip: 'Settings',
       settingsTitle: 'Settings',
       settingsTipWithUpdate: (ver) =>
@@ -796,6 +800,9 @@
       },
       loadingChat: '正在读取会话记录…',
       emptyChat: '正在等待线程响应…',
+      threadLoadErrTitle: '加载会话记录失败',
+      threadLoadErrFallback: '暂时无法读取该线程消息，请点击重试。',
+      threadLoadRetryBtn: '重试',
       settingsTip: '设置',
       settingsTitle: '设置',
       settingsTipWithUpdate: (ver) =>
@@ -1300,6 +1307,9 @@
       },
       loadingChat: '正在讀取會話記錄…',
       emptyChat: '正在等待執行緒回應…',
+      threadLoadErrTitle: '載入會話記錄失敗',
+      threadLoadErrFallback: '暫時無法讀取該執行緒訊息，請點擊重試。',
+      threadLoadRetryBtn: '重試',
       settingsTip: '設定',
       settingsTitle: '設定',
       settingsTipWithUpdate: (ver) =>
@@ -1610,11 +1620,18 @@
   let cachedThreads = [];
   let cachedDecisions = [];
   let boardScrollTop = 0;
+  let boardRefreshInFlight = false;
+  let boardRefreshQueuedForce = false;
+  let lastBoardRefreshAt = 0;
 
   let openThreadId = '';
   let openThreadObj = null;
   let lastThreadStamp = '';
   let lastRenderedItems = null;
+  let threadRefreshInFlight = false;
+  let openThreadReqSeq = 0;
+  let openThreadAbortController = null;
+  let openThreadEpochRetryCount = 0;
   const openTraceIds = new Set();
   const closedLiveTraceIds = new Set();
   const openSubDetailIds = new Set();
@@ -1999,6 +2016,12 @@
           closePtModal(true);
         }
         clearToast({ target: 'board', onlyTone: 'err' });
+      } else if (openThreadId && lastRenderedItems === null && !threadRefreshInFlight) {
+        Promise.resolve().then(() => {
+          if (openThreadId && lastRenderedItems === null && !threadRefreshInFlight) {
+            refreshOpenThread(true, true);
+          }
+        });
       }
     }
   }
@@ -3913,18 +3936,68 @@
   async function fetchJsonWithTimeout(
     url,
     options = {},
-    { timeoutMs = API_READ_TIMEOUT_MS, allowEmptyBody = false, returnRawOnStatus = [] } = {},
+    {
+      timeoutMs = API_READ_TIMEOUT_MS,
+      allowEmptyBody = false,
+      returnRawOnStatus = [],
+      signal = null,
+    } = {},
   ) {
     const rawTimeout = Number(timeoutMs);
     const hasTimeout = Number.isFinite(rawTimeout) && rawTimeout > 0;
     const ms = hasTimeout ? Math.max(50, rawTimeout) : 0;
-    const controller = hasTimeout && typeof AbortController === 'function' ? new AbortController() : null;
+    const extSignal = signal || options?.signal || null;
+    if (extSignal?.aborted) {
+      const abortErr = createApiError('Request aborted', { code: 'aborted', url });
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
+    const controller =
+      (hasTimeout || extSignal) && typeof AbortController === 'function'
+        ? new AbortController()
+        : null;
     const statusSet = Array.isArray(returnRawOnStatus) && returnRawOnStatus.length
       ? new Set(returnRawOnStatus)
       : null;
 
     let timer = null;
     let timedOut = false;
+    let externalAborted = false;
+    let onExternalAbort = null;
+    let rejectExternalAbort = null;
+
+    const externalAbortPromise = extSignal
+      ? new Promise((_, reject) => {
+          rejectExternalAbort = reject;
+          onExternalAbort = () => {
+            externalAborted = true;
+            if (controller) {
+              try {
+                controller.abort();
+              } catch {
+                // Ignore abort errors
+              }
+            }
+            const abortErr = createApiError('Request aborted', { code: 'aborted', url });
+            abortErr.name = 'AbortError';
+            reject(abortErr);
+          };
+          if (typeof extSignal.addEventListener === 'function') {
+            extSignal.addEventListener('abort', onExternalAbort, { once: true });
+          }
+        })
+      : null;
+
+    const cleanupExternalAbort = () => {
+      if (extSignal && onExternalAbort && typeof extSignal.removeEventListener === 'function') {
+        try {
+          extSignal.removeEventListener('abort', onExternalAbort);
+        } catch {
+          // Ignore listener cleanup errors
+        }
+      }
+      rejectExternalAbort = null;
+    };
 
     const workPromise = (async () => {
       const res = await invokeFetch(url, options, controller);
@@ -3935,34 +4008,46 @@
       return { fallbackToGet: false, status: Number(res?.status) || 200, data };
     })();
 
-    if (!hasTimeout) {
+    if (!hasTimeout && !externalAbortPromise) {
       return workPromise;
     }
 
-    // Prevent unhandled rejection if workPromise settles after timeout fires
+    // Prevent unhandled rejection if workPromise settles after timeout/abort fires
     workPromise.catch(() => {});
-    const timeoutPromise = new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        timedOut = true;
-        if (controller) {
-          try {
-            controller.abort();
-          } catch {
-            // Ignore abort errors
+    const racers = [workPromise];
+    if (externalAbortPromise) {
+      racers.push(externalAbortPromise);
+    }
+    if (hasTimeout) {
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          if (controller) {
+            try {
+              controller.abort();
+            } catch {
+              // Ignore abort errors
+            }
           }
-        }
-        reject(
-          createApiError(L().apiTimeoutErr(Math.max(1, Math.round(ms / 1000))), {
-            code: 'timeout',
-            url,
-          }),
-        );
-      }, ms);
-    });
+          reject(
+            createApiError(L().apiTimeoutErr(Math.max(1, Math.round(ms / 1000))), {
+              code: 'timeout',
+              url,
+            }),
+          );
+        }, ms);
+      });
+      racers.push(timeoutPromise);
+    }
 
     try {
-      return await Promise.race([workPromise, timeoutPromise]);
+      return await Promise.race(racers);
     } catch (err) {
+      if (externalAborted || err?.code === 'aborted') {
+        const abortErr = createApiError('Request aborted', { code: 'aborted', url });
+        abortErr.name = 'AbortError';
+        throw abortErr;
+      }
       if (timedOut || err?.name === 'AbortError' || err?.code === 'timeout') {
         throw createApiError(L().apiTimeoutErr(Math.max(1, Math.round(ms / 1000))), {
           code: 'timeout',
@@ -3972,6 +4057,7 @@
       throw err;
     } finally {
       if (timer) clearTimeout(timer);
+      cleanupExternalAbort();
     }
   }
 
@@ -5984,6 +6070,45 @@
     `;
   }
 
+  function abortOpenThreadRequest() {
+    openThreadReqSeq += 1;
+    if (openThreadAbortController) {
+      try {
+        openThreadAbortController.abort();
+      } catch {
+        // Ignore abort errors
+      }
+      openThreadAbortController = null;
+    }
+    threadRefreshInFlight = false;
+  }
+
+  function renderThreadLoadError(errMessage = '') {
+    const t = L();
+    const detail = String(errMessage || '').trim() || t.threadLoadErrFallback;
+    elChatStream.innerHTML = `
+      <div class="thread-load-err" role="alert">
+        <div class="thread-load-err-title">${esc(t.threadLoadErrTitle)}</div>
+        <div class="thread-load-err-msg">${esc(detail)}</div>
+        <button type="button" class="btn-retry-thread" data-action="retry-thread-load">${esc(t.threadLoadRetryBtn)}</button>
+      </div>
+    `;
+    const retryBtn =
+      typeof elChatStream.querySelector === 'function'
+        ? elChatStream.querySelector('button[data-action="retry-thread-load"]')
+        : null;
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => {
+        if (!openThreadId) return;
+        openThreadEpochRetryCount = 0;
+        lastThreadStamp = '';
+        lastRenderedItems = null;
+        elChatStream.innerHTML = renderSkeletonLoader();
+        refreshOpenThread(true, true);
+      });
+    }
+  }
+
   function renderTraceToolInnerHtml(e) {
     const t = L();
     const cat = e.category || 'other';
@@ -6671,6 +6796,9 @@
 
   function openSettingsScreen() {
     if (!elSettingsScreen) return;
+    if (openThreadId) {
+      closeThreadDrawer({ refresh: false });
+    }
     closeModelMenu({ restoreHeader: false });
     clearToast({ target: 'board' });
     boardScrollTop = elBoardBody.scrollTop;
@@ -7773,12 +7901,14 @@
 
   async function openThreadDrawer(threadId) {
     if (!threadId) return;
+    abortOpenThreadRequest();
     closeModelMenu({ restoreHeader: false });
     clearToast({ target: 'board', onlyTone: 'err' });
     settingsScreenOpen = false;
     if (elSettingsScreen) elSettingsScreen.hidden = true;
     boardScrollTop = elBoardBody.scrollTop;
     openThreadId = threadId;
+    openThreadEpochRetryCount = 0;
     lastThreadStamp = '';
     lastRenderedItems = null;
     openTraceIds.clear();
@@ -7808,23 +7938,18 @@
     elThreadScreen.classList.add('screen-slide');
 
     elChatStream.innerHTML = renderSkeletonLoader();
-    if (wasWaiting) {
-      postApi(
-        '/api/thread_mark_read',
-        '/api/thread_mark_read_get',
-        buildScopePayload({ threadId }),
-      ).catch(() => {});
-    }
     await refreshOpenThread(true, true);
     autoResizeInput();
     elChatInput.focus();
   }
 
   function closeThreadDrawer({ refresh = true } = {}) {
+    abortOpenThreadRequest();
     closeModelMenu({ restoreHeader: false });
     clearToast({ target: 'board', onlyTone: 'err' });
     openThreadId = '';
     openThreadObj = null;
+    openThreadEpochRetryCount = 0;
     lastThreadStamp = '';
     lastRenderedItems = null;
     openTraceIds.clear();
@@ -7841,8 +7966,18 @@
 
   async function refreshOpenThread(forceBottom = false, markRead = false) {
     if (!openThreadId || (isPanelHidden() && !forceBottom)) return;
+    if (threadRefreshInFlight) {
+      if (!forceBottom) return;
+      abortOpenThreadRequest();
+    }
+    const reqSeq = ++openThreadReqSeq;
     const reqEpoch = scopeEpoch;
     const reqThreadId = openThreadId;
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    openThreadAbortController = controller;
+    threadRefreshInFlight = true;
+    let needsEpochResync = false;
+
     try {
       const qs = new URLSearchParams(
         buildScopePayload({
@@ -7855,14 +7990,28 @@
       const { data } = await fetchJsonWithTimeout(
         url,
         { method: 'GET' },
-        { timeoutMs: API_READ_TIMEOUT_MS },
+        {
+          timeoutMs: API_READ_TIMEOUT_MS,
+          signal: controller ? controller.signal : null,
+        },
       );
+      if (reqSeq !== openThreadReqSeq) return;
+      if (reqEpoch !== scopeEpoch && openThreadId === reqThreadId && lastRenderedItems === null) {
+        needsEpochResync = true;
+      }
       if (reqEpoch !== scopeEpoch || openThreadId !== reqThreadId) return;
-      if (data.locale) applyLocale(data.locale);
-      if (!data.ok) {
-        elChatStream.innerHTML = `<div class="msg-err">${esc(data.error || 'Error')}</div>`;
+      if (!data || typeof data !== 'object') {
+        if (lastRenderedItems === null) {
+          renderThreadLoadError(L().apiInvalidJsonErr);
+        }
         return;
       }
+      if (data.locale) applyLocale(data.locale);
+      if (!data.ok) {
+        renderThreadLoadError(data.error || L().threadLoadErrFallback);
+        return;
+      }
+      openThreadEpochRetryCount = 0;
       if (data.thread) renderThreadHeader(data.thread);
       if (!data.unchanged && Array.isArray(data.items)) {
         lastThreadStamp = data.stamp || '';
@@ -7883,9 +8032,43 @@
             liveDurEl.textContent = fmtWorkedDuration(Math.min(86400, elapsed));
           }
         }
+      } else if (lastRenderedItems === null) {
+        lastThreadStamp = '';
+        renderThreadLoadError(L().threadLoadErrFallback);
       }
-    } catch {
-      // Ignore transient poll errors
+    } catch (err) {
+      if (err?.code === 'aborted' || reqSeq !== openThreadReqSeq || openThreadId !== reqThreadId) {
+        return;
+      }
+      if (reqEpoch !== scopeEpoch) {
+        if (lastRenderedItems === null) {
+          needsEpochResync = true;
+        }
+        return;
+      }
+      if (lastRenderedItems === null) {
+        renderThreadLoadError(err?.message || L().threadLoadErrFallback);
+      }
+    } finally {
+      if (reqSeq === openThreadReqSeq) {
+        threadRefreshInFlight = false;
+        if (openThreadAbortController === controller) {
+          openThreadAbortController = null;
+        }
+      }
+      if (
+        needsEpochResync &&
+        openThreadId === reqThreadId &&
+        lastRenderedItems === null &&
+        openThreadEpochRetryCount < 3
+      ) {
+        openThreadEpochRetryCount += 1;
+        Promise.resolve().then(() => {
+          if (openThreadId === reqThreadId && lastRenderedItems === null) {
+            refreshOpenThread(true, markRead);
+          }
+        });
+      }
     }
   }
 
@@ -8341,6 +8524,19 @@
 
   async function refreshBoard(force = false) {
     if (isPanelHidden() && !force) return;
+    if (
+      !force &&
+      openThreadId &&
+      lastBoardRefreshAt > 0 &&
+      Date.now() - lastBoardRefreshAt < BOARD_POLL_WHILE_THREAD_OPEN_MS
+    ) {
+      return;
+    }
+    if (boardRefreshInFlight) {
+      if (force) boardRefreshQueuedForce = true;
+      return;
+    }
+    boardRefreshInFlight = true;
     const reqEpoch = scopeEpoch;
     try {
       const convChanged = await syncHostConversationScope();
@@ -8465,9 +8661,11 @@
         openThreadId &&
         !(data.threads || []).some((x) => x.threadId === openThreadId)
       ) {
+        abortOpenThreadRequest();
         closeModelMenu({ restoreHeader: false });
         openThreadId = '';
         openThreadObj = null;
+        openThreadEpochRetryCount = 0;
         lastThreadStamp = '';
         lastRenderedItems = null;
         openTraceIds.clear();
@@ -8502,6 +8700,13 @@
       renderBoard(data);
     } catch {
       setLiveStatus(false);
+    } finally {
+      boardRefreshInFlight = false;
+      lastBoardRefreshAt = Date.now();
+      if (boardRefreshQueuedForce) {
+        boardRefreshQueuedForce = false;
+        Promise.resolve().then(() => refreshBoard(true));
+      }
     }
   }
 
