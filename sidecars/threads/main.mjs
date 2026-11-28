@@ -10,6 +10,12 @@ import {
   getPluginUpdateStatus,
 } from '../../lib/updater.mjs';
 import {
+  createWatchdogScheduler,
+  getWatchdogStatus,
+  snoozeWatchdogThread,
+  triggerWatchdogPatrol,
+} from '../../lib/watchdog.mjs';
+import {
   archiveThread,
   cleanupThreadWorktree,
   dispatchThread,
@@ -37,7 +43,7 @@ import {
 const THIS_FILE = fileURLToPath(import.meta.url);
 const HERE = dirname(THIS_FILE);
 const PLUGIN_ROOT = join(HERE, '..', '..');
-const SERVER_API_REVISION = 6;
+const SERVER_API_REVISION = 7;
 const SERVER_CAPABILITIES = [
   'settings',
   'settings_save_fast',
@@ -50,8 +56,10 @@ const SERVER_CAPABILITIES = [
   'coordinator_candidates',
   'review_model',
   'topic_memory',
+  'watchdog_patrol',
 ];
 const app = new SidecarApp();
+const watchdogScheduler = createWatchdogScheduler();
 
 resolveLsEndpoint();
 
@@ -295,6 +303,7 @@ async function handleInit(data = {}) {
       projectId: data.projectId || '',
       title: data.title || '',
     });
+    watchdogScheduler.reconcile();
     return { ok: true, locale: resolveAppLocale(), coordinator: coord };
   } catch (err) {
     return { ok: false, error: err.message, locale: resolveAppLocale() };
@@ -314,6 +323,7 @@ async function handleRebindCoordinator(data = {}) {
       title: data.title || '',
       migrateActiveThreads: parseBool(data.migrateActiveThreads, true),
     });
+    watchdogScheduler.reconcile();
     return { ...res, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
   } catch (err) {
     return {
@@ -632,6 +642,9 @@ registerDualApi('/api/settings', handleSettings);
 async function handleSaveSettings(data = {}) {
   try {
     const res = await saveSettingsWithFastResponse(data);
+    if (res?.ok) {
+      watchdogScheduler.reconcile();
+    }
     return { ...res, serverInfo: buildServerInfo() };
   } catch (err) {
     return {
@@ -643,6 +656,74 @@ async function handleSaveSettings(data = {}) {
   }
 }
 registerDualApi('/api/settings_save', handleSaveSettings);
+
+async function handleWatchdogStatus(data = {}) {
+  try {
+    const res = await getWatchdogStatus({
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
+    });
+    return { ...res, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
+  }
+}
+registerDualApi('/api/watchdog_status', handleWatchdogStatus);
+
+async function handleWatchdogPatrol(data = {}) {
+  try {
+    const res = await triggerWatchdogPatrol({
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
+      threadId: data.threadId || '',
+      wakeCheck: parseBool(data.wakeCheck, false),
+    });
+    return { ...res, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
+  }
+}
+registerDualApi('/api/watchdog_patrol', handleWatchdogPatrol);
+
+async function handleWatchdogSnooze(data = {}) {
+  try {
+    const res = await snoozeWatchdogThread({
+      threadId: data.threadId || '',
+      minutes: data.minutes,
+      clear: parseBool(data.clear, false),
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
+    });
+    return { ...res, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
+  }
+}
+registerDualApi('/api/watchdog_snooze', handleWatchdogSnooze);
 
 async function handleUpdateStatus(data = {}) {
   try {
@@ -700,8 +781,26 @@ async function handleUpdateApply(data = {}) {
 registerDualApi('/api/update_apply', handleUpdateApply);
 
 // Background watcher: ensures thread completions sync back to Coordinator even when side panel is collapsed
-setInterval(() => {
+const completionSyncTimer = setInterval(() => {
   syncThreads({ allWorkspaces: true }).catch(() => {});
 }, 3500);
+completionSyncTimer.unref?.();
+
+// Per-project non-blocking Watchdog patrol scheduler (zero LLM token idle loop)
+watchdogScheduler.start();
+
+function shutdownBackgroundLoops() {
+  clearInterval(completionSyncTimer);
+  watchdogScheduler.stop();
+}
+process.once('exit', shutdownBackgroundLoops);
+process.once('SIGINT', () => {
+  shutdownBackgroundLoops();
+  process.exit(0);
+});
+process.once('SIGTERM', () => {
+  shutdownBackgroundLoops();
+  process.exit(0);
+});
 
 app.run();

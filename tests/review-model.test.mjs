@@ -883,12 +883,13 @@ test('Issue #7: MCP schema, protocol docs, Sidecar capabilities/revision, 3-loca
   const hookMjs = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
 
   // 1. Revision & capability alignment
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*6\s*;/);
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*7\s*;/);
   assert.match(mainMjs, /['"]review_model['"]/);
   assert.match(mainMjs, /['"]decision_custom_reply['"]/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
+  assert.match(mainMjs, /['"]watchdog_patrol['"]/);
   assert.match(mainMjs, /threadType:\s*data\.threadType\s*\|\|\s*''/);
-  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*6\s*;/);
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*7\s*;/);
   assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
   assert.match(hookMjs, /threadType:\s*"review"/);
   assert.match(skillMd, /threadType:\s*"review"/);

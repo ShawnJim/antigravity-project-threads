@@ -1300,15 +1300,16 @@ test('Sidecar API, UI rebind modal, 3-locale I18N, P1-4 coordinator button visib
   // 1. Backend routes, API revision/capabilities, & hook-handler lock discipline
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/rebind_coordinator['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/coordinator_candidates['"]/);
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*6\s*;/);
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*7\s*;/);
   assert.match(mainMjs, /['"]rebind_coordinator['"]/);
   assert.match(mainMjs, /['"]coordinator_candidates['"]/);
   assert.match(mainMjs, /['"]review_model['"]/);
   assert.match(mainMjs, /['"]decision_custom_reply['"]/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
+  assert.match(mainMjs, /['"]watchdog_patrol['"]/);
   assert.match(mainMjs, /handleRebindCoordinator[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
   assert.match(mainMjs, /handleCoordinatorCandidates[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
-  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*6\s*;/);
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*7\s*;/);
   assert.match(appJs, /fetchJsonWithTimeout\(\s*`\/api\/coordinator_candidates\?\$\{qs\}`/);
   assert.match(
     appJs,

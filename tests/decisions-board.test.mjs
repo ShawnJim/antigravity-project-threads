@@ -1389,18 +1389,19 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
     renderO2ThreadCard,
   } = loadUiDecisionHelpers();
 
-  // Backend dual API registration, SERVER_API_REVISION=6, and review_model + decision_custom_reply + topic_memory capabilities
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*6\s*;/);
+  // Backend dual API registration, SERVER_API_REVISION=7, and review_model + decision_custom_reply + topic_memory + watchdog_patrol capabilities
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*7\s*;/);
   assert.match(mainMjs, /['"]review_model['"]/);
   assert.match(mainMjs, /['"]decision_custom_reply['"]/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
+  assert.match(mainMjs, /['"]watchdog_patrol['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/decision_action['"]/);
   assert.match(mainMjs, /executeDecisionAction/);
   assert.match(mainMjs, /customMessage:\s*data\.customMessage/);
   assert.match(mainMjs, /handleDecisionAction[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
 
-  // Frontend API revision 6, capability gating, maxlength 2000, strict res.action check, no GET fallback & no short timeout
-  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*6\s*;/);
+  // Frontend API revision 7, capability gating, maxlength 2000, strict res.action check, no GET fallback & no short timeout
+  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*7\s*;/);
   assert.match(appSource, /const\s+MAX_DECISION_CUSTOM_MESSAGE_LEN\s*=\s*2000\s*;/);
   assert.match(appSource, /function\s+supportsDecisionCustomReply\s*\(/);
   assert.match(appSource, /serverCapabilities\.has\(['"]decision_custom_reply['"]\)/);

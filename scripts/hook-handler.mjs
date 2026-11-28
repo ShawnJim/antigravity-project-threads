@@ -8,6 +8,7 @@ import {
   syncCompletionToCoordinator,
 } from '../lib/store.mjs';
 import { extractThreadCompletion } from '../lib/transcript.mjs';
+import { consumePendingWatchdogAlertsForPreInvocation } from '../lib/watchdog.mjs';
 
 const DIRECTIVE_VERSION = 17;
 const LEADING_SLASH_COORD_RE = /^\s*\/coord(?=$|[\s:：，,。!?！？])/i;
@@ -338,6 +339,16 @@ async function main() {
           ...bullets,
         ].join('\n'),
       );
+    }
+
+    // Lightweight injection for any deferred watchdog stall alerts queued while Coordinator was busy
+    try {
+      const watchdogNotice = consumePendingWatchdogAlertsForPreInvocation(coord);
+      if (watchdogNotice) {
+        messages.push(watchdogNotice);
+      }
+    } catch {
+      // Non-fatal: watchdog notice injection must never block PreInvocation
     }
 
     if (shouldUpdateDirective || shouldUpdateSteps || notifiedIds.length > 0) {

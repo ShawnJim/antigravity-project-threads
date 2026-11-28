@@ -3,7 +3,7 @@
 
   const BOARD_POLL_MS = 2200;
   const CHAT_POLL_MS = 1200;
-  const EXPECTED_SERVER_API_REVISION = 6;
+  const EXPECTED_SERVER_API_REVISION = 7;
   const MAX_DECISION_CUSTOM_MESSAGE_LEN = 2000;
   const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
   const API_READ_TIMEOUT_MS = 10_000;
@@ -471,6 +471,74 @@
       memArchiveSuccessToast: (id) => `Archived full memory to ${id} & rebuilt thin index`,
       memSplitSentToast: 'Sent semantic split request to Coordinator',
       memMigrateErrToast: 'Memory upgrade failed',
+      decisionAutoStallTitle: 'Thread appears stalled',
+      decisionAutoStallSummary: (title, dur) => `${title} (stalled ~${dur})`,
+      decisionAutoStallInspectBtn: 'Ask Coordinator to Inspect',
+      decisionAutoStallSnoozeBtn: 'Snooze',
+      wdPatrolBtn: 'Patrol',
+      wdPatrolStalledBtn: (n) => `Stalled ${n}`,
+      wdPatrolOffBtn: 'Watchdog off',
+      wdPatrolBusy: 'Patrolling…',
+      wdPatrolTip: (enabled, lastAgo, thrMin) =>
+        enabled
+          ? `Watchdog active (threshold ${thrMin}m, last patrol: ${lastAgo}) - click to patrol now`
+          : `Watchdog disabled (last patrol: ${lastAgo}) - click to run a one-time patrol`,
+      wdPatrolOkToast: (checked, stalled) =>
+        stalled > 0
+          ? `Patrol finished: ${stalled} stalled (${checked} checked)`
+          : `Patrol finished: ${checked} active ${checked === 1 ? 'thread' : 'threads'} healthy`,
+      wdPatrolSkippedToast: 'No active threads to patrol',
+      wdPatrolErrToast: 'Watchdog patrol failed',
+      wdStalledBadge: 'Possibly stalled',
+      wdSnoozedBadge: 'Snoozed',
+      wdStallDetail: (dur, deferred) =>
+        deferred
+          ? `No progress for ~${dur} (Coordinator busy, alert queued)`
+          : `No progress for ~${dur}`,
+      wdSnoozeDetail: (rem) => `Watchdog snoozed (${rem} remaining)`,
+      wdWakeBtn: 'Inspect Now',
+      wdWakingBtn: 'Checking…',
+      wdSnoozeBtn: (min) => `Snooze ${min}m`,
+      wdUnsnoozeBtn: 'Resume',
+      wdWakeSentToast: 'Stall alert sent to Coordinator',
+      wdWakeDeferredToast: 'Coordinator is busy; alert queued until idle',
+      wdWakeHealthyToast: 'Thread looks healthy (not stalled)',
+      wdSnoozedToast: (min) => `Watchdog snoozed for ${min}m`,
+      wdUnsnoozedToast: 'Watchdog monitoring resumed',
+      wdSnoozeErrToast: 'Failed to update snooze state',
+      wdUnsupportedErr: 'Watchdog patrol requires reloading the Sidecar service',
+      wdHdr: 'Background Watchdog Patrol',
+      wdBadgeOn: 'Active',
+      wdBadgeOff: 'Disabled',
+      wdBadgeReload: 'Reload required',
+      wdEnabledLabel: 'Automatic Stall Detection',
+      wdEnabledFollow: (onOff) => `Follow Global (${onOff})`,
+      wdEnabledOn: 'Enabled',
+      wdEnabledOff: 'Disabled',
+      wdDescGlobal:
+        'Runs per-project in the Sidecar background process with zero LLM token burn. Defers alerts while Coordinator is running.',
+      wdDescProject: (proj) =>
+        `Overrides Watchdog patrol for "${proj}" only. Leave numeric fields blank to inherit global values.`,
+      wdIntervalLabel: 'Patrol interval (sec)',
+      wdStallLabel: 'Stall threshold (min)',
+      wdBgTaskLabel: 'Bg task threshold (min)',
+      wdMismatchLabel: 'Mismatch grace (min)',
+      wdCooldownLabel: 'Alert cooldown (min)',
+      wdEscalatedLabel: 'Escalated cooldown (min)',
+      wdSaveBtn: 'Save Watchdog',
+      wdSavingBtn: 'Saving…',
+      wdResetGlobalBtn: 'Reset Watchdog',
+      wdResetProjectBtn: 'Clear Project Override',
+      wdPatrolNowBtn: 'Patrol Now',
+      wdSavedToast: 'Watchdog settings saved',
+      wdResetToast: 'Watchdog settings reset to defaults',
+      wdClearedProjToast: 'Cleared project watchdog override',
+      wdSaveErr: 'Failed to save watchdog settings',
+      wdMetaLine: (source, lastAgo, stalledCount) =>
+        `${source} | Last patrol: ${lastAgo}${stalledCount > 0 ? ` | Stalled: ${stalledCount}` : ''}`,
+      wdSourceProject: 'Project override',
+      wdSourceGlobal: 'Global defaults',
+      wdNeverPatrolled: 'not yet patrolled',
     },
 
     'zh-CN': {
@@ -902,6 +970,74 @@
       memArchiveSuccessToast: (id) => `已无损归档至专题 ${id} 并重建薄索引`,
       memSplitSentToast: '已向总控发送智能拆分指令',
       memMigrateErrToast: '记忆升级操作失败',
+      decisionAutoStallTitle: '线程疑似停滞，待核查',
+      decisionAutoStallSummary: (title, dur) => `${title}（已停滞约 ${dur}）`,
+      decisionAutoStallInspectBtn: '唤醒总控核查',
+      decisionAutoStallSnoozeBtn: '暂缓',
+      wdPatrolBtn: '巡检',
+      wdPatrolStalledBtn: (n) => `疑似停滞 ${n}`,
+      wdPatrolOffBtn: '巡检已关',
+      wdPatrolBusy: '巡检中…',
+      wdPatrolTip: (enabled, lastAgo, thrMin) =>
+        enabled
+          ? `看门狗运行中（停滞阈值 ${thrMin} 分钟，上次巡检：${lastAgo}），点击立即巡检`
+          : `看门狗已关闭（上次巡检：${lastAgo}），点击执行单次手工巡检`,
+      wdPatrolOkToast: (checked, stalled) =>
+        stalled > 0
+          ? `巡检完成：发现 ${stalled} 个疑似停滞（共查 ${checked} 个）`
+          : `巡检完成：${checked} 个活跃线程状态正常`,
+      wdPatrolSkippedToast: '当前无活跃线程，已跳过巡检',
+      wdPatrolErrToast: '看门狗巡检失败',
+      wdStalledBadge: '疑似停滞',
+      wdSnoozedBadge: '已暂缓巡检',
+      wdStallDetail: (dur, deferred) =>
+        deferred
+          ? `已无进展约 ${dur}（总控执行中，告警已排队）`
+          : `已无进展约 ${dur}`,
+      wdSnoozeDetail: (rem) => `已暂缓看门狗巡检（剩余约 ${rem}）`,
+      wdWakeBtn: '立即唤醒检查',
+      wdWakingBtn: '检查中…',
+      wdSnoozeBtn: (min) => `暂缓 ${min}m`,
+      wdUnsnoozeBtn: '恢复巡检',
+      wdWakeSentToast: '已唤醒总控核查该线程',
+      wdWakeDeferredToast: '总控正在执行中，告警已排队待空闲投递',
+      wdWakeHealthyToast: '该线程当前状态正常，未检测到停滞',
+      wdSnoozedToast: (min) => `已暂缓巡检 ${min} 分钟`,
+      wdUnsnoozedToast: '已恢复该线程看门狗巡检',
+      wdSnoozeErrToast: '更新暂缓状态失败',
+      wdUnsupportedErr: '当前侧边栏后端版本过旧，请重载后再使用看门狗巡检',
+      wdHdr: '后台看门狗巡检',
+      wdBadgeOn: '运行中',
+      wdBadgeOff: '已关闭',
+      wdBadgeReload: '需重载',
+      wdEnabledLabel: '自动卡死巡检',
+      wdEnabledFollow: (onOff) => `跟随全局 (${onOff})`,
+      wdEnabledOn: '开启',
+      wdEnabledOff: '关闭',
+      wdDescGlobal:
+        '在 Sidecar 后台按项目独立巡检（零空转 Token），总控执行中时自动延后投递不打断主会话。',
+      wdDescProject: (proj) =>
+        `仅覆盖项目「${proj}」的看门狗巡检配置；数值项留空表示继承全局默认。`,
+      wdIntervalLabel: '巡检间隔 (秒)',
+      wdStallLabel: '停滞阈值 (分钟)',
+      wdBgTaskLabel: '后台任务阈值 (分钟)',
+      wdMismatchLabel: '状态错配宽限 (分钟)',
+      wdCooldownLabel: '告警冷却 (分钟)',
+      wdEscalatedLabel: '阶梯退避冷却 (分钟)',
+      wdSaveBtn: '保存看门狗',
+      wdSavingBtn: '保存中…',
+      wdResetGlobalBtn: '恢复默认',
+      wdResetProjectBtn: '清除项目覆盖',
+      wdPatrolNowBtn: '立即巡检',
+      wdSavedToast: '看门狗配置已保存',
+      wdResetToast: '已恢复看门狗默认配置',
+      wdClearedProjToast: '已清除当前项目看门狗覆盖',
+      wdSaveErr: '保存看门狗配置失败',
+      wdMetaLine: (source, lastAgo, stalledCount) =>
+        `${source} | 上次巡检：${lastAgo}${stalledCount > 0 ? ` | 疑似停滞：${stalledCount}` : ''}`,
+      wdSourceProject: '当前项目覆盖',
+      wdSourceGlobal: '全局默认',
+      wdNeverPatrolled: '尚未巡检',
     },
 
     'zh-TW': {
@@ -1333,6 +1469,74 @@
       memArchiveSuccessToast: (id) => `已無損歸檔至專題 ${id} 並重建薄索引`,
       memSplitSentToast: '已向總控傳送智慧拆分指令',
       memMigrateErrToast: '記憶升級操作失敗',
+      decisionAutoStallTitle: '執行緒疑似停滯，待核查',
+      decisionAutoStallSummary: (title, dur) => `${title}（已停滯約 ${dur}）`,
+      decisionAutoStallInspectBtn: '喚醒總控核查',
+      decisionAutoStallSnoozeBtn: '暫緩',
+      wdPatrolBtn: '巡檢',
+      wdPatrolStalledBtn: (n) => `疑似停滯 ${n}`,
+      wdPatrolOffBtn: '巡檢已關',
+      wdPatrolBusy: '巡檢中…',
+      wdPatrolTip: (enabled, lastAgo, thrMin) =>
+        enabled
+          ? `看門狗運行中（停滯閾值 ${thrMin} 分鐘，上次巡檢：${lastAgo}），點擊立即巡檢`
+          : `看門狗已關閉（上次巡檢：${lastAgo}），點擊執行單次手動巡檢`,
+      wdPatrolOkToast: (checked, stalled) =>
+        stalled > 0
+          ? `巡檢完成：發現 ${stalled} 個疑似停滯（共查 ${checked} 個）`
+          : `巡檢完成：${checked} 個活躍執行緒狀態正常`,
+      wdPatrolSkippedToast: '目前無活躍執行緒，已略過巡檢',
+      wdPatrolErrToast: '看門狗巡檢失敗',
+      wdStalledBadge: '疑似停滯',
+      wdSnoozedBadge: '已暫緩巡檢',
+      wdStallDetail: (dur, deferred) =>
+        deferred
+          ? `已無進展約 ${dur}（總控執行中，告警已排隊）`
+          : `已無進展約 ${dur}`,
+      wdSnoozeDetail: (rem) => `已暫緩看門狗巡檢（剩餘約 ${rem}）`,
+      wdWakeBtn: '立即喚醒檢查',
+      wdWakingBtn: '檢查中…',
+      wdSnoozeBtn: (min) => `暫緩 ${min}m`,
+      wdUnsnoozeBtn: '恢復巡檢',
+      wdWakeSentToast: '已喚醒總控核查該執行緒',
+      wdWakeDeferredToast: '總控正在執行中，告警已排隊待閒置投遞',
+      wdWakeHealthyToast: '該執行緒目前狀態正常，未偵測到停滯',
+      wdSnoozedToast: (min) => `已暫緩巡檢 ${min} 分鐘`,
+      wdUnsnoozedToast: '已恢復該執行緒看門狗巡檢',
+      wdSnoozeErrToast: '更新暫緩狀態失敗',
+      wdUnsupportedErr: '目前側邊欄後端版本過舊，請重新載入後再使用看門狗巡檢',
+      wdHdr: '背景看門狗巡檢',
+      wdBadgeOn: '運行中',
+      wdBadgeOff: '已關閉',
+      wdBadgeReload: '需重新載入',
+      wdEnabledLabel: '自動卡死巡檢',
+      wdEnabledFollow: (onOff) => `跟隨全域 (${onOff})`,
+      wdEnabledOn: '開啟',
+      wdEnabledOff: '關閉',
+      wdDescGlobal:
+        '在 Sidecar 背景依專案獨立巡檢（零空轉 Token），總控執行中時自動延後投遞不打斷主會話。',
+      wdDescProject: (proj) =>
+        `僅覆寫專案「${proj}」的看門狗巡檢設定；數值項留空表示繼承全域預設。`,
+      wdIntervalLabel: '巡檢間隔 (秒)',
+      wdStallLabel: '停滯閾值 (分鐘)',
+      wdBgTaskLabel: '背景任務閾值 (分鐘)',
+      wdMismatchLabel: '狀態錯配寬限 (分鐘)',
+      wdCooldownLabel: '告警冷卻 (分鐘)',
+      wdEscalatedLabel: '階梯退避冷卻 (分鐘)',
+      wdSaveBtn: '儲存看門狗',
+      wdSavingBtn: '儲存中…',
+      wdResetGlobalBtn: '恢復預設',
+      wdResetProjectBtn: '清除專案覆寫',
+      wdPatrolNowBtn: '立即巡檢',
+      wdSavedToast: '看門狗設定已儲存',
+      wdResetToast: '已恢復看門狗預設設定',
+      wdClearedProjToast: '已清除目前專案看門狗覆寫',
+      wdSaveErr: '儲存看門狗設定失敗',
+      wdMetaLine: (source, lastAgo, stalledCount) =>
+        `${source} | 上次巡檢：${lastAgo}${stalledCount > 0 ? ` | 疑似停滯：${stalledCount}` : ''}`,
+      wdSourceProject: '目前專案覆寫',
+      wdSourceGlobal: '全域預設',
+      wdNeverPatrolled: '尚未巡檢',
     },
   };
 
@@ -1442,6 +1646,12 @@
   let memorySnapshot = null;
   let memoryActiveTopicData = null;
   let lastMemoryTopicsKey = '';
+  let wdPatrolling = false;
+  let wdSaving = false;
+  let wdDirtyByUser = false;
+  let wdDraftEnabled = 'true'; // 'inherit' | 'true' | 'false'
+  let wdToastTimer = null;
+  const wdBusyThreadIds = new Set();
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
@@ -1496,6 +1706,26 @@
   const elBtnOpenCoord = document.getElementById('btn-open-coord');
   const elBtnCardCoord = document.getElementById('btn-card-coord');
   const elBtnRebindCoord = document.getElementById('btn-rebind-coord');
+  const elBtnWatchdogPatrol = document.getElementById('btn-watchdog-patrol');
+  const elLblWdPatrol = document.getElementById('lbl-wd-patrol');
+  const elWdCard = document.getElementById('settings-watchdog-card');
+  const elWdStatusBadge = document.getElementById('wd-status-badge');
+  const elBtnWdEnabledInherit = document.getElementById('btn-wd-enabled-inherit');
+  const elBtnWdEnabledOn = document.getElementById('btn-wd-enabled-on');
+  const elBtnWdEnabledOff = document.getElementById('btn-wd-enabled-off');
+  const elSetWdInterval = document.getElementById('set-wd-interval');
+  const elSetWdStall = document.getElementById('set-wd-stall');
+  const elSetWdBgTask = document.getElementById('set-wd-bgtask');
+  const elSetWdMismatch = document.getElementById('set-wd-mismatch');
+  const elSetWdCooldown = document.getElementById('set-wd-cooldown');
+  const elSetWdEscalated = document.getElementById('set-wd-escalated');
+  const elWdSettingsMeta = document.getElementById('wd-settings-meta');
+  const elWdUnsupportedHint = document.getElementById('wd-unsupported-hint');
+  const elBtnWdSave = document.getElementById('btn-wd-save');
+  const elBtnWdReset = document.getElementById('btn-wd-reset');
+  const elBtnWdPatrolNow = document.getElementById('btn-wd-patrol-now');
+  const elWdSettingsToast = document.getElementById('wd-settings-toast');
+  const elWdSettingsErr = document.getElementById('wd-settings-err');
   const elBtnChatCoord = document.getElementById('btn-chat-coord');
   const elChatStream = document.getElementById('chat-stream');
   const elChatInput = document.getElementById('chat-input');
@@ -3411,6 +3641,10 @@
     return typeof serverCapabilities !== 'undefined' && serverCapabilities.has('topic_memory');
   }
 
+  function supportsWatchdogPatrol() {
+    return typeof serverCapabilities !== 'undefined' && serverCapabilities.has('watchdog_patrol');
+  }
+
   function inspectServerInfo(data, { fromState = false, expectServerInfo = false } = {}) {
     if (!data || typeof data !== 'object') return;
     const info = data.serverInfo && typeof data.serverInfo === 'object' ? data.serverInfo : null;
@@ -3419,6 +3653,7 @@
       : '';
     const prevCustomCap = supportsDecisionCustomReply();
     const prevTopicCap = supportsTopicMemory();
+    const prevWatchdogCap = supportsWatchdogPatrol();
 
     if (info) {
       const caps = Array.isArray(info.capabilities) ? info.capabilities : [];
@@ -3472,6 +3707,15 @@
       lastMemoryTopicsKey = '';
       if (typeof renderMemoryUi === 'function' && memorySnapshot) {
         renderMemoryUi({ syncInputs: false });
+      }
+    }
+    if (supportsWatchdogPatrol() !== prevWatchdogCap) {
+      if (typeof lastBoardKey !== 'undefined') lastBoardKey = '';
+      if (settingsScreenOpen && typeof renderWatchdogSettingsCard === 'function') {
+        renderWatchdogSettingsCard(false);
+      }
+      if (typeof lastSnap !== 'undefined' && lastSnap && typeof renderBoardWatchdogChip === 'function') {
+        renderBoardWatchdogChip(lastSnap);
       }
     }
   }
@@ -4128,6 +4372,24 @@
           o.action === 'dismiss'
             ? { ...o, label: t.decisionDismissBtn }
             : { ...o, label: t.decisionAutoArchiveBtn },
+        ),
+      };
+    }
+    if (dec.autoKind === 'watchdog_stalled') {
+      const durSec = Math.max(1, Math.round((Number(dec.stalledDurationMs) || 0) / 1000));
+      const durMin = Math.floor(durSec / 60);
+      const durRem = durSec % 60;
+      const durText = typeof t.fmtDuration === 'function' ? t.fmtDuration(durMin, durRem) : `${durMin}m`;
+      return {
+        title: t.decisionAutoStallTitle || String(dec.title || ''),
+        summary:
+          typeof t.decisionAutoStallSummary === 'function'
+            ? t.decisionAutoStallSummary(thTitle, durText)
+            : String(dec.summary || ''),
+        options: baseOpts.map((o) =>
+          o.action === 'dismiss'
+            ? { ...o, label: t.decisionAutoStallSnoozeBtn || t.decisionDismissBtn }
+            : { ...o, label: t.decisionAutoStallInspectBtn || o.label },
         ),
       };
     }
@@ -4843,18 +5105,69 @@
     const modelLabel = formatModelDisplay(th.modelDisplayName || th.resolvedModel || th.model);
     const modelChip = `<span class="o2-wchips"><span class="o2-wchip" title="${esc(modelLabel)}">${esc(modelLabel)}</span></span>`;
     const usageHtml = renderThreadUsageRow(th);
+    const wdInfo = !th.archived && th.watchdog && typeof th.watchdog === 'object' ? th.watchdog : null;
+    const isStalled = Boolean(wdInfo?.stalled);
+    const isSnoozed = Boolean(!isStalled && wdInfo?.snoozed && wdInfo?.snoozedUntil);
+    const allowWdActions =
+      typeof serverCapabilities !== 'undefined' && serverCapabilities.has('watchdog_patrol');
+    const isWdBusy = Boolean(
+      typeof wdBusyThreadIds !== 'undefined' &&
+        typeof wdBusyThreadIds.has === 'function' &&
+        wdBusyThreadIds.has(th.threadId),
+    );
+    const fmtWdDur = (ms) => {
+      const sec = Math.max(1, Math.round((Number(ms) || 0) / 1000));
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      return typeof t.fmtDuration === 'function' ? t.fmtDuration(m, s) : `${m}m`;
+    };
+    const stallBadgeHtml = isStalled
+      ? `<span class="o2-stall-badge">${esc(t.wdStalledBadge || 'Possibly stalled')}</span>`
+      : isSnoozed
+        ? `<span class="o2-snooze-badge">${esc(t.wdSnoozedBadge || 'Snoozed')}</span>`
+        : '';
+    let stallBarHtml = '';
+    if (isStalled) {
+      const durText = fmtWdDur(wdInfo.stalledDurationMs || 0);
+      const detailText =
+        typeof t.wdStallDetail === 'function'
+          ? t.wdStallDetail(durText, Boolean(wdInfo.pendingDelivery))
+          : durText;
+      const snoozeMin =
+        (typeof lastSnap !== 'undefined' && Number(lastSnap?.watchdog?.defaultSnoozeMin)) || 30;
+      const wdActsHtml = allowWdActions
+        ? `<div class="o2-stall-acts">
+            <button type="button" class="row-act act-wd-wake" data-action="wd-wake" data-id="${esc(th.threadId)}"${isWdBusy ? ' disabled' : ''}>${esc(isWdBusy ? t.wdWakingBtn || 'Checking…' : t.wdWakeBtn || 'Inspect Now')}</button>
+            <button type="button" class="row-act" data-action="wd-snooze" data-id="${esc(th.threadId)}"${isWdBusy ? ' disabled' : ''}>${esc(typeof t.wdSnoozeBtn === 'function' ? t.wdSnoozeBtn(snoozeMin) : `Snooze ${snoozeMin}m`)}</button>
+          </div>`
+        : '';
+      stallBarHtml = `<div class="o2-th-stall"><span class="o2-stall-text">${esc(detailText)}</span>${wdActsHtml}</div>`;
+    } else if (isSnoozed) {
+      const remMs = Math.max(60_000, Date.parse(wdInfo.snoozedUntil) - Date.now());
+      const remText = fmtWdDur(remMs);
+      const snoozeText =
+        typeof t.wdSnoozeDetail === 'function' ? t.wdSnoozeDetail(remText) : remText;
+      const resumeHtml = allowWdActions
+        ? `<div class="o2-stall-acts">
+            <button type="button" class="row-act" data-action="wd-unsnooze" data-id="${esc(th.threadId)}"${isWdBusy ? ' disabled' : ''}>${esc(t.wdUnsnoozeBtn || 'Resume')}</button>
+          </div>`
+        : '';
+      stallBarHtml = `<div class="o2-th-stall is-snoozed"><span class="o2-stall-text">${esc(snoozeText)}</span>${resumeHtml}</div>`;
+    }
     const decisionBadgeHtml = hasPendingDecision
       ? `<span class="o2-dec-badge">${esc(t.decisionBadge)}</span>`
       : '';
-    const cardCls = `o2-th ${stateCls}${isOpen ? ' open' : ''}${isActiveMain ? ' active-main' : ''}${hasPendingDecision ? ' has-decision' : ''}`;
+    const dotCls = isStalled ? 'stalled' : stateCls;
+    const cardCls = `o2-th ${stateCls}${isStalled ? ' stalled' : ''}${isOpen ? ' open' : ''}${isActiveMain ? ' active-main' : ''}${hasPendingDecision ? ' has-decision' : ''}`;
 
     return `
       <div class="${cardCls}" data-th-card="${esc(th.threadId)}">
         <div class="o2-thh">
-          <span class="o2-thd ${stateCls}" aria-hidden="true"></span>
+          <span class="o2-thd ${dotCls}" aria-hidden="true"></span>
           <button type="button" class="o2-tht" data-action="open-primary" data-id="${esc(th.threadId)}" title="${esc(cardTitleTip)}">
             <b>${esc(th.title)}</b>
             <em>${esc(statusWord)}</em>
+            ${stallBadgeHtml}
             ${decisionBadgeHtml}
           </button>
           <span class="o2-thc">${rightMetaHtml}</span>
@@ -4864,6 +5177,7 @@
         </div>
         ${goalLine ? `<div class="o2-thg" data-action="open-primary" data-id="${esc(th.threadId)}">${esc(goalLine)}</div>` : ''}
         ${nowHtml}
+        ${stallBarHtml}
         ${tasksHtml}
         ${usageHtml}
         <div class="o2-th-actions">
@@ -4912,7 +5226,13 @@
 
     container.querySelectorAll('.o2-th').forEach((card) => {
       card.addEventListener('click', (e) => {
-        if (e.target.closest('.o2-fold-btn') || e.target.closest('.o2-th-actions')) return;
+        if (
+          e.target.closest('.o2-fold-btn') ||
+          e.target.closest('.o2-th-actions') ||
+          e.target.closest('.o2-stall-acts')
+        ) {
+          return;
+        }
         openThreadDrawer(card.dataset.thCard);
       });
     });
@@ -5019,6 +5339,30 @@
         if (th && th.worktreePath) {
           requestCleanWorktree(th, { triggerBtn: btn });
         }
+      });
+    });
+
+    container.querySelectorAll('button[data-action="wd-wake"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tid = btn.dataset.id;
+        if (tid) runWatchdogManualPatrol({ threadId: tid, wakeCheck: true, triggerBtn: btn });
+      });
+    });
+
+    container.querySelectorAll('button[data-action="wd-snooze"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tid = btn.dataset.id;
+        if (tid) runWatchdogThreadSnooze(tid, { clear: false, triggerBtn: btn });
+      });
+    });
+
+    container.querySelectorAll('button[data-action="wd-unsnooze"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tid = btn.dataset.id;
+        if (tid) runWatchdogThreadSnooze(tid, { clear: true, triggerBtn: btn });
       });
     });
   }
@@ -5138,6 +5482,7 @@
     const hasCoord = Boolean(c && c.conversationId);
     bindBtn.hidden = hasCoord;
     updateCoordinatorControls();
+    renderBoardWatchdogChip(snap);
 
     const headerMeta = resolveBoardHeaderDisplay(snap);
 
@@ -5912,6 +6257,9 @@
     );
 
     syncSettingsActionState();
+    if (typeof renderWatchdogSettingsCard === 'function') {
+      renderWatchdogSettingsCard(syncInputs);
+    }
   }
 
   async function loadSettingsData({ syncInputs = false, forceRefresh = false } = {}) {
@@ -5968,9 +6316,14 @@
     boardScrollTop = elBoardBody.scrollTop;
     settingsScreenOpen = true;
     settingsDirtyByUser = false;
+    wdDirtyByUser = false;
     if (elSettingsErr) {
       elSettingsErr.hidden = true;
       elSettingsErr.textContent = '';
+    }
+    if (elWdSettingsErr) {
+      elWdSettingsErr.hidden = true;
+      elWdSettingsErr.textContent = '';
     }
     clearUpdateCardNotice();
     elBoardScreen.hidden = true;
@@ -7753,6 +8106,7 @@
         coordinator: data.coordinator,
         threads: data.threads,
         decisions: data.decisions || [],
+        watchdog: data.watchdog || null,
       });
       if (!force && !scopeChanged && !convChanged && key === lastBoardKey) return;
       lastBoardKey = key;
@@ -7819,7 +8173,8 @@
     if (
       e.target.closest('#btn-sort') ||
       e.target.closest('#btn-card-coord') ||
-      e.target.closest('#btn-rebind-coord')
+      e.target.closest('#btn-rebind-coord') ||
+      e.target.closest('#btn-watchdog-patrol')
     ) {
       return;
     }
@@ -8441,6 +8796,7 @@
       if (settingsScope === 'global') return;
       settingsScope = 'global';
       settingsDirtyByUser = false;
+      wdDirtyByUser = false;
       renderSettingsScreen(true);
     });
   }
@@ -8451,6 +8807,7 @@
       if (!scopeKey || settingsScope === 'project') return;
       settingsScope = 'project';
       settingsDirtyByUser = false;
+      wdDirtyByUser = false;
       renderSettingsScreen(true);
     });
   }
@@ -8760,6 +9117,526 @@
       refreshBoard(false);
     }
   });
+
+  // ---------- Background Watchdog Patrol UI & Settings ----------
+  const WD_DEFAULT_VALS = {
+    enabled: true,
+    patrolIntervalSec: 30,
+    stallThresholdMin: 10,
+    bgTaskThresholdMin: 20,
+    mismatchGraceMin: 2,
+    cooldownMin: 10,
+    escalatedCooldownMin: 30,
+    defaultSnoozeMin: 30,
+  };
+
+  function isWatchdogInputFocused() {
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    if (!active) return false;
+    return [
+      elSetWdInterval,
+      elSetWdStall,
+      elSetWdBgTask,
+      elSetWdMismatch,
+      elSetWdCooldown,
+      elSetWdEscalated,
+    ].includes(active);
+  }
+
+  function flashWatchdogToast(msg, tone = 'ok', durationMs = 2800) {
+    if (wdToastTimer) {
+      clearTimeout(wdToastTimer);
+      wdToastTimer = null;
+    }
+    if (!elWdSettingsToast) return;
+    const text = String(msg || '');
+    elWdSettingsToast.className =
+      tone === 'err' ? 'toast err' : tone === 'warn' ? 'toast warn' : 'toast';
+    elWdSettingsToast.textContent = text;
+    elWdSettingsToast.title = text;
+    if (text && durationMs > 0) {
+      wdToastTimer = setTimeout(() => {
+        wdToastTimer = null;
+        if (!elWdSettingsToast) return;
+        elWdSettingsToast.textContent = '';
+        elWdSettingsToast.title = '';
+        elWdSettingsToast.className = 'toast';
+      }, durationMs);
+    }
+  }
+
+  function renderBoardWatchdogChip(snap) {
+    if (!elBtnWatchdogPatrol || !elLblWdPatrol) return;
+    const t = L();
+    const hasCoord = Boolean(snap?.coordinator?.conversationId);
+    const supported = supportsWatchdogPatrol();
+    if (!hasCoord || !supported) {
+      elBtnWatchdogPatrol.hidden = true;
+      return;
+    }
+    const wd = snap?.watchdog || null;
+    const enabled = wd ? wd.enabled !== false : true;
+    const stalledCount = Number(wd?.stalledCount) || 0;
+    const thrMin = Number(wd?.stallThresholdMin) || WD_DEFAULT_VALS.stallThresholdMin;
+    const lastAgo = wd?.lastPatrolAt ? relTimeAgo(wd.lastPatrolAt) : t.wdNeverPatrolled;
+
+    elBtnWatchdogPatrol.hidden = false;
+    elBtnWatchdogPatrol.disabled = wdPatrolling;
+    elBtnWatchdogPatrol.classList.toggle('is-stalled', stalledCount > 0);
+    elBtnWatchdogPatrol.classList.toggle('is-off', !enabled && stalledCount === 0);
+    elBtnWatchdogPatrol.classList.toggle('is-busy', wdPatrolling);
+    elLblWdPatrol.textContent = wdPatrolling
+      ? t.wdPatrolBusy
+      : stalledCount > 0
+        ? t.wdPatrolStalledBtn(stalledCount)
+        : enabled
+          ? t.wdPatrolBtn
+          : t.wdPatrolOffBtn;
+    elBtnWatchdogPatrol.title = t.wdPatrolTip(enabled, lastAgo, thrMin);
+  }
+
+  function getWatchdogEffectiveForSettings() {
+    const effWd = loadedSettingsData?.effective?.watchdog;
+    if (effWd && typeof effWd === 'object') return effWd;
+    const globalSaved = loadedSettingsData?.settings?.watchdog || WD_DEFAULT_VALS;
+    return {
+      ...WD_DEFAULT_VALS,
+      ...globalSaved,
+      source: 'global',
+      hasProjectOverride: false,
+      global: { ...WD_DEFAULT_VALS, ...globalSaved },
+      project: {},
+    };
+  }
+
+  function syncWatchdogEnabledButtons() {
+    const isProject = settingsScope === 'project';
+    const map = [
+      [elBtnWdEnabledInherit, 'inherit'],
+      [elBtnWdEnabledOn, 'true'],
+      [elBtnWdEnabledOff, 'false'],
+    ];
+    for (const [btn, val] of map) {
+      if (!btn) continue;
+      if (val === 'inherit') {
+        btn.hidden = !isProject;
+      }
+      const active = wdDraftEnabled === val;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    }
+  }
+
+  function renderWatchdogSettingsCard(syncInputs = false) {
+    if (!elWdCard) return;
+    const t = L();
+    const supported = supportsWatchdogPatrol();
+    const effWd = getWatchdogEffectiveForSettings();
+    const globalCfg = effWd.global || WD_DEFAULT_VALS;
+    const projCfg = effWd.project || {};
+    const isProject = settingsScope === 'project';
+    const scopeKey = loadedSettingsData?.scopeKey || loadedSettingsData?.effective?.scopeKey || activeScopeKey || '';
+
+    const lblHdr = document.getElementById('lbl-wd-hdr');
+    if (lblHdr) lblHdr.textContent = t.wdHdr;
+    const lblEn = document.getElementById('lbl-wd-enabled');
+    if (lblEn) lblEn.textContent = t.wdEnabledLabel;
+    if (elBtnWdEnabledInherit) {
+      elBtnWdEnabledInherit.textContent = t.wdEnabledFollow(
+        globalCfg.enabled !== false ? t.wdEnabledOn : t.wdEnabledOff,
+      );
+    }
+    if (elBtnWdEnabledOn) elBtnWdEnabledOn.textContent = t.wdEnabledOn;
+    if (elBtnWdEnabledOff) elBtnWdEnabledOff.textContent = t.wdEnabledOff;
+
+    const descEl = document.getElementById('desc-wd-enabled');
+    if (descEl) {
+      const projLabel =
+        loadedSettingsData?.effective?.projectName ||
+        lastSnap?.projectName ||
+        loadedSettingsData?.effective?.scopeLabel ||
+        lastSnap?.scopeTitle ||
+        scopeKey;
+      descEl.textContent = isProject ? t.wdDescProject(projLabel) : t.wdDescGlobal;
+    }
+
+    const labelPairs = [
+      ['lbl-wd-interval', t.wdIntervalLabel],
+      ['lbl-wd-stall', t.wdStallLabel],
+      ['lbl-wd-bgtask', t.wdBgTaskLabel],
+      ['lbl-wd-mismatch', t.wdMismatchLabel],
+      ['lbl-wd-cooldown', t.wdCooldownLabel],
+      ['lbl-wd-escalated', t.wdEscalatedLabel],
+    ];
+    for (const [id, text] of labelPairs) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    if (elWdStatusBadge) {
+      elWdStatusBadge.hidden = false;
+      if (!supported) {
+        elWdStatusBadge.className = 'update-badge warn';
+        elWdStatusBadge.textContent = t.wdBadgeReload;
+      } else if (effWd.enabled !== false) {
+        elWdStatusBadge.className = 'update-badge ok';
+        elWdStatusBadge.textContent = t.wdBadgeOn;
+      } else {
+        elWdStatusBadge.className = 'update-badge';
+        elWdStatusBadge.textContent = t.wdBadgeOff;
+      }
+    }
+
+    const numBindings = [
+      [elSetWdInterval, 'patrolIntervalSec'],
+      [elSetWdStall, 'stallThresholdMin'],
+      [elSetWdBgTask, 'bgTaskThresholdMin'],
+      [elSetWdMismatch, 'mismatchGraceMin'],
+      [elSetWdCooldown, 'cooldownMin'],
+      [elSetWdEscalated, 'escalatedCooldownMin'],
+    ];
+
+    if (syncInputs || (!wdDirtyByUser && !isWatchdogInputFocused())) {
+      if (isProject) {
+        wdDraftEnabled =
+          typeof projCfg.enabled === 'boolean' ? (projCfg.enabled ? 'true' : 'false') : 'inherit';
+      } else {
+        wdDraftEnabled = globalCfg.enabled !== false ? 'true' : 'false';
+      }
+      for (const [inp, key] of numBindings) {
+        if (!inp) continue;
+        const gVal = globalCfg[key] ?? WD_DEFAULT_VALS[key];
+        if (isProject) {
+          inp.placeholder = String(gVal);
+          inp.value = typeof projCfg[key] === 'number' ? String(projCfg[key]) : '';
+        } else {
+          inp.placeholder = String(WD_DEFAULT_VALS[key]);
+          inp.value = String(gVal);
+        }
+      }
+    } else {
+      for (const [inp, key] of numBindings) {
+        if (!inp) continue;
+        const gVal = globalCfg[key] ?? WD_DEFAULT_VALS[key];
+        inp.placeholder = isProject ? String(gVal) : String(WD_DEFAULT_VALS[key]);
+      }
+    }
+    syncWatchdogEnabledButtons();
+
+    const controlsDisabled = !supported || wdSaving;
+    for (const btn of [elBtnWdEnabledInherit, elBtnWdEnabledOn, elBtnWdEnabledOff]) {
+      if (btn) btn.disabled = controlsDisabled;
+    }
+    for (const [inp] of numBindings) {
+      if (inp) inp.disabled = controlsDisabled;
+    }
+
+    if (elWdUnsupportedHint) {
+      elWdUnsupportedHint.hidden = supported;
+      elWdUnsupportedHint.textContent = supported ? '' : t.wdUnsupportedErr;
+    }
+
+    if (elWdSettingsMeta) {
+      const snapWd = lastSnap?.watchdog || null;
+      const srcLabel = effWd.hasProjectOverride ? t.wdSourceProject : t.wdSourceGlobal;
+      const lastAgo = snapWd?.lastPatrolAt ? relTimeAgo(snapWd.lastPatrolAt) : t.wdNeverPatrolled;
+      const stalledCount = Number(snapWd?.stalledCount) || 0;
+      elWdSettingsMeta.textContent = t.wdMetaLine(srcLabel, lastAgo, stalledCount);
+    }
+
+    if (elBtnWdSave) {
+      elBtnWdSave.disabled = controlsDisabled;
+      elBtnWdSave.textContent = wdSaving ? t.wdSavingBtn : t.wdSaveBtn;
+    }
+    if (elBtnWdReset) {
+      elBtnWdReset.textContent = isProject ? t.wdResetProjectBtn : t.wdResetGlobalBtn;
+      elBtnWdReset.disabled = controlsDisabled || (isProject && !effWd.hasProjectOverride && !wdDirtyByUser);
+    }
+    if (elBtnWdPatrolNow) {
+      const canPatrol = Boolean(supported && lastSnap?.coordinator?.conversationId);
+      elBtnWdPatrolNow.hidden = !canPatrol;
+      elBtnWdPatrolNow.disabled = !canPatrol || wdPatrolling;
+      elBtnWdPatrolNow.textContent = wdPatrolling ? t.wdPatrolBusy : t.wdPatrolNowBtn;
+    }
+  }
+
+  function readWatchdogSettingsDraft() {
+    const isProject = settingsScope === 'project';
+    const patch = {};
+    if (isProject) {
+      patch.enabled = wdDraftEnabled === 'inherit' ? '' : wdDraftEnabled === 'true';
+    } else {
+      patch.enabled = wdDraftEnabled !== 'false';
+    }
+    const fields = [
+      [elSetWdInterval, 'patrolIntervalSec'],
+      [elSetWdStall, 'stallThresholdMin'],
+      [elSetWdBgTask, 'bgTaskThresholdMin'],
+      [elSetWdMismatch, 'mismatchGraceMin'],
+      [elSetWdCooldown, 'cooldownMin'],
+      [elSetWdEscalated, 'escalatedCooldownMin'],
+    ];
+    for (const [inp, key] of fields) {
+      if (!inp) continue;
+      const raw = String(inp.value ?? '').trim();
+      if (!raw) {
+        if (isProject) patch[key] = '';
+      } else {
+        const n = Number(raw);
+        if (Number.isFinite(n)) patch[key] = Math.round(n);
+      }
+    }
+    return patch;
+  }
+
+  async function submitWatchdogSettingsSave(reset = false) {
+    if (wdSaving) return;
+    const t = L();
+    if (!supportsWatchdogPatrol()) {
+      flashWatchdogToast(t.wdUnsupportedErr, 'err', 3600);
+      return;
+    }
+    const scopeKey =
+      loadedSettingsData?.scopeKey || loadedSettingsData?.effective?.scopeKey || activeScopeKey || '';
+    const activeScope = settingsScope === 'project' && scopeKey ? 'project' : 'global';
+    wdSaving = true;
+    if (elWdSettingsErr) {
+      elWdSettingsErr.hidden = true;
+      elWdSettingsErr.textContent = '';
+    }
+    renderWatchdogSettingsCard(false);
+
+    try {
+      await syncHostConversationScope();
+      const prevScopeKey = loadedSettingsData?.scopeKey || '';
+      const payload = buildScopePayload({
+        scope: activeScope,
+        section: 'watchdog',
+        ...(scopeKey ? { workspaceKey: scopeKey } : {}),
+        reset,
+      });
+      if (!reset) {
+        payload.watchdog = readWatchdogSettingsDraft();
+      }
+      const res = await postApi(
+        '/api/settings_save',
+        '/api/settings_save_get',
+        payload,
+        { timeoutMs: 0, allowGetFallback: false, expectServerInfo: true },
+      );
+      if (!res?.ok || !res?.settings?.watchdog) {
+        const msg = res?.error || t.wdSaveErr;
+        if (elWdSettingsErr) {
+          elWdSettingsErr.hidden = false;
+          elWdSettingsErr.textContent = msg;
+        }
+        flashWatchdogToast(msg, 'err', 3600);
+        return;
+      }
+      const nextScopeKey =
+        activeScope === 'global' && prevScopeKey
+          ? prevScopeKey
+          : res.scopeKey || res.effective?.scopeKey || scopeKey;
+      loadedSettingsData = {
+        settings: res.settings,
+        effective: res.effective,
+        scopeKey: nextScopeKey,
+        coordinatorModelDisplayName:
+          res.coordinatorModelDisplayName ||
+          res.effective?.coordinatorModelDisplayName ||
+          loadedSettingsData?.coordinatorModelDisplayName ||
+          '',
+        coordinatorModel:
+          res.coordinatorModel ||
+          res.effective?.coordinatorModel ||
+          loadedSettingsData?.coordinatorModel ||
+          '',
+      };
+      wdDirtyByUser = false;
+      renderWatchdogSettingsCard(true);
+      flashWatchdogToast(
+        reset
+          ? activeScope === 'project'
+            ? t.wdClearedProjToast
+            : t.wdResetToast
+          : t.wdSavedToast,
+      );
+      lastBoardKey = '';
+      refreshBoard(true);
+    } catch (err) {
+      const msg = err?.message || t.wdSaveErr;
+      if (elWdSettingsErr) {
+        elWdSettingsErr.hidden = false;
+        elWdSettingsErr.textContent = msg;
+      }
+      flashWatchdogToast(msg, 'err', 3600);
+    } finally {
+      wdSaving = false;
+      renderWatchdogSettingsCard(false);
+    }
+  }
+
+  async function runWatchdogManualPatrol({ threadId = '', wakeCheck = false, triggerBtn = null } = {}) {
+    const t = L();
+    if (!supportsWatchdogPatrol()) {
+      flashToast(t.wdUnsupportedErr, 'err', 3600);
+      return;
+    }
+    if (threadId && wdBusyThreadIds.has(threadId)) return;
+    if (!threadId && wdPatrolling) return;
+
+    if (threadId) wdBusyThreadIds.add(threadId);
+    else wdPatrolling = true;
+    if (triggerBtn) triggerBtn.disabled = true;
+    if (lastSnap) renderBoardWatchdogChip(lastSnap);
+    if (settingsScreenOpen) renderWatchdogSettingsCard(false);
+
+    try {
+      await syncHostConversationScope();
+      const expectedAction = wakeCheck && threadId ? 'wake_check' : 'patrol';
+      const payload = buildScopePayload({
+        workspaceKey: activeScopeKey || lastSnap?.scopeKey || '',
+        coordinatorId: lastSnap?.coordinator?.conversationId || '',
+        ...(threadId ? { threadId } : {}),
+        ...(wakeCheck ? { wakeCheck: true } : {}),
+      });
+      const res = await postApi(
+        '/api/watchdog_patrol',
+        '/api/watchdog_patrol_get',
+        payload,
+        { timeoutMs: 0, allowGetFallback: false, expectServerInfo: true },
+      );
+      if (!res?.ok || res.action !== expectedAction) {
+        flashToast(res?.error || t.wdPatrolErrToast, 'err', 3600);
+        return;
+      }
+      if (expectedAction === 'wake_check') {
+        if (res.alertedCount > 0) {
+          flashToast(t.wdWakeSentToast, 'ok', 2800);
+        } else if (res.deferredCount > 0) {
+          flashToast(t.wdWakeDeferredToast, 'warn', 3400);
+        } else {
+          flashToast(t.wdWakeHealthyToast, 'ok', 2600);
+        }
+      } else if (res.skipped && res.reason === 'no_active_threads') {
+        const msg = t.wdPatrolSkippedToast;
+        if (settingsScreenOpen) flashWatchdogToast(msg, 'ok', 2600);
+        else flashToast(msg, 'ok', 2400);
+      } else {
+        const msg = t.wdPatrolOkToast(Number(res.checkedCount) || 0, Number(res.stalledCount) || 0);
+        const tone = (Number(res.stalledCount) || 0) > 0 ? 'warn' : 'ok';
+        if (settingsScreenOpen) flashWatchdogToast(msg, tone, 3200);
+        else flashToast(msg, tone, 3000);
+      }
+      lastBoardKey = '';
+      await refreshBoard(true);
+    } catch (err) {
+      const msg = err?.message || t.wdPatrolErrToast;
+      if (settingsScreenOpen) flashWatchdogToast(msg, 'err', 3600);
+      else flashToast(msg, 'err', 3600);
+    } finally {
+      if (threadId) wdBusyThreadIds.delete(threadId);
+      else wdPatrolling = false;
+      if (triggerBtn) triggerBtn.disabled = false;
+      if (lastSnap) renderBoardWatchdogChip(lastSnap);
+      if (settingsScreenOpen) renderWatchdogSettingsCard(false);
+    }
+  }
+
+  async function runWatchdogThreadSnooze(threadId, { clear = false, triggerBtn = null } = {}) {
+    if (!threadId || wdBusyThreadIds.has(threadId)) return;
+    const t = L();
+    if (!supportsWatchdogPatrol()) {
+      flashToast(t.wdUnsupportedErr, 'err', 3600);
+      return;
+    }
+    wdBusyThreadIds.add(threadId);
+    if (triggerBtn) triggerBtn.disabled = true;
+    try {
+      await syncHostConversationScope();
+      const expectedAction = clear ? 'unsnooze' : 'snooze';
+      const payload = buildScopePayload({
+        threadId,
+        clear: Boolean(clear),
+        workspaceKey: activeScopeKey || lastSnap?.scopeKey || '',
+        coordinatorId: lastSnap?.coordinator?.conversationId || '',
+      });
+      const res = await postApi(
+        '/api/watchdog_snooze',
+        '/api/watchdog_snooze_get',
+        payload,
+        { timeoutMs: 0, allowGetFallback: false, expectServerInfo: true },
+      );
+      if (!res?.ok || res.action !== expectedAction) {
+        flashToast(res?.error || t.wdSnoozeErrToast, 'err', 3600);
+        return;
+      }
+      flashToast(
+        clear ? t.wdUnsnoozedToast : t.wdSnoozedToast(Number(res.minutes) || 30),
+        'ok',
+        2600,
+      );
+      lastBoardKey = '';
+      await refreshBoard(true);
+    } catch (err) {
+      flashToast(err?.message || t.wdSnoozeErrToast, 'err', 3600);
+    } finally {
+      wdBusyThreadIds.delete(threadId);
+      if (triggerBtn) triggerBtn.disabled = false;
+    }
+  }
+
+  if (elBtnWatchdogPatrol) {
+    elBtnWatchdogPatrol.addEventListener('click', (e) => {
+      e.stopPropagation();
+      runWatchdogManualPatrol({ triggerBtn: elBtnWatchdogPatrol });
+    });
+  }
+  for (const [btn, val] of [
+    [elBtnWdEnabledInherit, 'inherit'],
+    [elBtnWdEnabledOn, 'true'],
+    [elBtnWdEnabledOff, 'false'],
+  ]) {
+    if (!btn) continue;
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      wdDraftEnabled = val;
+      wdDirtyByUser = true;
+      syncWatchdogEnabledButtons();
+      renderWatchdogSettingsCard(false);
+    });
+  }
+  for (const inp of [
+    elSetWdInterval,
+    elSetWdStall,
+    elSetWdBgTask,
+    elSetWdMismatch,
+    elSetWdCooldown,
+    elSetWdEscalated,
+  ]) {
+    if (!inp) continue;
+    inp.addEventListener('input', () => {
+      wdDirtyByUser = true;
+      if (elBtnWdReset && !wdSaving) {
+        elBtnWdReset.disabled = false;
+      }
+    });
+  }
+  if (elBtnWdSave) {
+    elBtnWdSave.addEventListener('click', () => {
+      submitWatchdogSettingsSave(false);
+    });
+  }
+  if (elBtnWdReset) {
+    elBtnWdReset.addEventListener('click', () => {
+      submitWatchdogSettingsSave(true);
+    });
+  }
+  if (elBtnWdPatrolNow) {
+    elBtnWdPatrolNow.addEventListener('click', () => {
+      runWatchdogManualPatrol({ triggerBtn: elBtnWdPatrolNow });
+    });
+  }
 
   // ---------- Plugin Version & Update Checker ----------
   function renderUpdateStatusNotice() {

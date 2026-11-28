@@ -779,7 +779,7 @@ test('MCP stdio server supports update_project_memory topic CRUD, budget notices
   assert.equal(delRes.result.structuredContent.topics.length, 0);
 });
 
-test('static checks: protocol v17, API rev 6, topic_memory gating, dec-022 wording cleanup, zero native dialogs, zero middle dots, and LF endings', (t) => {
+test('static checks: protocol v17, API rev 7, topic_memory gating, dec-022 wording cleanup, zero native dialogs, zero middle dots, and LF endings', (t) => {
   const hookMjs = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
@@ -793,13 +793,14 @@ test('static checks: protocol v17, API rev 6, topic_memory gating, dec-022 wordi
 
   // 1. Version & capability alignment
   assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*6\s*;/);
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*7\s*;/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
+  assert.match(mainMjs, /['"]watchdog_patrol['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/memory_save['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/memory_migrate['"]/);
   assert.match(mainMjs, /handleSaveMemory[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
   assert.match(mainMjs, /handleMigrateMemory[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
-  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*6\s*;/);
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*7\s*;/);
   assert.match(appJs, /function\s+supportsTopicMemory\s*\(/);
   assert.match(appJs, /serverCapabilities\.has\(['"]topic_memory['"]\)/);
 
