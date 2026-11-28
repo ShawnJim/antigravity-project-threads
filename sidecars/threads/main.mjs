@@ -335,6 +335,8 @@ async function handleSettings(data = {}) {
       settings,
       effective,
       scopeKey: effective.scopeKey || scopeKey || '',
+      projectName: effective.projectName || '',
+      scopeLabel: effective.scopeLabel || '',
       coordinatorModelDisplayName: effective.coordinatorModelDisplayName || '',
       coordinatorModel: effective.coordinatorModel || '',
     };
@@ -389,6 +391,8 @@ async function handleSaveSettings(data = {}) {
       settings,
       effective,
       scopeKey: effective.scopeKey || scopeKey || '',
+      projectName: effective.projectName || '',
+      scopeLabel: effective.scopeLabel || '',
       coordinatorModelDisplayName: effective.coordinatorModelDisplayName || '',
       coordinatorModel: effective.coordinatorModel || '',
     };

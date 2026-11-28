@@ -1073,7 +1073,13 @@
     if (convId && window.sidecar?.agent?.getConversationMetadata) {
       try {
         const meta = await window.sidecar.agent.getConversationMetadata(convId);
-        const rawPid = meta?.projectId || meta?.project_id || '';
+        const nestedMeta =
+          meta?.response?.conversationMetadata?.metadata ||
+          meta?.response?.conversation_metadata?.metadata ||
+          meta?.conversation?.metadata ||
+          meta?.metadata ||
+          meta;
+        const rawPid = nestedMeta?.projectId || nestedMeta?.project_id || '';
         if (getHostConvId() === convId) {
           hostProjectId =
             rawPid && rawPid !== 'outside-of-project' ? String(rawPid).trim() : '';
@@ -1227,9 +1233,13 @@
       sortMode === 'priority' ? t.sortPriority : t.sortRecent;
 
     if (!lastSnap) {
-      document.getElementById('panel-title').textContent = t.panelTitle;
+      const panelTitleEl = document.getElementById('panel-title');
+      panelTitleEl.textContent = t.panelTitle;
+      panelTitleEl.title = t.panelTitle;
       document.getElementById('goal-kicker-text').textContent = t.kickerProject;
-      document.getElementById('goal-title').textContent = t.defaultProjTitle;
+      const goalTitleEl = document.getElementById('goal-title');
+      goalTitleEl.textContent = t.defaultProjTitle;
+      goalTitleEl.title = '';
     }
 
     document.getElementById('lbl-drawer-title').textContent = t.drawerTitle;
@@ -3161,6 +3171,51 @@
     `;
   }
 
+  function stripCoordinatorPrefix(raw) {
+    return String(raw || '').replace(/^(?:\[Coordinator\]\s*)+/i, '').trim();
+  }
+
+  function resolveBoardHeaderDisplay(snap) {
+    const t = L();
+    const c = snap?.coordinator || null;
+    const hasCoord = Boolean(c && c.conversationId);
+    const projectName = String(snap?.projectName || c?.projectName || '').trim();
+    const fullPath = String(
+      snap?.workspacePath || c?.repoRoot || c?.workspacePath || workspace || '',
+    ).trim();
+    const workspaceName =
+      String(snap?.workspaceName || '').trim() ||
+      (fullPath ? fullPath.split(/[\\/]/).filter(Boolean).pop() : '');
+    const coordLabel = stripCoordinatorPrefix(c?.title || '');
+    const scopeTitle =
+      projectName ||
+      String(snap?.scopeTitle || '').trim() ||
+      workspaceName ||
+      String(snap?.projectLabel || '').trim();
+
+    const panelTitle = projectName || workspaceName || scopeTitle || t.panelTitle;
+    const panelTooltip =
+      projectName && fullPath
+        ? `${projectName} — ${fullPath}`
+        : fullPath || projectName || panelTitle;
+
+    const goalTitle = hasCoord
+      ? workspaceName || coordLabel || scopeTitle || t.defaultProjTitle
+      : scopeTitle || t.defaultProjTitle;
+    const goalTooltip = fullPath || goalTitle;
+
+    return {
+      projectName,
+      workspaceName,
+      fullPath,
+      scopeTitle,
+      panelTitle,
+      panelTooltip,
+      goalTitle,
+      goalTooltip,
+    };
+  }
+
   function renderBoard(snap) {
     lastSnap = snap;
     const t = L();
@@ -3170,12 +3225,7 @@
     bindBtn.hidden = hasCoord;
     updateCoordinatorControls();
 
-    const folderProj = c
-      ? (c.repoRoot || c.workspacePath || '').split(/[\\/]/).filter(Boolean).pop()
-      : workspace
-        ? workspace.split(/[\\/]/).filter(Boolean).pop()
-        : '';
-    const projName = folderProj || String(snap.projectLabel || '').trim();
+    const headerMeta = resolveBoardHeaderDisplay(snap);
 
     // Sync worktree checkbox availability based on snap.hasGitRepo
     const wtChk = document.getElementById('f-wt');
@@ -3208,7 +3258,9 @@
     const wtThreads = active.filter((x) => x.worktreePath);
 
     // Header title & Underline tab counts/badges
-    document.getElementById('panel-title').textContent = projName || t.panelTitle;
+    const panelTitleEl = document.getElementById('panel-title');
+    panelTitleEl.textContent = headerMeta.panelTitle;
+    panelTitleEl.title = headerMeta.panelTooltip;
     document.getElementById('badge-waiting').textContent =
       waiting.length > 0 ? String(waiting.length) : '';
     document.getElementById('cnt-threads').textContent =
@@ -3222,8 +3274,9 @@
     document.getElementById('goal-kicker-text').textContent = hasCoord
       ? t.kickerCoord
       : t.kickerProject;
-    document.getElementById('goal-title').textContent =
-      projName || c?.title || t.defaultProjTitle;
+    const goalTitleEl = document.getElementById('goal-title');
+    goalTitleEl.textContent = headerMeta.goalTitle;
+    goalTitleEl.title = headerMeta.goalTooltip;
     document.getElementById('goal-sub').textContent = t.triageSummary(
       waiting.length,
       working.length,
@@ -3404,6 +3457,7 @@
     return {
       scopeKey,
       scopeKind: scopeKey ? 'workspace' : 'unscoped',
+      projectName: '',
       scopeLabel: '',
       hasProjectOverride: false,
       coordinatorId: '',
@@ -3666,7 +3720,10 @@
     }
 
     const projLabel =
+      eff.projectName ||
+      lastSnap?.projectName ||
       eff.scopeLabel ||
+      lastSnap?.scopeTitle ||
       lastSnap?.projectLabel ||
       (workspace ? workspace.split(/[\\/]/).filter(Boolean).pop() : '') ||
       scopeKey;
@@ -3676,7 +3733,7 @@
     if (scopePill) {
       scopePill.hidden = settingsScope !== 'project' || !projLabel;
       scopePill.textContent = projLabel;
-      scopePill.title = scopeKey || projLabel;
+      scopePill.title = scopeKey && scopeKey !== projLabel ? `${projLabel} — ${scopeKey}` : scopeKey || projLabel;
     }
     document.getElementById('lbl-settings-scope-desc').textContent =
       settingsScope === 'project' ? t.settingsProjectHint(projLabel) : t.settingsGlobalHint;
@@ -5055,6 +5112,10 @@
         scopeKey: nextScopeKey,
         manualPopoutConvId,
         hasGitRepo: Boolean(data.hasGitRepo),
+        projectName: data.projectName || '',
+        workspaceName: data.workspaceName || '',
+        workspacePath: data.workspacePath || '',
+        scopeTitle: data.scopeTitle || '',
         projectLabel: data.projectLabel || '',
         sortMode,
         timeBucket,
