@@ -533,6 +533,7 @@ async function handleSaveMemory(data = {}) {
       title: data.title || '',
       summary: data.summary || '',
       keywords,
+      createOnly: parseBool(data.createOnly, false),
     });
     return {
       ok: true,
@@ -544,6 +545,7 @@ async function handleSaveMemory(data = {}) {
     return {
       ok: false,
       error: err.message,
+      ...(err?.code ? { errorCode: err.code } : {}),
       locale: resolveAppLocale(),
       serverInfo: buildServerInfo(),
     };

@@ -878,7 +878,11 @@ test('static checks: protocol v17, API rev 6, topic_memory gating, dec-022 wordi
     'memModalSplitWarn',
     'memSizeTag',
     'memBudgetWarnText',
+    'memTopicExistsErr',
   ];
+  assert.match(mainMjs, /createOnly:\s*parseBool\(data\.createOnly,\s*false\)/);
+  assert.match(appJs, /createOnly:\s*memoryActiveView\s*===\s*['"]new_topic['"]/);
+  assert.match(appJs, /memTopicExistsErr/);
   for (const loc of ['en', 'zh-CN', 'zh-TW']) {
     for (const k of memKeys) {
       const val = ctx.I18N[loc][k];
@@ -1119,4 +1123,264 @@ test('Sidecar UI behavior: topic_memory capability gating, migration banner, top
   sandbox.api.setIme(false);
   await sandbox.api.loadMemory({ forceSyncEditor: true });
   assert.equal(doc.getElementById('mem-editor').value, '# Server newer snapshot\n');
+});
+
+test('Opus review P1-1: CRLF oversized memory archives losslessly, and verification failure rolls back legacy file without orphans', (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-mem-p1-1-');
+  const repoDir = join(tempRoot, 'crlf-repo');
+  initTempGitRepo(repoDir);
+
+  // Build >250 lines with Windows CRLF so CRLF->LF drops >250 bytes (exceeding metadata comment size)
+  const crlfLines = [
+    '# Windows CRLF Project Shared Memory',
+    '',
+    '## Active Decisions & Constraints',
+    ...Array.from({ length: 260 }, (_, i) => `- CRLF invariant #${i + 1}: preserve line verbatim across archive.`),
+    '',
+    buildLegacyV1MergeConventionsSection(),
+  ];
+  const crlfBody = `${crlfLines.join('\r\n')}\r\n`;
+  mkdirSync(join(repoDir, '.agents', 'rules'), { recursive: true });
+  const memPath = join(repoDir, '.agents', 'rules', 'project-memory.md');
+  writeFileSync(memPath, crlfBody, 'utf8');
+
+  // 1. Simulated verification failure MUST roll back the newly written legacy.md and leave zero orphans
+  assert.throws(
+    () =>
+      archiveMemoryToLegacyTopic({
+        baseDir: repoDir,
+        projectName: 'CrlfRepo',
+        _verifyPersisted: () => false,
+      }),
+    /verification failed/i,
+  );
+  assert.equal(
+    existsSync(join(repoDir, '.agents', 'memory', 'legacy.md')),
+    false,
+    'failed verification must delete the newly written legacy.md orphan',
+  );
+  assert.equal(readFileSync(memPath, 'utf8'), crlfBody, 'source project-memory.md must remain untouched on rollback');
+  const diagAfterFail = inspectMemoryMigrationStatus(repoDir);
+  assert.equal(diagAfterFail.needsMigration, true);
+  assert.equal(diagAfterFail.topicCount, 0);
+  assert.equal(diagAfterFail.suggestedLegacyTopicId, 'legacy');
+
+  // 2. Real archive succeeds on 260+ line CRLF file and preserves 100% normalized content
+  const okRes = archiveMemoryToLegacyTopic({
+    baseDir: repoDir,
+    projectName: 'CrlfRepo',
+  });
+  assert.equal(okRes.legacyTopic.id, 'legacy');
+  assert.equal(okRes.legacyTopic.content, crlfBody.replace(/\r\n/g, '\n'));
+  assert.equal(okRes.migration.needsMigration, false);
+  assert.equal(okRes.budget.overBudget, false);
+  assert.ok(okRes.budget.lineCount <= THIN_INDEX_SOFT_MAX_LINES);
+});
+
+test('Opus review P1-2: createOnly / mode="create" rejects duplicate topic IDs instead of silently overwriting', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-mem-p1-2-');
+  const repoDir = join(tempRoot, 'dup-topic-repo');
+  initTempGitRepo(repoDir);
+
+  // Create initial topic with createOnly: true
+  const first = writeMemoryTopic({
+    baseDir: repoDir,
+    projectName: 'DupRepo',
+    topic: 'sidecar-ui',
+    title: 'Sidecar UI',
+    keywords: ['app.js'],
+    summary: 'Original rules.',
+    content: '# Sidecar UI\n\n- Original priceless content.\n',
+    createOnly: true,
+  });
+  assert.equal(first.topic.id, 'sidecar-ui');
+
+  // Duplicate create via writeMemoryTopic(createOnly: true) MUST reject and preserve original content
+  assert.throws(
+    () =>
+      writeMemoryTopic({
+        baseDir: repoDir,
+        projectName: 'DupRepo',
+        topic: 'Sidecar-UI',
+        title: 'Clobber Attempt',
+        content: '# Clobbered\n',
+        createOnly: true,
+      }),
+    (err) => err?.code === 'TOPIC_ALREADY_EXISTS' && /already exists/i.test(err.message),
+  );
+  assert.match(readMemoryTopic(repoDir, '', 'sidecar-ui').content, /Original priceless content/);
+
+  // Duplicate create via updateProjectMemory({ createOnly: true }) and mode="create" MUST also reject
+  await assert.rejects(
+    () =>
+      updateProjectMemory({
+        workspacePath: repoDir,
+        topic: 'sidecar-ui',
+        mode: 'replace',
+        createOnly: true,
+        content: '# Overwrite attempt\n',
+      }),
+    /already exists/i,
+  );
+  await assert.rejects(
+    () =>
+      updateProjectMemory({
+        workspacePath: repoDir,
+        topic: 'sidecar-ui',
+        mode: 'create',
+        content: '# Overwrite via create mode\n',
+      }),
+    /already exists/i,
+  );
+  assert.match(readMemoryTopic(repoDir, '', 'sidecar-ui').content, /Original priceless content/);
+
+  // Explicit edit (createOnly: false) still updates existing topic cleanly
+  const edited = await updateProjectMemory({
+    workspacePath: repoDir,
+    topic: 'sidecar-ui',
+    mode: 'replace',
+    createOnly: false,
+    content: '# Sidecar UI\n\n- Updated intentionally.\n',
+  });
+  assert.equal(edited.action, 'save_topic');
+  assert.match(readMemoryTopic(repoDir, '', 'sidecar-ui').content, /Updated intentionally/);
+});
+
+test('Opus review P1-3: initial default template + several topics stay comfortably within soft budget (<=60 lines / 4KB)', (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-mem-p1-3-');
+  const repoDir = join(tempRoot, 'budget-repo');
+  initTempGitRepo(repoDir);
+
+  assert.equal(THIN_INDEX_SOFT_MAX_LINES, 60);
+  assert.equal(THIN_INDEX_SOFT_MAX_BYTES, 4096);
+
+  ensureProjectMemoryFile(repoDir, 'BudgetRepo');
+  const initialMem = readProjectMemory(repoDir);
+  assert.equal(initialMem.budget.overBudget, false, 'default template must not trigger overBudget');
+  assert.equal(initialMem.budgetWarning, '');
+  assert.ok(
+    initialMem.budget.byteSize < THIN_INDEX_SOFT_MAX_BYTES * 0.65,
+    `default template (${initialMem.budget.byteSize}B) should leave ample headroom below ${THIN_INDEX_SOFT_MAX_BYTES}B`,
+  );
+
+  for (const [id, title, kws, sum] of [
+    ['ls-rpc', 'LS RPC', ['ls-client', 'agentapi'], 'Endpoint discovery and model catalog.'],
+    ['sidecar-ui', 'Sidecar UI', ['app.js', 'DOM'], 'In-DOM modal and draft guards.'],
+    ['git-release', 'Git Release', ['worktree', 'dev', 'main'], 'Dual-branch release workflow.'],
+  ]) {
+    const res = writeMemoryTopic({
+      baseDir: repoDir,
+      projectName: 'BudgetRepo',
+      topic: id,
+      title,
+      keywords: kws,
+      summary: sum,
+      content: `# ${title}\n\n- Notes for ${id}.\n`,
+    });
+    assert.equal(res.budget.overBudget, false, `adding topic ${id} should not immediately trip budget`);
+    assert.equal(res.budgetWarning, '');
+  }
+
+  // Exceeding 4KB bytes still accurately triggers budgetWarning even under 60 lines
+  const longBytes = `# Heavy\n${Array.from({ length: 25 }, (_, i) => `- ${'x'.repeat(180)} #${i}`).join('\n')}\n`;
+  const overByteEval = evaluateIndexBudget(longBytes);
+  assert.equal(overByteEval.overLines, false);
+  assert.equal(overByteEval.overBytes, true);
+  assert.equal(overByteEval.overBudget, true);
+  assert.ok(overByteEval.budgetWarning.includes('4096'));
+});
+
+test('Opus review P1-4: request_coordinator_split only delivers to the registered active Coordinator for the project scope', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-mem-p1-4-');
+  const repoUnbound = join(tempRoot, 'unbound-repo');
+  const repoBound = join(tempRoot, 'bound-repo');
+  initTempGitRepo(repoUnbound);
+  initTempGitRepo(repoBound);
+
+  mkdirSync(join(repoUnbound, '.agents', 'rules'), { recursive: true });
+  writeFileSync(join(repoUnbound, '.agents', 'rules', 'project-memory.md'), buildOversizedLegacyMemory(70), 'utf8');
+  mkdirSync(join(repoBound, '.agents', 'rules'), { recursive: true });
+  writeFileSync(join(repoBound, '.agents', 'rules', 'project-memory.md'), buildOversizedLegacyMemory(70), 'utf8');
+
+  // Wire mock agentapi to verify NO message is sent on rejected cases and exact target on valid case
+  const captureFile = join(tempRoot, 'p1-4-agentapi-capture.json');
+  const fakeScript = join(tempRoot, 'p1-4-fake-agentapi.mjs');
+  writeFileSync(
+    fakeScript,
+    `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(captureFile)}, JSON.stringify(process.argv.slice(2)), 'utf8');\n`,
+    'utf8',
+  );
+  const shimPath =
+    process.platform === 'win32'
+      ? join(tempRoot, 'p1-4-agentapi.cmd')
+      : join(tempRoot, 'p1-4-agentapi.sh');
+  if (process.platform === 'win32') {
+    writeFileSync(shimPath, `@echo off\r\n"${process.execPath}" "${fakeScript}" %*\r\n`, 'utf8');
+  } else {
+    writeFileSync(shimPath, `#!/usr/bin/env sh\n"${process.execPath}" "${fakeScript}" "$@"\n`, {
+      mode: 0o755,
+    });
+  }
+  process.env.ANTIGRAVITY_LS_ADDRESS = '127.0.0.1:59999';
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'test-csrf-p1-4';
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = shimPath;
+
+  // 1. Unbound project (no registered coordinator): MUST reject even when caller supplies a regular conversationId or coordinatorId
+  await assert.rejects(
+    () =>
+      migrateProjectMemory({
+        workspacePath: repoUnbound,
+        conversationId: 'conv-regular-unregistered',
+        action: 'request_coordinator_split',
+      }),
+    /No registered active Coordinator/i,
+  );
+  await assert.rejects(
+    () =>
+      migrateProjectMemory({
+        workspacePath: repoUnbound,
+        coordinatorId: 'conv-regular-unregistered',
+        action: 'request_coordinator_split',
+      }),
+    /No registered active Coordinator/i,
+  );
+  assert.equal(existsSync(captureFile), false, 'must never invoke agentapi when no Coordinator is registered');
+
+  // 2. Bound project: mismatched explicit coordinatorId MUST be rejected
+  const keyBound = normalizeKey(repoBound);
+  const reg = loadRegistry();
+  reg.coordinators[keyBound] = {
+    key: keyBound,
+    conversationId: 'coord-bound-active',
+    workspacePath: repoBound,
+    repoRoot: repoBound,
+    defaultBranch: 'dev',
+    title: '[Coordinator] BoundRepo',
+  };
+  saveRegistry(reg);
+
+  await assert.rejects(
+    () =>
+      migrateProjectMemory({
+        workspacePath: repoBound,
+        coordinatorId: 'conv-some-other-chat',
+        action: 'request_coordinator_split',
+      }),
+    /does not match the active Coordinator/i,
+  );
+  assert.equal(existsSync(captureFile), false, 'must never deliver to mismatched explicit coordinatorId');
+
+  // 3. Bound project triggered from a regular host conversation (no explicit coordinatorId) routes strictly to registered active Coordinator
+  const splitOk = await migrateProjectMemory({
+    workspacePath: repoBound,
+    conversationId: 'conv-regular-host-chat',
+    action: 'request_coordinator_split',
+  });
+  assert.equal(splitOk.ok, true);
+  assert.equal(splitOk.action, 'request_coordinator_split');
+  assert.equal(splitOk.coordinatorId, 'coord-bound-active');
+  assert.equal(existsSync(captureFile), true);
+  const sentArgs = JSON.parse(readFileSync(captureFile, 'utf8')).join(' ');
+  assert.match(sentArgs, /coord-bound-active/);
+  assert.doesNotMatch(sentArgs, /conv-regular-host-chat/);
 });

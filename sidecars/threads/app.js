@@ -441,6 +441,7 @@
       memTopicSavedToast: (id) => `Saved topic ${id} & synced worktrees`,
       memTopicDeletedToast: (id) => `Deleted topic ${id} & updated index`,
       memTopicEmptyErr: 'Enter a valid lowercase kebab-case topic ID (e.g. "ls-rpc").',
+      memTopicExistsErr: (id) => `Topic "${id}" already exists. Use a different ID or edit the existing topic.`,
       memSaveErrToast: 'Failed to save memory',
       memUnsupportedErr: 'Topic knowledge base requires reloading the Sidecar service.',
       memTopicsEmpty: 'No on-demand topic files yet. Split module-specific notes into topics to keep the thin index lean.',
@@ -871,6 +872,7 @@
       memTopicSavedToast: (id) => `已保存专题 ${id} 并广播至活跃分支`,
       memTopicDeletedToast: (id) => `已删除专题 ${id} 并更新薄索引`,
       memTopicEmptyErr: '请输入合法的小写 kebab-case 专题 ID（例如 ls-rpc）',
+      memTopicExistsErr: (id) => `专题「${id}」已存在，请更换其他 ID 或直接编辑已有专题`,
       memSaveErrToast: '保存记忆失败',
       memUnsupportedErr: '当前侧边栏后台版本过旧，请重载后再管理专题知识库',
       memTopicsEmpty: '暂无按需专题文件。将各模块细节拆分至专题，可保持薄索引精炼并降低子线程上下文开销。',
@@ -1301,6 +1303,7 @@
       memTopicSavedToast: (id) => `已儲存專題 ${id} 並廣播至活躍分支`,
       memTopicDeletedToast: (id) => `已刪除專題 ${id} 並更新薄索引`,
       memTopicEmptyErr: '請輸入合法的小寫 kebab-case 專題 ID（例如 ls-rpc）',
+      memTopicExistsErr: (id) => `專題「${id}」已存在，請更換其他 ID 或直接編輯既有專題`,
       memSaveErrToast: '儲存記憶失敗',
       memUnsupportedErr: '目前側邊欄後台版本過舊，請重新載入後再管理專題知識庫',
       memTopicsEmpty: '尚無按需專題檔案。將各模組細節拆分至專題，可維持薄索引精煉並降低執行緒上下文負擔。',
@@ -8662,6 +8665,16 @@
         if (elMemTopicId && !elMemTopicId.readOnly) elMemTopicId.focus();
         return;
       }
+      const isNewTopicCreate = memoryActiveView === 'new_topic';
+      if (isNewTopicCreate) {
+        const normalizedNewId = topicId.toLowerCase();
+        const existingTopics = Array.isArray(memorySnapshot?.topics) ? memorySnapshot.topics : [];
+        if (existingTopics.some((x) => String(x?.id || '').toLowerCase() === normalizedNewId)) {
+          showMemoryError(t.memTopicExistsErr(normalizedNewId));
+          if (elMemTopicId && !elMemTopicId.readOnly) elMemTopicId.focus();
+          return;
+        }
+      }
       topicTitle = String(elMemTopicTitle?.value || '').trim();
       topicKeywords = String(elMemTopicKeywords?.value || '').trim();
       topicSummary = String(elMemTopicSummary?.value || '').trim();
@@ -8679,6 +8692,7 @@
             keywords: topicKeywords,
             summary: topicSummary,
             content,
+            createOnly: memoryActiveView === 'new_topic',
           })
         : buildScopePayload({
             mode: 'replace',

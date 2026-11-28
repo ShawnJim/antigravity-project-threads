@@ -199,7 +199,7 @@ const TOOLS = [
   {
     name: 'update_project_memory',
     description:
-      'Read, list, update, or delete two-tier isolated Shared Project Memory: a concise thin index (.agents/rules/project-memory.md, target <= 60 lines / ~2KB) plus on-demand topic knowledge files (.agents/memory/<topic>.md), automatically keeping the thin-index topic table in sync and broadcasting updates to all active Worker Thread worktrees. Anti-bloat discipline: when existing conventions change, conflict, or memory grows beyond budget, call mode="read" first and consolidate/deduplicate using mode="replace" (or move domain details into a topic file via `topic`) rather than endlessly appending. Omitting `topic` remains 100% backward-compatible with legacy single-file usage.',
+      'Read, list, update, or delete two-tier isolated Shared Project Memory: a concise thin index (.agents/rules/project-memory.md, target <= 60 lines / ~4KB) plus on-demand topic knowledge files (.agents/memory/<topic>.md), automatically keeping the thin-index topic table in sync and broadcasting updates to all active Worker Thread worktrees. Anti-bloat discipline: when existing conventions change, conflict, or memory grows beyond budget, call mode="read" first and consolidate/deduplicate using mode="replace" (or move domain details into a topic file via `topic`) rather than endlessly appending. Omitting `topic` remains 100% backward-compatible with legacy single-file usage.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -229,6 +229,11 @@ const TOOLS = [
           type: 'string',
           description:
             'Optional lowercase kebab-case topic ID (e.g. "ls-rpc", "sidecar-ui") targeting .agents/memory/<topic>.md. Omit to read/update the thin index (.agents/rules/project-memory.md).',
+        },
+        createOnly: {
+          type: 'boolean',
+          description:
+            'When true with `topic`, reject with a conflict error if `.agents/memory/<topic>.md` already exists instead of overwriting it.',
         },
         title: {
           type: 'string',
@@ -579,6 +584,7 @@ async function handleToolCall(name, args = {}) {
           title: args.title || '',
           summary: args.summary || '',
           keywords: args.keywords,
+          createOnly: Boolean(args.createOnly),
         });
 
         const budgetNote = result?.budgetWarning ? `\n\n> Thin Index Budget Notice: ${result.budgetWarning}` : '';
