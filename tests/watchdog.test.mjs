@@ -10,6 +10,7 @@ import vm from 'node:vm';
 import {
   WATCHDOG_DEFAULTS,
   WATCHDOG_LIMITS,
+  buildBatchStallAlertMessage,
   buildStallAlertMessage,
   consumePendingWatchdogAlertsForPreInvocation,
   createWatchdogScheduler,
@@ -1252,3 +1253,564 @@ test('Issue #6: Sidecar UI capability gating renders stalled badge/actions only 
   assert.equal(locDec.summary.includes('·'), false);
 });
 
+test('Issue #6 P1-5: Atomic delivery claim prevents patrol + PreInvocation double-delivery, rolls back on send failure, and enforces token match', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-wd-p15-');
+  const repoA = join(tempRoot, 'proj-p15');
+  mkdirSync(repoA, { recursive: true });
+  const t0 = Date.parse('2026-11-28T16:00:00.000Z');
+  const nowRef = { ms: t0 };
+
+  const reg = loadRegistry();
+  const wkA = seedProject(reg, { repoPath: repoA, coordConvId: 'conv-coord-p15' });
+  reg.threads['thr-p15'] = {
+    threadId: 'thr-p15',
+    projectSeq: 1,
+    localId: '#1',
+    conversationId: 'conv-thr-p15',
+    coordinatorId: 'conv-coord-p15',
+    workspaceKey: wkA,
+    title: 'Concurrent delivery race test',
+    runState: 'RUN_STATE_RUNNING',
+    bucket: 'working',
+    archived: false,
+    createdAt: new Date(t0 - 15 * 60_000).toISOString(),
+    updatedAt: new Date(t0 - 12 * 60_000).toISOString(),
+  };
+  saveRegistry(reg);
+  makeTranscript(
+    appDataDir,
+    'conv-thr-p15',
+    [{ step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Race</USER_REQUEST>' }],
+    t0 - 12 * 60_000,
+  );
+
+  // 1. Defer alert while Coordinator is RUNNING
+  let coordState = 'RUN_STATE_RUNNING';
+  const sent = [];
+  let inFlightPreInvocationOutput = null;
+  let observedDeliveringState = null;
+
+  const baseDeps = {
+    now: () => nowRef.ms,
+    getConversation: async (cid) => ({
+      conversation: {
+        id: cid,
+        state:
+          cid === 'conv-coord-p15'
+            ? { runState: coordState }
+            : { runState: 'RUN_STATE_RUNNING', updateTime: new Date(t0 - 12 * 60_000).toISOString() },
+      },
+    }),
+    invokeAgentApiSend: async (args) => {
+      // Inspect persisted atomic claim state BEFORE delivery finishes
+      const midReg = loadRegistry();
+      const midEntry = midReg.watchdogState[wkA].threads['thr-p15'];
+      observedDeliveringState = {
+        deliveryState: midEntry.deliveryState,
+        hasToken: Boolean(midEntry.deliveryClaimToken),
+      };
+      // Simulate PreInvocation firing immediately as agentapi wakes Coordinator
+      inFlightPreInvocationOutput = consumePendingWatchdogAlertsForPreInvocation(
+        midReg.coordinators[wkA],
+        { nowMs: nowRef.ms },
+      );
+      sent.push(args);
+      return { queued: true };
+    },
+  };
+
+  const rDefer = await patrolProjectScope(wkA, { deps: baseDeps });
+  assert.equal(rDefer.deferredCount, 1);
+  assert.equal(rDefer.results[0].reason, 'coordinator_running');
+  assert.equal(sent.length, 0);
+
+  // 2. Coordinator turns IDLE -> patrol atomically claims `delivering` + token, so in-flight PreInvocation skips!
+  coordState = 'RUN_STATE_IDLE';
+  nowRef.ms = t0 + 30_000;
+  const rDeliver = await patrolProjectScope(wkA, { deps: baseDeps });
+  assert.equal(rDeliver.alertedCount, 1);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(observedDeliveringState, { deliveryState: 'delivering', hasToken: true });
+  assert.equal(
+    inFlightPreInvocationOutput,
+    '',
+    'PreInvocation MUST skip entries atomically claimed in delivering state',
+  );
+
+  const afterEntry = loadRegistry().watchdogState[wkA].threads['thr-p15'];
+  assert.equal(afterEntry.alertCount, 1, 'alertCount must increment ONCE (not double-counted)');
+  assert.equal(afterEntry.deliveryState, '');
+  assert.equal(afterEntry.deliveryClaimToken, '');
+  assert.equal(afterEntry.pendingDelivery, false);
+  // Cooldown must be 10m (alert #1), NOT 30m (alert #2)
+  const cooldownDeltaMs = Date.parse(afterEntry.nextAlertEligibleAt) - nowRef.ms;
+  assert.equal(cooldownDeltaMs, WATCHDOG_DEFAULTS.cooldownMin * 60_000);
+
+  // 3. Reverse race: PreInvocation wins right before patrol's atomic claim -> patrol skips with ZERO send!
+  nowRef.ms = t0 + 12 * 60_000; // past 10m cooldown -> eligible for alert #2
+  coordState = 'RUN_STATE_RUNNING';
+  await patrolProjectScope(wkA, { deps: baseDeps });
+  assert.equal(loadRegistry().watchdogState[wkA].threads['thr-p15'].pendingDelivery, true);
+
+  coordState = 'RUN_STATE_IDLE';
+  nowRef.ms = t0 + 12 * 60_000 + 5_000;
+  let preWonText = '';
+  let secondPreText = '';
+  const rPreWins = await patrolProjectScope(wkA, {
+    deps: {
+      ...baseDeps,
+      getConversation: async (cid) => {
+        if (cid === 'conv-coord-p15') {
+          // Simulate PreInvocation racing right as patrol probes Coordinator IDLE
+          const coordObj = loadRegistry().coordinators[wkA];
+          preWonText = consumePendingWatchdogAlertsForPreInvocation(coordObj, { nowMs: nowRef.ms });
+          secondPreText = consumePendingWatchdogAlertsForPreInvocation(coordObj, { nowMs: nowRef.ms });
+        }
+        return baseDeps.getConversation(cid);
+      },
+    },
+  });
+  assert.match(preWonText, /\[THREAD_STALL_ALERT\]/);
+  assert.equal(secondPreText, '', 'Second PreInvocation call must return empty string');
+  assert.equal(rPreWins.alertedCount, 0, 'Patrol must NOT double-send after PreInvocation claimed');
+  assert.equal(sent.length, 1, 'Total agentapi sends must remain 1');
+  assert.equal(loadRegistry().watchdogState[wkA].threads['thr-p15'].alertCount, 2);
+
+  // 4. Delivery failure rolls back atomic `delivering` claim cleanly back to `pending` so retry/PreInvocation works
+  nowRef.ms = t0 + 45 * 60_000; // past 30m escalated cooldown -> eligible for alert #3
+  const rFail = await patrolProjectScope(wkA, {
+    deps: {
+      ...baseDeps,
+      invokeAgentApiSend: async () => {
+        throw new Error('agentapi timeout');
+      },
+    },
+  });
+  assert.equal(rFail.alertedCount, 0);
+  assert.equal(rFail.deferredCount, 1);
+  assert.equal(rFail.results[0].reason, 'delivery_failed');
+
+  const failedEntry = loadRegistry().watchdogState[wkA].threads['thr-p15'];
+  assert.equal(failedEntry.deliveryState, 'pending');
+  assert.equal(failedEntry.deliveryClaimToken, '');
+  assert.equal(failedEntry.pendingDelivery, true);
+  assert.equal(failedEntry.pendingDeliveryReason, 'delivery_failed');
+  assert.equal(failedEntry.alertCount, 2, 'Failed send must not increment alertCount');
+
+  // After failure rollback, PreInvocation can safely claim and deliver alert #3
+  const recoveredViaPre = consumePendingWatchdogAlertsForPreInvocation(
+    loadRegistry().coordinators[wkA],
+    { nowMs: nowRef.ms + 1000 },
+  );
+  assert.match(recoveredViaPre, /\[THREAD_STALL_ALERT\]/);
+  assert.equal(loadRegistry().watchdogState[wkA].threads['thr-p15'].alertCount, 3);
+
+  // 5. Token mismatch guard: concurrent snooze during in-flight send prevents post-send commit from overwriting snooze
+  nowRef.ms = t0 + 110 * 60_000; // past 60m cooldown -> eligible for alert #4
+  const rTokenLost = await patrolProjectScope(wkA, {
+    deps: {
+      ...baseDeps,
+      invokeAgentApiSend: async () => {
+        // User snoozes the thread while send is in flight (clears deliveryClaimToken)
+        await snoozeWatchdogThread({
+          threadId: 'thr-p15',
+          minutes: 30,
+          workspaceKey: wkA,
+          coordinatorId: 'conv-coord-p15',
+          deps: { now: () => nowRef.ms + 500 },
+        });
+        return { queued: true };
+      },
+    },
+  });
+  assert.equal(rTokenLost.alertedCount, 0);
+  assert.equal(rTokenLost.results[0].reason, 'claim_superseded');
+  const snoozedAfter = loadRegistry().watchdogState[wkA].threads['thr-p15'];
+  assert.equal(snoozedAfter.state, 'snoozed', 'Token mismatch must never overwrite newer snooze state');
+  assert.equal(snoozedAfter.alertCount, 3, 'Token mismatch must not increment alertCount');
+});
+
+test('Issue #6 P1-6: Multi-thread patrol batches alerts into a single Coordinator send and fails closed when Coordinator probe fails', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-wd-p16-');
+  const repoA = join(tempRoot, 'proj-p16');
+  mkdirSync(repoA, { recursive: true });
+  const t0 = Date.parse('2026-11-28T17:00:00.000Z');
+  const nowRef = { ms: t0 };
+
+  const reg = loadRegistry();
+  const wkA = seedProject(reg, { repoPath: repoA, coordConvId: 'conv-coord-p16' });
+  for (const [idx, tid] of ['thr-m1', 'thr-m2'].entries()) {
+    reg.threads[tid] = {
+      threadId: tid,
+      projectSeq: idx + 1,
+      localId: `#${idx + 1}`,
+      conversationId: `conv-${tid}`,
+      coordinatorId: 'conv-coord-p16',
+      workspaceKey: wkA,
+      title: `Stalled worker ${idx + 1}`,
+      runState: 'RUN_STATE_RUNNING',
+      bucket: 'working',
+      archived: false,
+      createdAt: new Date(t0 - 20 * 60_000).toISOString(),
+      updatedAt: new Date(t0 - 15 * 60_000).toISOString(),
+    };
+    makeTranscript(
+      appDataDir,
+      `conv-${tid}`,
+      [{ step_index: 0, type: 'USER_INPUT', content: `<USER_REQUEST>Task ${idx + 1}</USER_REQUEST>` }],
+      t0 - 15 * 60_000,
+    );
+  }
+  saveRegistry(reg);
+
+  // 1. Coordinator LS probe throws -> MUST fail-closed (defer with coordinator_state_unknown, ZERO sends)
+  const sent = [];
+  let coordProbeMode = 'throw';
+  const makeDeps = () => ({
+    now: () => nowRef.ms,
+    getConversation: async (cid) => {
+      if (cid === 'conv-coord-p16') {
+        if (coordProbeMode === 'throw') throw new Error('LS unreachable');
+        if (coordProbeMode === 'empty') return { conversation: { id: cid, state: {} } };
+        return { conversation: { id: cid, state: { runState: coordProbeMode } } };
+      }
+      return {
+        conversation: {
+          id: cid,
+          state: { runState: 'RUN_STATE_RUNNING', updateTime: new Date(t0 - 15 * 60_000).toISOString() },
+        },
+      };
+    },
+    invokeAgentApiSend: async (args) => {
+      // Coordinator immediately transitions to RUNNING as soon as alert #1 wakes it!
+      assert.equal(coordProbeMode, 'RUN_STATE_IDLE', 'Must NEVER send when Coordinator is already RUNNING');
+      coordProbeMode = 'RUN_STATE_RUNNING';
+      sent.push(args);
+      return { queued: true };
+    },
+  });
+
+  const rErr = await patrolProjectScope(wkA, { deps: makeDeps() });
+  assert.equal(rErr.stalledCount, 2);
+  assert.equal(rErr.alertedCount, 0);
+  assert.equal(rErr.deferredCount, 2);
+  assert.equal(sent.length, 0, 'Probe error must fail-closed with zero sends');
+  assert.ok(rErr.results.every((r) => r.reason === 'coordinator_state_unknown'));
+
+  // 2. Coordinator LS probe returns empty runState -> STILL fail-closed!
+  coordProbeMode = 'empty';
+  nowRef.ms = t0 + 10_000;
+  const rEmpty = await patrolProjectScope(wkA, { deps: makeDeps() });
+  assert.equal(rEmpty.alertedCount, 0);
+  assert.equal(rEmpty.deferredCount, 2);
+  assert.equal(sent.length, 0, 'Unknown/empty Coordinator runState must fail-closed');
+  assert.ok(rEmpty.results.every((r) => r.reason === 'coordinator_state_unknown'));
+
+  // 3. Coordinator turns IDLE -> BOTH stalled threads batched into ONE single invokeAgentApiSend!
+  coordProbeMode = 'RUN_STATE_IDLE';
+  nowRef.ms = t0 + 30_000;
+  const rBatch = await patrolProjectScope(wkA, { deps: makeDeps() });
+  assert.equal(rBatch.stalledCount, 2);
+  assert.equal(rBatch.alertedCount, 2);
+  assert.equal(rBatch.deferredCount, 0);
+  assert.equal(sent.length, 1, 'Multi-thread patrol cycle must send at most ONE batched alert to Coordinator');
+  assert.match(sent[0].message, /\[THREAD_STALL_ALERT\]/);
+  assert.match(sent[0].message, /thr-m1/);
+  assert.match(sent[0].message, /thr-m2/);
+  assert.ok(rBatch.results.every((r) => r.delivered === true && r.batched === true));
+  assert.equal(loadRegistry().watchdogState[wkA].threads['thr-m1'].alertCount, 1);
+  assert.equal(loadRegistry().watchdogState[wkA].threads['thr-m2'].alertCount, 1);
+
+  // 4. Batch formatter produces zero middle dots across all 3 locales
+  for (const loc of ['en', 'zh-CN', 'zh-TW']) {
+    const batchMsg = buildBatchStallAlertMessage(
+      [
+        { threadId: 'thr-m1', title: 'One', stallReason: 'no_progress_running', stalledDurationMs: 600_000 },
+        { threadId: 'thr-m2', title: 'Two', stallReason: 'state_mismatch_idle_working', stalledDurationMs: 180_000 },
+      ],
+      loc,
+    );
+    assert.match(batchMsg, /\[THREAD_STALL_ALERT\]/);
+    assert.match(batchMsg, /thr-m1/);
+    assert.match(batchMsg, /thr-m2/);
+    assert.equal(batchMsg.includes('·'), false, `buildBatchStallAlertMessage(${loc}) must not contain middle dot`);
+  }
+});
+
+test('Issue #6 P1-7: Model reset (explicit section="models" or legacy empty section) never wipes global or project watchdog config', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-wd-p17-');
+  const repoA = join(tempRoot, 'proj-p17');
+  mkdirSync(repoA, { recursive: true });
+  const wkA = normalizeKey(repoA);
+
+  // Seed custom global + project settings for BOTH models and watchdog
+  saveSettings({
+    scope: 'global',
+    worktreeModel: 'gemini-4-neon-xhigh',
+    readOnlyModel: 'gemini-4-neon-low',
+    reviewModel: 'claude-opus-4-6-thinking',
+  });
+  saveSettings({
+    scope: 'global',
+    section: 'watchdog',
+    watchdog: { enabled: false, patrolIntervalSec: 45, stallThresholdMin: 18 },
+  });
+  saveSettings({
+    scope: 'project',
+    workspaceKey: wkA,
+    worktreeModel: 'gemini-4-neon-low',
+    reviewModel: 'claude-opus-4-6',
+  });
+  saveSettings({
+    scope: 'project',
+    section: 'watchdog',
+    workspaceKey: wkA,
+    watchdog: { enabled: true, stallThresholdMin: 14, cooldownMin: 7 },
+  });
+
+  // 1. Legacy global reset (omitting `section`) resets ONLY model defaults -> preserves global watchdog!
+  saveSettings({ scope: 'global', reset: true });
+  let cur = loadSettings();
+  assert.deepEqual(cur.defaults, {
+    worktreeModel: 'inherit',
+    readOnlyModel: 'inherit',
+    reviewModel: 'inherit',
+  });
+  assert.equal(cur.watchdog.enabled, false, 'Empty-section global reset must preserve global watchdog.enabled');
+  assert.equal(cur.watchdog.patrolIntervalSec, 45);
+  assert.equal(cur.watchdog.stallThresholdMin, 18);
+
+  // 2. Explicit `section: 'models'` global reset via fast endpoint also preserves global watchdog
+  saveSettings({ scope: 'global', worktreeModel: 'gemini-4-neon-xhigh' });
+  const fastGlobalRes = await saveSettingsWithFastResponse({
+    scope: 'global',
+    section: 'models',
+    reset: true,
+  });
+  assert.equal(fastGlobalRes.ok, true);
+  assert.equal(fastGlobalRes.settings.defaults.worktreeModel, 'inherit');
+  assert.equal(fastGlobalRes.settings.watchdog.patrolIntervalSec, 45);
+
+  // 3. Legacy project reset (omitting `section`) clears ONLY project model overrides -> preserves project watchdog!
+  saveSettings({ scope: 'project', workspaceKey: wkA, reset: true });
+  cur = loadSettings();
+  assert.equal(cur.projects[wkA].worktreeModel, '');
+  assert.equal(cur.projects[wkA].reviewModel, '');
+  assert.equal(cur.projects[wkA].watchdog.enabled, true, 'Empty-section project reset must preserve project watchdog');
+  assert.equal(cur.projects[wkA].watchdog.stallThresholdMin, 14);
+  assert.equal(cur.projects[wkA].watchdog.cooldownMin, 7);
+
+  // 4. Watchdog-only reset clears ONLY watchdog while preserving newly saved project model overrides
+  saveSettings({ scope: 'project', workspaceKey: wkA, worktreeModel: 'gemini-4-neon-xhigh' });
+  const fastWdReset = await saveSettingsWithFastResponse({
+    scope: 'project',
+    section: 'watchdog',
+    workspaceKey: wkA,
+    reset: true,
+  });
+  assert.equal(fastWdReset.ok, true);
+  assert.equal(fastWdReset.settings.projects[wkA].worktreeModel, 'gemini-4-neon-xhigh');
+  assert.equal(fastWdReset.settings.projects[wkA].watchdog, undefined);
+
+  // 5. Unscoped legacy reset preserves global watchdog & project watchdog overrides unless section === 'all'
+  saveSettings({
+    scope: 'project',
+    section: 'watchdog',
+    workspaceKey: wkA,
+    watchdog: { stallThresholdMin: 22 },
+  });
+  saveSettings({ reset: true });
+  cur = loadSettings();
+  assert.equal(cur.watchdog.patrolIntervalSec, 45, 'Unscoped legacy reset must preserve global watchdog');
+  assert.equal(cur.projects[wkA].worktreeModel, '');
+  assert.equal(cur.projects[wkA].watchdog.stallThresholdMin, 22);
+
+  // 6. Frontend submitSettingsSave explicitly passes section: 'models' on both save and reset
+  const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
+  const saveStart = appJs.indexOf('async function submitSettingsSave(');
+  const saveEnd = appJs.indexOf('async function loadSelectableModels(', saveStart);
+  assert.notEqual(saveStart, -1);
+  assert.notEqual(saveEnd, -1);
+
+  const posted = [];
+  const ctx = {
+    L: () => ({
+      settingsSaving: 'Saving',
+      settingsSave: 'Save',
+      settingsSavedToast: 'Saved',
+      settingsResetToast: 'Reset',
+      settingsClearedProjectToast: 'Cleared',
+      settingsSaveErr: 'Err',
+    }),
+    syncHostConversationScope: async () => false,
+    buildScopePayload: (extra = {}) => ({ workspace: '/repo', ...extra }),
+    readSettingsSlotValue: () => 'inherit',
+    postApi: async (url, getUrl, payload) => {
+      posted.push({ url, payload });
+      return { ok: true, settings: {}, effective: {}, scopeKey: '/repo' };
+    },
+    populateDispatchModelSelect: () => {},
+    renderSettingsScreen: () => {},
+    loadSettingsData: () => {},
+    flashToast: () => {},
+    syncSettingsActionState: () => {},
+  };
+  vm.runInNewContext(
+    `
+    let settingsSaving = false;
+    let settingsScope = 'global';
+    let loadedSettingsData = { scopeKey: '/repo' };
+    let activeScopeKey = '/repo';
+    let settingsDirtyByUser = true;
+    const API_WRITE_TIMEOUT_MS = 10000;
+    const elSettingsErr = { hidden: true, textContent: '' };
+    const elBtnSettingsSave = { disabled: false, textContent: 'Save' };
+    const elBtnSettingsReset = { disabled: false };
+    ${appJs.slice(saveStart, saveEnd)}
+    this.submitSettingsSave = submitSettingsSave;
+    `,
+    ctx,
+  );
+  await ctx.submitSettingsSave(true);
+  await ctx.submitSettingsSave(false);
+  assert.equal(posted.length, 2);
+  assert.equal(posted[0].payload.reset, true);
+  assert.equal(posted[0].payload.section, 'models', 'Model Reset must explicitly send section: "models"');
+  assert.equal(posted[1].payload.reset, false);
+  assert.equal(posted[1].payload.section, 'models', 'Model Save must explicitly send section: "models"');
+});
+
+test('Issue #6 P1-8: Threads waiting on user action (ask_question / confirmation prompt / bucket="waiting") never false-positive as stalled', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-wd-p18-');
+  const repoA = join(tempRoot, 'proj-p18');
+  mkdirSync(repoA, { recursive: true });
+  const t0 = Date.parse('2026-11-28T18:00:00.000Z');
+  const nowRef = { ms: t0 };
+
+  const reg = loadRegistry();
+  const wkA = seedProject(reg, { repoPath: repoA, coordConvId: 'conv-coord-p18' });
+
+  // Thread 1: Called `ask_question` and remains RUN_STATE_RUNNING for 15m (> 10m stallThresholdMin)
+  reg.threads['thr-ask-run'] = {
+    threadId: 'thr-ask-run',
+    conversationId: 'conv-thr-ask-run',
+    coordinatorId: 'conv-coord-p18',
+    workspaceKey: wkA,
+    title: 'Waiting on ask_question choice',
+    runState: 'RUN_STATE_RUNNING',
+    bucket: 'working',
+    archived: false,
+    createdAt: new Date(t0 - 20 * 60_000).toISOString(),
+    updatedAt: new Date(t0 - 15 * 60_000).toISOString(),
+  };
+  makeTranscript(
+    appDataDir,
+    'conv-thr-ask-run',
+    [
+      { step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Deploy option</USER_REQUEST>' },
+      {
+        step_index: 1,
+        type: 'PLANNER_RESPONSE',
+        tool_calls: [{ name: 'ask_question', args: { questions: [{ question: 'Which env?', options: ['Staging', 'Prod'] }] } }],
+      },
+    ],
+    t0 - 15 * 60_000,
+  );
+
+  // Thread 2: Asked confirmation question in plain text and went RUN_STATE_IDLE without final summary (> 2m grace)
+  reg.threads['thr-ask-idle'] = {
+    threadId: 'thr-ask-idle',
+    conversationId: 'conv-thr-ask-idle',
+    coordinatorId: 'conv-coord-p18',
+    workspaceKey: wkA,
+    title: 'Waiting on user confirmation in IDLE',
+    runState: 'RUN_STATE_IDLE',
+    bucket: 'idle',
+    archived: false,
+    lastSummary: '',
+    createdAt: new Date(t0 - 12 * 60_000).toISOString(),
+    updatedAt: new Date(t0 - 5 * 60_000).toISOString(),
+  };
+  makeTranscript(
+    appDataDir,
+    'conv-thr-ask-idle',
+    [
+      { step_index: 0, type: 'USER_INPUT', content: '<USER_REQUEST>Check schema</USER_REQUEST>' },
+      { step_index: 1, type: 'PLANNER_RESPONSE', content: '请确认是否需要一并迁移历史表？' },
+    ],
+    t0 - 5 * 60_000,
+  );
+
+  // Seed prior `watching` state on thr-ask-idle to verify silent_exit_no_summary does NOT fire
+  reg.watchdogState[wkA] = {
+    scopeKey: wkA,
+    coordinatorId: 'conv-coord-p18',
+    updatedAt: new Date(t0 - 5 * 60_000).toISOString(),
+    threads: {
+      'thr-ask-idle': {
+        state: 'watching',
+        stalled: false,
+        lastProgressAt: new Date(t0 - 5 * 60_000).toISOString(),
+        mismatchSinceAt: new Date(t0 - 4 * 60_000).toISOString(),
+        updatedAt: new Date(t0 - 5 * 60_000).toISOString(),
+      },
+    },
+  };
+  saveRegistry(reg);
+
+  const sent = [];
+  const res = await patrolProjectScope(wkA, {
+    deps: {
+      now: () => nowRef.ms,
+      getConversation: async (cid) => ({
+        conversation: {
+          id: cid,
+          state:
+            cid === 'conv-thr-ask-run'
+              ? { runState: 'RUN_STATE_RUNNING', updateTime: new Date(t0 - 15 * 60_000).toISOString() }
+              : { runState: 'RUN_STATE_IDLE', updateTime: new Date(t0 - 5 * 60_000).toISOString() },
+        },
+      }),
+      invokeAgentApiSend: async (args) => {
+        sent.push(args);
+        return { queued: true };
+      },
+    },
+  });
+  assert.equal(res.stalledCount, 0, 'Threads awaiting user input/confirmation must never be flagged as stalled');
+  assert.equal(res.alertedCount, 0);
+  assert.equal(sent.length, 0);
+
+  // 3. Direct state machine check: bucket === 'waiting' never stalls and clears any prior stalled state
+  const waitEval = evaluateThreadWatchdogState({
+    thread: {
+      threadId: 'thr-wait-bucket',
+      runState: 'RUN_STATE_RUNNING',
+      bucket: 'waiting',
+      archived: false,
+      createdAt: new Date(t0 - 30 * 60_000).toISOString(),
+      updatedAt: new Date(t0 - 20 * 60_000).toISOString(),
+    },
+    signals: {
+      runState: 'RUN_STATE_RUNNING',
+      bucket: 'waiting',
+      needsUserAction: false,
+      toolStepCount: 1,
+      transcriptStat: { exists: true, size: 120, mtimeMs: t0 - 20 * 60_000 },
+    },
+    prevEntry: {
+      state: 'stalled',
+      stalled: true,
+      stallReason: 'no_progress_running',
+      stallFingerprint: 'no_progress_running|s:1|b:120|rs:RUN_STATE_RUNNING|bg:0',
+      updatedAt: new Date(t0 - 5 * 60_000).toISOString(),
+    },
+    config: WATCHDOG_DEFAULTS,
+    nowMs: t0,
+  });
+  assert.equal(waitEval.stalled, false);
+  assert.equal(waitEval.shouldAlert, false);
+  assert.equal(waitEval.recovered, true);
+  assert.equal(waitEval.skipReason, 'waiting_user_action');
+  assert.equal(waitEval.entry.state, 'cleared');
+});

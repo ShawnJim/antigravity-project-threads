@@ -6370,6 +6370,7 @@
       const prevScopeKey = loadedSettingsData?.scopeKey || '';
       const payload = buildScopePayload({
         scope: activeScope,
+        section: 'models',
         ...(scopeKey ? { workspaceKey: scopeKey } : {}),
         reset,
       });
