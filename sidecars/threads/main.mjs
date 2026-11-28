@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Response, SidecarApp } from 'sidecar_sdk';
@@ -29,7 +29,8 @@ import {
   updateProjectMemory,
 } from '../../lib/store.mjs';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
+const THIS_FILE = fileURLToPath(import.meta.url);
+const HERE = dirname(THIS_FILE);
 const PLUGIN_ROOT = join(HERE, '..', '..');
 const SERVER_API_REVISION = 2;
 const SERVER_CAPABILITIES = [
@@ -53,34 +54,46 @@ function readPluginManifestVersion() {
   }
 }
 
-function readStartupGitSha() {
+function readMainFileStamp() {
   try {
-    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
-      cwd: PLUGIN_ROOT,
-      encoding: 'utf8',
-      timeout: 2000,
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    const st = statSync(THIS_FILE);
+    return `${Math.round(st.mtimeMs)}:${st.size}`;
   } catch {
     return '';
   }
 }
 
 const STARTED_VERSION = readPluginManifestVersion();
-const STARTED_GIT_SHA = readStartupGitSha();
+const STARTED_MAIN_STAMP = readMainFileStamp();
 const STARTED_AT = new Date().toISOString();
+let startedGitSha = '';
+
+execFile(
+  'git',
+  ['rev-parse', '--short', 'HEAD'],
+  { cwd: PLUGIN_ROOT, encoding: 'utf8', timeout: 2000, windowsHide: true },
+  (err, stdout) => {
+    if (!err && stdout) {
+      startedGitSha = String(stdout).trim();
+    }
+  },
+);
 
 function buildServerInfo() {
   const diskVersion = readPluginManifestVersion();
+  const currentMainStamp = readMainFileStamp();
+  const versionChanged = Boolean(STARTED_VERSION && diskVersion && diskVersion !== STARTED_VERSION);
+  const mainFileChanged = Boolean(
+    STARTED_MAIN_STAMP && currentMainStamp && currentMainStamp !== STARTED_MAIN_STAMP,
+  );
   return {
     startedVersion: STARTED_VERSION,
     diskVersion: diskVersion || STARTED_VERSION,
-    startedGitSha: STARTED_GIT_SHA,
+    startedGitSha,
     startedAt: STARTED_AT,
     apiRevision: SERVER_API_REVISION,
     capabilities: SERVER_CAPABILITIES,
-    versionDrifted: Boolean(STARTED_VERSION && diskVersion && diskVersion !== STARTED_VERSION),
+    versionDrifted: versionChanged || mainFileChanged,
   };
 }
 

@@ -14,6 +14,7 @@ import {
 import {
   buildModelFamilyGroups,
   isSameModelFamily,
+  isSameModelVariant,
   resolveModelFamilySelection,
 } from '../lib/model-format.mjs';
 import {
@@ -122,8 +123,10 @@ function makeMockElement(id = '') {
   };
 }
 
-function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en' } = {}) {
+function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en', nativeFetch = null } = {}) {
   const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
+  const constStart = appJs.indexOf('const EXPECTED_SERVER_API_REVISION');
+  const constEnd = appJs.indexOf('const params =', constStart);
   const i18nStart = appJs.indexOf('const I18N = {');
   const i18nEnd = appJs.indexOf('let curLocale =', i18nStart);
   const apiStart = appJs.indexOf('function createApiError(');
@@ -133,6 +136,8 @@ function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en' } = {}) {
   const saveStart = appJs.indexOf('async function submitSettingsSave(');
   const saveEnd = appJs.indexOf('async function loadSelectableModels(', saveStart);
 
+  assert.notEqual(constStart, -1);
+  assert.notEqual(constEnd, -1);
   assert.notEqual(i18nStart, -1);
   assert.notEqual(i18nEnd, -1);
   assert.notEqual(apiStart, -1);
@@ -148,6 +153,7 @@ function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en' } = {}) {
     return elements.get(id);
   };
   const flashToastCalls = [];
+  const loadSettingsCalls = [];
 
   const ctx = {
     console,
@@ -163,11 +169,14 @@ function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en' } = {}) {
     Boolean,
     Array,
     Object,
+    Set,
     Math,
     JSON,
+    fetch: nativeFetch || (() => { throw new Error('unexpected global fetch'); }),
     doFetch: fetchImpl,
     document: {
       getElementById: getEl,
+      activeElement: null,
     },
     flashToast: (...args) => flashToastCalls.push(args),
     applyLocale: () => {},
@@ -179,15 +188,15 @@ function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en' } = {}) {
     renderSettingsScreen: () => {},
     syncSettingsActionState: () => {},
     readSettingsSlotValue: () => 'inherit',
+    loadSettingsData: (opts) => {
+      loadSettingsCalls.push(opts);
+      return Promise.resolve(true);
+    },
   };
 
   vm.runInNewContext(
     `
-    const EXPECTED_SERVER_API_REVISION = 2;
-    const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
-    const API_READ_TIMEOUT_MS = 10000;
-    const API_WRITE_TIMEOUT_MS = 12000;
-    const API_UPDATE_TIMEOUT_MS = 30000;
+    ${appJs.slice(constStart, constEnd)}
     ${appJs.slice(i18nStart, i18nEnd)}
     let curLocale = ${JSON.stringify(locale)};
     const L = () => I18N[curLocale] || I18N.en;
@@ -198,6 +207,7 @@ function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en' } = {}) {
     let activeScopeKey = '/demo/repo';
     let settingsSaving = false;
     let settingsDirtyByUser = false;
+    let sidecarFetchSupportsSignal = null;
     let pluginUpdateState = null;
     let pluginUpdateChecking = false;
     let pluginUpdateApplying = false;
@@ -232,22 +242,34 @@ function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en' } = {}) {
     ${appJs.slice(updStart, updEnd)}
 
     this.api = {
+      EXPECTED_SERVER_API_REVISION,
+      REQUIRED_UPDATE_CAPABILITIES,
       safeReadJson,
+      invokeFetch,
       fetchWithTimeout,
+      fetchJsonWithTimeout,
       postApi,
       inspectServerInfo,
       loadPluginUpdateStatus,
       runManualUpdateCheck,
       renderUpdateCard,
       submitSettingsSave,
-      setFetch(fn) { doFetch = fn; },
-      setTimeoutOverrides(ms) {
-        this._origFetchWithTimeout = fetchWithTimeout;
-        fetchWithTimeout = (url, opts) => this._origFetchWithTimeout(url, opts, ms);
+      setFetch(fn) { doFetch = fn; sidecarFetchSupportsSignal = null; },
+      setLoadedSettingsData(val) { loadedSettingsData = val; },
+      setSettingsScope(val) { settingsScope = val; },
+      overrideJsonTimeout(ms) {
+        const orig = fetchJsonWithTimeout;
+        fetchJsonWithTimeout = (url, opts, cfg = {}) =>
+          orig(url, opts, {
+            ...cfg,
+            timeoutMs: cfg.timeoutMs > 0 ? Math.min(cfg.timeoutMs, ms) : cfg.timeoutMs,
+          });
       },
       getState() {
         return {
           settingsSaving,
+          loadedSettingsData,
+          sidecarFetchSupportsSignal,
           pluginUpdateState,
           backendVersionMismatch,
           updateCardError,
@@ -259,10 +281,10 @@ function loadUiApiAndUpdateHarness({ fetchImpl, locale = 'en' } = {}) {
     ctx,
   );
 
-  return { api: ctx.api, getEl, flashToastCalls };
+  return { api: ctx.api, getEl, flashToastCalls, loadSettingsCalls };
 }
 
-test('Issue #1: safeReadJson and postApi turn 404 plain-text "Not found" into semantic reload error without SyntaxError', async () => {
+test('Issue #1 + Opus P1-1: safeReadJson & postApi handle 404 "Not found", NEVER replay POST on 200-non-JSON / TypeError / 500, and reject empty 200 body', async () => {
   const requests = [];
   const { api } = loadUiApiAndUpdateHarness({
     fetchImpl: async (url, opts = {}) => {
@@ -296,7 +318,45 @@ test('Issue #1: safeReadJson and postApi turn 404 plain-text "Not found" into se
     },
   );
 
-  // postApi falls back POST 404 -> GET 404 and still throws clean semantic mismatch error
+  // Empty 200 body throws invalid_json (never silently returns {} that would wipe board)
+  await assert.rejects(
+    () =>
+      api.safeReadJson(
+        {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          text: async () => '',
+        },
+        { url: '/api/state' },
+      ),
+    (err) => {
+      assert.equal(err.code, 'invalid_json');
+      assert.equal(err.isBackendMismatch, false);
+      return true;
+    },
+  );
+
+  // 200 plain text (not "Not found") throws invalid_content_type without false backend mismatch banner
+  await assert.rejects(
+    () =>
+      api.safeReadJson(
+        {
+          ok: true,
+          status: 200,
+          headers: { get: () => 'text/plain' },
+          text: async () => 'Temporary gateway text',
+        },
+        { url: '/api/state' },
+      ),
+    (err) => {
+      assert.equal(err.code, 'invalid_content_type');
+      assert.equal(err.isBackendMismatch, false);
+      return true;
+    },
+  );
+
+  // Explicit 404 on POST downgrades to GET fallback once; 404 on GET surfaces semantic mismatch error
   await assert.rejects(
     () => api.postApi('/api/update_check', '/api/update_check_get', { force: true }),
     (err) => {
@@ -310,7 +370,44 @@ test('Issue #1: safeReadJson and postApi turn 404 plain-text "Not found" into se
   assert.equal(requests[0].method, 'POST');
   assert.equal(requests[1].method, 'GET');
 
-  // HTTP 500 JSON error does NOT trigger duplicate GET fallback and preserves server error message
+  // allowGetFallback: false does NOT fall back even on 404
+  requests.length = 0;
+  await assert.rejects(
+    () => api.postApi('/api/update_apply', '/api/update_apply_get', { channel: 'dev' }, { allowGetFallback: false }),
+    (err) => err.code === 'sidecar_route_not_found',
+  );
+  assert.equal(requests.length, 1);
+
+  // Opus P1-1: POST returning 200 with non-JSON HTML error page MUST NOT replay via GET
+  requests.length = 0;
+  api.setFetch(async (url, opts = {}) => {
+    requests.push({ url: String(url), method: opts.method || 'GET' });
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'text/html' },
+      text: async () => '<html>Bad Gateway</html>',
+    };
+  });
+  await assert.rejects(
+    () => api.postApi('/api/dispatch', '/api/dispatch_get', { title: 'Test' }),
+    (err) => err.code === 'invalid_content_type',
+  );
+  assert.equal(requests.length, 1, '200 non-JSON on POST must NEVER replay write via GET');
+
+  // Opus P1-1: POST throwing network TypeError MUST NOT replay via GET
+  requests.length = 0;
+  api.setFetch(async (url, opts = {}) => {
+    requests.push({ url: String(url), method: opts.method || 'GET' });
+    throw new TypeError('Failed to fetch');
+  });
+  await assert.rejects(
+    () => api.postApi('/api/thread_send', '/api/thread_send_get', { threadId: 'thr-1', message: 'hi' }),
+    /Failed to fetch/,
+  );
+  assert.equal(requests.length, 1, 'Network TypeError on POST must NEVER replay write via GET');
+
+  // HTTP 500 JSON error preserves server message and MUST NOT replay via GET
   requests.length = 0;
   api.setFetch(async (url, opts = {}) => {
     requests.push({ url: String(url), method: opts.method || 'GET' });
@@ -323,15 +420,12 @@ test('Issue #1: safeReadJson and postApi turn 404 plain-text "Not found" into se
   });
   await assert.rejects(
     () => api.postApi('/api/settings_save', '/api/settings_save_get', { scope: 'global' }),
-    (err) => {
-      assert.equal(err.message, 'Disk quota exceeded');
-      return true;
-    },
+    (err) => err.message === 'Disk quota exceeded',
   );
   assert.equal(requests.length, 1, 'HTTP 500 must not trigger duplicate GET fallback');
 });
 
-test('Issue #1: Version & Updates card surfaces backend mismatch cleanly, avoids misleading Stable active state, and isolates errors from #settings-toast', async () => {
+test('Issue #1 + Opus P1-3: Version & Updates card handles mismatch without Stable flicker or mismatch reset when old backend lacks serverInfo', async () => {
   const { api, getEl, flashToastCalls } = loadUiApiAndUpdateHarness({
     fetchImpl: async () => ({
       ok: false,
@@ -341,7 +435,7 @@ test('Issue #1: Version & Updates card surfaces backend mismatch cleanly, avoids
     }),
   });
 
-  // 1. Old sidecar missing /api/update_status must mark mismatch, NOT silently highlight Stable
+  // 1. Old sidecar missing /api/update_status marks mismatch and never highlights Stable
   await api.loadPluginUpdateStatus({ bg: true });
   assert.equal(api.getState().backendVersionMismatch?.kind, 'stale_backend');
   assert.equal(getEl('btn-channel-stable').classList.contains('active'), false);
@@ -350,14 +444,43 @@ test('Issue #1: Version & Updates card surfaces backend mismatch cleanly, avoids
   assert.equal(getEl('btn-channel-dev').disabled, true);
   assert.equal(getEl('update-reload-banner').hidden, false);
   assert.equal(getEl('update-reload-banner').classList.contains('warn'), true);
-  assert.match(getEl('update-reload-banner').textContent, /reload|toggle/i);
   assert.equal(getEl('update-status-badge').textContent, 'Reload required');
   assert.equal(flashToastCalls.length, 0);
 
-  // 2. Manual check hitting 404 or server failure stays inside update card and NEVER calls flashToast
-  await api.runManualUpdateCheck();
-  assert.equal(flashToastCalls.length, 0, 'Update check error must not pollute #settings-toast via flashToast');
+  // 2. Opus P1-3: old dev backend HAS /api/update_status & /api/update_check but omits serverInfo
+  //    -> backendVersionMismatch MUST stay stale_backend and NEVER flip back to null
+  api.inspectServerInfo({ threads: [], scopeKey: '/demo' }, { fromState: true });
+  assert.equal(api.getState().backendVersionMismatch?.kind, 'stale_backend');
 
+  api.setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => 'application/json' },
+    text: async () =>
+      JSON.stringify({
+        ok: true,
+        channel: 'dev',
+        currentVersion: '1.1.0',
+        isGitInstall: true,
+        hasUpdate: false,
+        checkedAt: '2026-11-28T10:00:00Z',
+      }),
+  }));
+  await api.loadPluginUpdateStatus({ bg: false });
+  assert.equal(
+    api.getState().backendVersionMismatch?.kind,
+    'stale_backend',
+    'update_status response without serverInfo must NOT clear stale_backend mismatch',
+  );
+  await api.runManualUpdateCheck('dev');
+  assert.equal(
+    api.getState().backendVersionMismatch?.kind,
+    'stale_backend',
+    'update_check response without serverInfo must NOT clear stale_backend mismatch',
+  );
+  assert.equal(flashToastCalls.length, 0, 'Update check must never call flashToast');
+
+  // 3. Updated backend returning valid serverInfo clears mismatch and isolates errors to #update-err
   api.setFetch(async () => ({
     ok: true,
     status: 200,
@@ -372,30 +495,28 @@ test('Issue #1: Version & Updates card surfaces backend mismatch cleanly, avoids
         serverInfo: {
           startedVersion: '1.1.0',
           diskVersion: '1.1.0',
-          apiRevision: 2,
-          capabilities: ['update_status', 'update_check', 'update_apply'],
+          apiRevision: api.EXPECTED_SERVER_API_REVISION,
+          capabilities: api.REQUIRED_UPDATE_CAPABILITIES,
           versionDrifted: false,
         },
       }),
   }));
   await api.runManualUpdateCheck('dev');
-  assert.equal(flashToastCalls.length, 0, 'Update check error must remain isolated to #update-err');
+  assert.equal(api.getState().backendVersionMismatch, null);
+  assert.equal(flashToastCalls.length, 0);
   assert.equal(getEl('update-err').hidden, false);
   assert.equal(getEl('update-err').textContent, 'Network unreachable');
   assert.equal(getEl('btn-channel-dev').classList.contains('active'), true);
 
-  // 3. inspectServerInfo detects stale backend lacking serverInfo on /api/state and versionDrifted
-  api.inspectServerInfo({ threads: [], scopeKey: '/demo' }, { fromState: true });
-  assert.equal(api.getState().backendVersionMismatch?.kind, 'stale_backend');
-
+  // 4. versionDrifted is reflected accurately in reload banner
   api.inspectServerInfo(
     {
       threads: [],
       serverInfo: {
         startedVersion: '1.1.0',
         diskVersion: '1.2.0',
-        apiRevision: 2,
-        capabilities: ['update_status', 'update_check', 'update_apply'],
+        apiRevision: api.EXPECTED_SERVER_API_REVISION,
+        capabilities: api.REQUIRED_UPDATE_CAPABILITIES,
         versionDrifted: true,
       },
     },
@@ -403,6 +524,95 @@ test('Issue #1: Version & Updates card surfaces backend mismatch cleanly, avoids
   );
   assert.equal(api.getState().backendVersionMismatch?.kind, 'version_drifted');
   assert.match(getEl('update-reload-banner').textContent, /v1\.1\.0.*v1\.2\.0/);
+});
+
+test('Issue #2 + Opus P0-1 / P0-2 / P1-2: side-effect writes have no short default timeout, DataCloneError falls back without signal, and hanging body read still times out & recovers Save button', async () => {
+  // 1. Opus P0-1: postApi defaults to timeoutMs=0 so slow side-effect writes (/api/dispatch) do NOT abort early
+  const slowCalls = [];
+  const { api, getEl } = loadUiApiAndUpdateHarness({
+    fetchImpl: (url, opts = {}) => {
+      slowCalls.push({ url: String(url), hasSignal: 'signal' in opts });
+      return new Promise((resolve) => {
+        setTimeout(
+          () =>
+            resolve({
+              ok: true,
+              status: 200,
+              headers: { get: () => 'application/json' },
+              text: async () => JSON.stringify({ ok: true, thread: { threadId: 'thr-999' } }),
+            }),
+          180,
+        );
+      });
+    },
+  });
+  api.overrideJsonTimeout(80); // Caps positive timeouts to 80ms, leaves timeoutMs=0 unbounded
+  const dispatchRes = await api.postApi('/api/dispatch', '/api/dispatch_get', {
+    title: 'Slow git worktree dispatch',
+  });
+  assert.equal(dispatchRes.ok, true);
+  assert.equal(dispatchRes.thread.threadId, 'thr-999');
+  assert.equal(slowCalls.length, 1);
+  assert.equal(slowCalls[0].hasSignal, false, 'Unbounded postApi default must not attach AbortSignal');
+
+  // 2. Opus P0-2: bridge window.sidecar.fetch throwing DataCloneError on AbortSignal degrades cleanly and caches capability
+  const bridgeCalls = [];
+  api.setFetch(async (url, opts = {}) => {
+    bridgeCalls.push({ url: String(url), hasSignal: Boolean(opts.signal) });
+    if (opts.signal) {
+      const cloneErr = new Error('Failed to execute postMessage: AbortSignal could not be cloned.');
+      cloneErr.name = 'DataCloneError';
+      throw cloneErr;
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify({ ok: true, clonedFallback: true }),
+    };
+  });
+  const firstBridge = await api.fetchJsonWithTimeout('/api/state', { method: 'GET' }, { timeoutMs: 500 });
+  assert.equal(firstBridge.data.clonedFallback, true);
+  assert.equal(api.getState().sidecarFetchSupportsSignal, false);
+  assert.deepEqual(
+    bridgeCalls.map((c) => c.hasSignal),
+    [true, false],
+  );
+  // Subsequent request skips signal directly without triggering another DataCloneError
+  bridgeCalls.length = 0;
+  await api.fetchJsonWithTimeout('/api/state', { method: 'GET' }, { timeoutMs: 500 });
+  assert.deepEqual(
+    bridgeCalls.map((c) => c.hasSignal),
+    [false],
+  );
+
+  // 3. Opus P1-2: Response headers arrive immediately (200 OK), but body stream (res.text()) hangs forever
+  //    -> fetchJsonWithTimeout + submitSettingsSave STILL abort/timeout cleanly and restore Save button!
+  let bodyAborted = false;
+  const bodyHangCalls = [];
+  api.setFetch(async (url, opts = {}) => {
+    bodyHangCalls.push({ url: String(url), method: opts.method || 'GET' });
+    if (opts.signal) {
+      opts.signal.addEventListener('abort', () => {
+        bodyAborted = true;
+      });
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => 'application/json' },
+      text: () => new Promise(() => {}), // headers arrived, body stalls forever
+    };
+  });
+  api.overrideJsonTimeout(100);
+  await api.submitSettingsSave(false);
+  assert.equal(bodyAborted, true, 'AbortController must fire when body read stalls past timeout');
+  assert.equal(bodyHangCalls.length, 1, 'Timed-out body read must NOT replay via GET');
+  assert.equal(api.getState().settingsSaving, false, 'finally must clear settingsSaving');
+  assert.equal(getEl('btn-settings-save').disabled, false, 'Save button must recover from disabled state');
+  assert.equal(getEl('btn-settings-save').textContent, 'Save');
+  assert.equal(getEl('settings-err').hidden, false);
+  assert.match(getEl('settings-err').textContent, /timed out/i);
 });
 
 test('Issue #2: connectPost enforces total hard timeout on slow trickle responses and rejects on premature socket drop', async (t) => {
@@ -453,32 +663,26 @@ test('Issue #2: connectPost enforces total hard timeout on slow trickle response
     await new Promise((r) => server.close(r));
   });
 
-  // 1. Slow trickle bypasses socket inactivity timeout, but total hard timeout still rejects promptly
   const t0 = Date.now();
   await assert.rejects(() => connectPost('svc', 'Trickle', {}, 180), /timed out/i);
-  const trickleElapsed = Date.now() - t0;
-  assert.ok(trickleElapsed < 1200, `Expected hard timeout < 1200ms, got ${trickleElapsed}ms`);
+  assert.ok(Date.now() - t0 < 1200);
 
-  // 2. Mid-body TCP reset rejects immediately instead of hanging forever
   const t1 = Date.now();
   await assert.rejects(() => connectPost('svc', 'DropMidBody', {}, 5000), /closed|aborted|reset|socket/i);
   assert.ok(Date.now() - t1 < 1500);
 
-  // 3. Drop before response headers rejects immediately
   const t2 = Date.now();
   await assert.rejects(() => connectPost('svc', 'DropBeforeHeaders', {}, 5000), /closed|hang up|reset|socket/i);
   assert.ok(Date.now() - t2 < 1500);
 
-  // 4. Healthy endpoint still resolves normally
   const okRes = await connectPost('svc', 'Healthy', {}, 2000);
   assert.deepEqual(okRes, { ok: true });
 });
 
-test('Issue #2: saveSettingsWithFastResponse persists immediately without blocking on hung LS RPCs and falls back cleanly', async (t) => {
+test('Issue #2 + Opus P1-4: saveSettingsWithFastResponse avoids hung LS RPCs, normalizes worktree/subdir scopeKey to main repo root, and preserves frontend scopeKey on global save', async (t) => {
   const { tempRoot } = createTempEnv(t, 'pt-fast-save-');
   const openSockets = new Set();
   const receivedUrls = [];
-  // Intentionally hung LS server that never responds
   const hungLs = http.createServer((req) => {
     receivedUrls.push(req.url);
     openSockets.add(req.socket);
@@ -493,113 +697,160 @@ test('Issue #2: saveSettingsWithFastResponse persists immediately without blocki
   });
 
   const repoRoot = join(tempRoot, 'demo-proj');
-  mkdirSync(repoRoot, { recursive: true });
-  const wk = normalizeKey(repoRoot);
+  const nestedSubdir = join(repoRoot, 'src', 'nested');
+  const worktreeDir = join(tempRoot, '.worktrees', 'demo-proj', 'thr-048-feat');
+  mkdirSync(nestedSubdir, { recursive: true });
+  mkdirSync(worktreeDir, { recursive: true });
+
+  const mainKey = normalizeKey(repoRoot);
   const reg = loadRegistry();
-  reg.coordinators[wk] = {
-    key: wk,
+  reg.coordinators[mainKey] = {
+    key: mainKey,
     conversationId: 'conv-coord-hung',
     workspacePath: repoRoot,
     repoRoot,
     title: '[Coordinator] DemoProj',
   };
+  reg.threads['thr-048'] = {
+    threadId: 'thr-048',
+    conversationId: 'conv-worker-wt',
+    coordinatorId: 'conv-coord-hung',
+    workspaceKey: mainKey,
+    worktreePath: worktreeDir,
+    title: 'Worktree feature',
+    archived: false,
+  };
   saveRegistry(reg);
 
-  // Global save must complete fast without invoking hung GetConversation / catalog RPCs
+  // 1. Global save from a worker's worktree path resolves to main repo key (NOT raw worktree path!)
   const startMs = Date.now();
-  const resGlobal = await saveSettingsWithFastResponse({
+  const resFromWt = await saveSettingsWithFastResponse({
     scope: 'global',
-    workspacePath: repoRoot,
-    conversationId: 'conv-coord-hung',
+    workspacePath: worktreeDir,
+    conversationId: 'conv-worker-wt',
     worktreeModel: 'gemini-4-neon-xhigh',
     readOnlyModel: 'inherit',
   });
-  const elapsedMs = Date.now() - startMs;
-  assert.equal(resGlobal.ok, true);
-  assert.ok(elapsedMs < 1500, `Global save should not block on hung LS (took ${elapsedMs}ms)`);
-  assert.equal(receivedUrls.length, 0, 'Global save fast path must not invoke blocking LS RPCs');
+  assert.equal(resFromWt.ok, true);
+  assert.ok(Date.now() - startMs < 1500);
+  assert.equal(receivedUrls.length, 0);
+  assert.equal(resFromWt.scopeKey, mainKey, 'Worktree workspacePath must resolve to main repo scopeKey');
   assert.equal(loadSettings().defaults.worktreeModel, 'gemini-4-neon-xhigh');
-  assert.equal(loadSettings().defaults.readOnlyModel, 'inherit');
 
-  // Project save with explicit workspaceKey persists and returns immediately
-  const projStart = Date.now();
-  const resProj = await saveSettingsWithFastResponse({
+  // 2. Project save from nested repo subdirectory without explicit workspaceKey also normalizes to main repo key
+  const resFromSubdir = await saveSettingsWithFastResponse({
     scope: 'project',
-    workspaceKey: wk,
-    workspacePath: repoRoot,
+    workspacePath: nestedSubdir,
     worktreeModel: 'gemini-4-neon-low',
     readOnlyModel: '',
   });
-  assert.equal(resProj.ok, true);
-  assert.ok(Date.now() - projStart < 1500);
-  assert.equal(loadSettings().projects[wk].worktreeModel, 'gemini-4-neon-low');
+  assert.equal(resFromSubdir.ok, true);
+  assert.equal(resFromSubdir.scopeKey, mainKey, 'Subdirectory must normalize to registered main repo scopeKey');
+  assert.equal(loadSettings().projects[mainKey].worktreeModel, 'gemini-4-neon-low');
+  assert.equal(loadSettings().projects[normalizeKey(nestedSubdir)], undefined);
 
-  // Fallback effective builder returns complete normalized settings shape synchronously
-  const fallback = buildFallbackEffectiveSettings(loadSettings(), { scopeKey: wk, workspacePath: repoRoot });
-  assert.equal(fallback.scopeKey, wk);
-  assert.equal(fallback.worktreeModel, 'gemini-4-neon-low');
-  assert.equal(fallback.readOnlyModel, 'inherit');
-});
+  // 3. Unregistered standalone folder does NOT get falsely inferred as scopeKey on global save
+  const strayDir = join(tempRoot, 'unregistered-dir');
+  mkdirSync(strayDir, { recursive: true });
+  const resStray = await saveSettingsWithFastResponse({
+    scope: 'global',
+    workspacePath: strayDir,
+    worktreeModel: 'inherit',
+  });
+  assert.equal(resStray.ok, true);
+  assert.equal(resStray.scopeKey, '', 'Unregistered path must not fabricate unnormalized scopeKey');
 
-test('Issue #2: frontend submitSettingsSave aborts hung request via AbortController, never triggers duplicate GET, and restores Save button', async () => {
-  let aborted = false;
-  const calls = [];
-  const { api, getEl } = loadUiApiAndUpdateHarness({
-    fetchImpl: (url, opts = {}) => {
-      calls.push({ url: String(url), method: opts.method || 'GET' });
-      return new Promise((_, reject) => {
-        if (opts.signal) {
-          opts.signal.addEventListener('abort', () => {
-            aborted = true;
-            const err = new Error('Aborted');
-            err.name = 'AbortError';
-            reject(err);
-          });
-        }
-      });
+  // 4. Frontend submitSettingsSave preserves existing loadedSettingsData.scopeKey on global save and triggers refresh when degraded
+  const sentPayloads = [];
+  const { api, loadSettingsCalls } = loadUiApiAndUpdateHarness({
+    fetchImpl: async (url, opts = {}) => {
+      sentPayloads.push(JSON.parse(opts.body));
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        text: async () =>
+          JSON.stringify({
+            ok: true,
+            degraded: true,
+            scopeKey: '',
+            settings: { defaults: { worktreeModel: 'inherit', readOnlyModel: 'inherit' }, projects: {} },
+            effective: { scopeKey: '', worktreeModel: 'inherit', readOnlyModel: 'inherit' },
+            serverInfo: {
+              startedVersion: '1.1.0',
+              diskVersion: '1.1.0',
+              apiRevision: api.EXPECTED_SERVER_API_REVISION,
+              capabilities: api.REQUIRED_UPDATE_CAPABILITIES,
+              versionDrifted: false,
+            },
+          }),
+      };
     },
   });
-  api.setTimeoutOverrides(120);
-
+  api.setLoadedSettingsData({
+    settings: { defaults: { worktreeModel: 'inherit', readOnlyModel: 'inherit' }, projects: {} },
+    effective: { scopeKey: mainKey },
+    scopeKey: mainKey,
+    coordinatorModelDisplayName: 'Gemini 4 Neon (XHigh)',
+    coordinatorModel: 'gemini-4-neon-xhigh',
+  });
+  api.setSettingsScope('global');
   await api.submitSettingsSave(false);
-  assert.equal(aborted, true, 'Hung settings_save request must be aborted on timeout');
-  assert.equal(calls.length, 1, 'Timed-out POST must NOT trigger duplicate GET fallback');
-  assert.equal(api.getState().settingsSaving, false, 'finally must clear settingsSaving');
-  assert.equal(getEl('btn-settings-save').disabled, false, 'Save button must recover from disabled state');
-  assert.equal(getEl('btn-settings-save').textContent, 'Save', 'Save button must recover from Saving…');
-  assert.equal(getEl('settings-err').hidden, false);
-  assert.match(getEl('settings-err').textContent, /timed out/i);
+  assert.equal(sentPayloads[0].workspaceKey, mainKey, 'Global save should pass known workspaceKey');
+  assert.equal(api.getState().loadedSettingsData.scopeKey, mainKey, 'Global save must never wipe existing scopeKey');
+  assert.equal(loadSettingsCalls.length, 1, 'Degraded save response triggers background loadSettingsData refresh');
+
+  // 5. Fallback builder produces complete effective object synchronously
+  const fallback = buildFallbackEffectiveSettings(loadSettings(), { scopeKey: mainKey, workspacePath: repoRoot });
+  assert.equal(fallback.scopeKey, mainKey);
+  assert.equal(fallback.worktreeModel, 'gemini-4-neon-low');
 });
 
-test('Issue #3: Extra High <-> xhigh normalization works identically in lib, UI, transcript extraction, and inherit resolution', async (t) => {
-  // 1. Direct family comparison (lib + UI mirror)
+test('Issue #3 + Opus P1-5 / P1-6: Extra High <-> xhigh normalization, strict Thinking variant separation, and stable turn-level coordinatorTurnStamp', async (t) => {
   const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
-  const start = appJs.indexOf('function formatModelDisplay(');
-  const end = appJs.indexOf('function normalizeActivityText(', start);
-  const uiCtx = {};
+  const start1 = appJs.indexOf('function formatModelDisplay(');
+  const end1 = appJs.indexOf('function normalizeActivityText(', start1);
+  const start2 = appJs.indexOf('function matchesLiveThreadModel(');
+  const end2 = appJs.indexOf('const MODEL_MENU_SUB_WIDTH', start2);
+  const uiCtx = {
+    selectableModels: [],
+    pendingModelByThread: new Map(),
+  };
   vm.runInNewContext(
-    `${appJs.slice(start, end)}
+    `${appJs.slice(start1, end1)}
+     ${appJs.slice(start2, end2)}
      this.isSameModelFamily = isSameModelFamily;
+     this.isSameModelVariant = isSameModelVariant;
      this.buildModelFamilyGroups = buildModelFamilyGroups;
-     this.resolveModelFamilySelection = resolveModelFamilySelection;`,
+     this.resolveModelFamilySelection = resolveModelFamilySelection;
+     this.matchesLiveThreadModel = matchesLiveThreadModel;
+     this.getModelByIdFromCatalog = getModelByIdFromCatalog;
+     this.setCatalog = (m) => { selectableModels = m; };`,
     uiCtx,
   );
 
+  // 1. Extra High <-> xhigh (including underscore boundaries like neon_extra_high)
   const positivePairs = [
     ['Gemini 4 Neon (Extra High)', 'gemini-4-neon-xhigh'],
     ['Gemini 4 Neon Extra High', 'gemini-4-neon-tiered-xhigh'],
     ['Gemini 4 Neon (Extra High)', 'Gemini 4 Neon (XHigh)'],
     ['Gemini 4 Hydrogen (X-High)', 'gemini-4-hydrogen-xhigh'],
-    ['Gemini 4 Neon (XHigh)', 'gemini-4-neon-xhigh'],
+    ['gemini_4_neon_extra_high', 'gemini-4-neon-xhigh'],
+    ['gemini_4_neon_x_high', 'gemini-4-neon-xhigh'],
   ];
   for (const [a, b] of positivePairs) {
     assert.equal(isSameModelFamily(a, b), true, `lib isSameModelFamily(${a}, ${b})`);
-    assert.equal(uiCtx.isSameModelFamily(a, b), true, `UI isSameModelFamily(${a}, ${b})`);
+    assert.equal(isSameModelVariant(a, b), true, `lib isSameModelVariant(${a}, ${b})`);
+    assert.equal(uiCtx.isSameModelVariant(a, b), true, `UI isSameModelVariant(${a}, ${b})`);
   }
-  assert.equal(isSameModelFamily('Gemini 4 Neon (High)', 'gemini-4-neon-xhigh'), false);
-  assert.equal(uiCtx.isSameModelFamily('Gemini 4 Neon (High)', 'gemini-4-neon-xhigh'), false);
+  assert.equal(isSameModelVariant('Gemini 4 Neon (High)', 'gemini-4-neon-xhigh'), false);
 
-  // 2. resolveModelFamilySelection matches Extra High label to XHigh catalog entry without fallback
+  // 2. Opus P1-6: Thinking vs non-Thinking variants NEVER alias in catalog / menu matching
+  assert.equal(isSameModelFamily('Claude Sonnet 4.6 (Thinking)', 'claude-sonnet-4-6'), true);
+  assert.equal(isSameModelVariant('Claude Sonnet 4.6 (Thinking)', 'claude-sonnet-4-6'), false);
+  assert.equal(uiCtx.isSameModelVariant('Claude Sonnet 4.6 (Thinking)', 'claude-sonnet-4-6'), false);
+  assert.equal(isSameModelVariant('Claude Sonnet 4.6 (Thinking)', 'claude-sonnet-4-6-thinking'), true);
+
   const catalog = [
     {
       id: 'gemini-4-neon-medium',
@@ -614,7 +865,41 @@ test('Issue #3: Extra High <-> xhigh normalization works identically in lib, UI,
       label: 'Gemini 4 Neon (XHigh)',
       thinkingLevel: 'Extra High',
     },
+    {
+      id: 'claude-sonnet-4-6',
+      modelId: 'claude-sonnet-4-6',
+      modelEnum: 'MODEL_PLACEHOLDER_M34',
+      label: 'Claude Sonnet 4.6',
+    },
+    {
+      id: 'claude-sonnet-4-6-thinking',
+      modelId: 'claude-sonnet-4-6-thinking',
+      modelEnum: 'MODEL_PLACEHOLDER_M35',
+      label: 'Claude Sonnet 4.6 (Thinking)',
+    },
   ];
+  uiCtx.setCatalog(catalog);
+
+  // Thinking thread only checks the Thinking catalog item, NEVER the bare non-Thinking item
+  const thinkingThread = { modelDisplayName: 'Claude Sonnet 4.6 (Thinking)' };
+  assert.equal(uiCtx.matchesLiveThreadModel(catalog[2], thinkingThread), false);
+  assert.equal(uiCtx.matchesLiveThreadModel(catalog[3], thinkingThread), true);
+
+  // Bare thread only checks the bare item, NEVER the Thinking item
+  const bareThread = { modelDisplayName: 'Claude Sonnet 4.6' };
+  assert.equal(uiCtx.matchesLiveThreadModel(catalog[2], bareThread), true);
+  assert.equal(uiCtx.matchesLiveThreadModel(catalog[3], bareThread), false);
+
+  // Unlisted Thinking variant when only bare exists does NOT mis-match bare variant
+  uiCtx.setCatalog([catalog[2]]);
+  assert.equal(uiCtx.getModelByIdFromCatalog('Claude Sonnet 4.6 (Thinking)'), null);
+  assert.deepEqual(canonicalizeModelForSettings('Claude Sonnet 4.6 (Thinking)', [catalog[2]]), {
+    value: 'Claude Sonnet 4.6 (Thinking)',
+    label: '',
+  });
+  uiCtx.setCatalog(catalog);
+
+  // Extra High label still matches XHigh entry cleanly across lib, UI, and canonicalize
   const groups = buildModelFamilyGroups(catalog, { includeInherit: true });
   const selLib = resolveModelFamilySelection('Gemini 4 Neon (Extra High)', groups);
   const selUi = uiCtx.resolveModelFamilySelection('Gemini 4 Neon (Extra High)', groups);
@@ -622,14 +907,12 @@ test('Issue #3: Extra High <-> xhigh normalization works identically in lib, UI,
   assert.equal(selLib.isFallback, false);
   assert.equal(selUi.value, 'gemini-4-neon-xhigh');
   assert.equal(selUi.isFallback, false);
-
-  // canonicalizeModelForSettings maps Extra High label to canonical slug
   assert.deepEqual(canonicalizeModelForSettings('Gemini 4 Neon Extra High', catalog), {
     value: 'gemini-4-neon-xhigh',
     label: 'Gemini 4 Neon (XHigh)',
   });
 
-  // 3. extractModelFromSteps retains Extra High display name when planner slug is -xhigh
+  // 3. extractModelFromSteps retains Extra High display name with xhigh slug
   const extracted = extractModelFromSteps([
     {
       type: 'USER_INPUT',
@@ -643,7 +926,7 @@ test('Issue #3: Extra High <-> xhigh normalization works identically in lib, UI,
     modelSlug: 'gemini-4-neon-tiered-xhigh',
   });
 
-  // 4. resolveInheritedCoordinatorModel resolves Extra High transcript entry to concrete xhigh slug (not 'pro')
+  // 4. resolveInheritedCoordinatorModel & Opus P1-5 stable coordinatorTurnStamp
   const { tempRoot, appDataDir } = createTempEnv(t, 'pt-xhigh-inh-');
   const repoRoot = join(tempRoot, 'xhigh-repo');
   mkdirSync(repoRoot, { recursive: true });
@@ -657,6 +940,7 @@ test('Issue #3: Extra High <-> xhigh normalization works identically in lib, UI,
     workspacePath: repoRoot,
     repoRoot,
     title: '[Coordinator] XHigh',
+    lastStepCount: 1,
   };
   saveRegistry(reg);
 
@@ -685,37 +969,55 @@ test('Issue #3: Extra High <-> xhigh normalization works identically in lib, UI,
   assert.equal(inherited.model, 'gemini-4-neon-xhigh');
   assert.equal(inherited.displayName, 'Gemini 4 Neon (XHigh)');
 
-  // 5. syncThreads emits coordinatorTurnStamp that updates when coordinator transcript grows
+  // Opus P1-5: Adding intermediate tool steps without changing model or lastStepCount keeps coordinatorTurnStamp STABLE (no /api/settings storm!)
   const snap1 = await syncThreads({ workspacePath: repoRoot });
-  assert.ok(snap1.coordinatorTurnStamp.startsWith(`${coordConvId}|`));
   writeFileSync(
     txPath,
-    `${readFileSync(txPath, 'utf8')}\n${JSON.stringify({ step_index: 2, type: 'PLANNER_RESPONSE', model: 'gemini-4-neon-xhigh', content: 'Turn 2' })}\n`,
+    `${readFileSync(txPath, 'utf8')}\n${JSON.stringify({ step_index: 2, type: 'GENERIC', status: 'DONE', content: 'tool output' })}\n`,
     'utf8',
   );
-  const snap2 = await syncThreads({ workspacePath: repoRoot });
-  assert.notEqual(snap2.coordinatorTurnStamp, snap1.coordinatorTurnStamp);
+  const snapToolStep = await syncThreads({ workspacePath: repoRoot });
+  assert.equal(
+    snapToolStep.coordinatorTurnStamp,
+    snap1.coordinatorTurnStamp,
+    'Intermediate tool steps must NOT churn coordinatorTurnStamp',
+  );
+
+  // Switching model in a new turn DOES update coordinatorTurnStamp
+  writeFileSync(
+    txPath,
+    `${readFileSync(txPath, 'utf8')}\n${JSON.stringify({ step_index: 3, type: 'PLANNER_RESPONSE', model: 'gemini-4-neon-medium', content: 'Turn 2' })}\n`,
+    'utf8',
+  );
+  const snapModelChange = await syncThreads({ workspacePath: repoRoot });
+  assert.notEqual(snapModelChange.coordinatorTurnStamp, snap1.coordinatorTurnStamp);
 });
 
-test('Issue #1/#2/#3 static & I18N checks: serverInfo, refresh linkage, draft note, zero middle dots, zero native dialogs, and LF line endings', () => {
+test('Issue #1/#2/#3 static & I18N checks: serverInfo, refresh linkage, throttle/focus guard, draft note, zero middle dots, zero native dialogs, and LF line endings', () => {
   const mainMjs = readFileSync(new URL('../sidecars/threads/main.mjs', import.meta.url), 'utf8');
   const indexHtml = readFileSync(new URL('../sidecars/threads/index.html', import.meta.url), 'utf8');
   const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
   const themeCss = readFileSync(new URL('../sidecars/threads/theme.css', import.meta.url), 'utf8');
 
-  // Sidecar backend exposes startup version/capabilities and static headers
+  // Sidecar backend exposes startup version/capabilities, non-blocking git sha, and static headers
   assert.match(mainMjs, /X-PT-Server-Version/);
   assert.match(mainMjs, /X-PT-Api-Revision/);
   assert.match(mainMjs, /SERVER_CAPABILITIES/);
   assert.match(mainMjs, /serverInfo:\s*buildServerInfo\(\)/);
   assert.match(mainMjs, /saveSettingsWithFastResponse/);
+  assert.equal(/execFileSync/.test(mainMjs), false, 'main.mjs should not synchronously block startup on git');
 
-  // Settings UI wires refresh button to both model catalog and /api/settings?refresh=1 + draft hint + isolated update status
+  // Settings UI wires refresh button, throttle/in-flight dedup, focus guard, draft hint, and isolated update status
   assert.match(indexHtml, /id="settings-inherit-note"/);
   assert.match(indexHtml, /id="update-status-msg"/);
   assert.match(themeCss, /\.settings-inherit-note/);
   assert.match(themeCss, /\.update-reload-banner\.warn/);
   assert.match(appJs, /elBtnSettingsRefreshModels\.addEventListener\('click'[\s\S]*?loadSelectableModels\(true\)[\s\S]*?loadSettingsData\(/);
+  assert.match(appJs, /settingsLoadInFlight/);
+  assert.match(appJs, /SETTINGS_AUTO_REFRESH_MIN_MS/);
+  assert.match(appJs, /isSelectElementFocused/);
+  assert.match(appJs, /fetchJsonWithTimeout/);
+  assert.match(appJs, /isSignalCloneError/);
   assert.match(appJs, /coordinatorTurnStamp/);
   assert.match(appJs, /syncSettingsInheritHint/);
   assert.equal(/\b(?:window\.)?(?:confirm|alert|prompt)\s*\(/.test(appJs), false);

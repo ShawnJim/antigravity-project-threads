@@ -9,6 +9,7 @@
   const API_WRITE_TIMEOUT_MS = 12_000;
   const API_UPDATE_TIMEOUT_MS = 30_000;
   const HOST_META_TIMEOUT_MS = 2000;
+  const SETTINGS_AUTO_REFRESH_MIN_MS = 10_000;
   const params = new URLSearchParams(location.search);
   const getHostConvId = () =>
     (window.sidecar && window.sidecar.conversationId) ||
@@ -1090,7 +1091,11 @@
   let settingsSaving = false;
   let settingsRefreshing = false;
   let settingsDirtyByUser = false;
+  let settingsLoadInFlight = null;
+  let lastSettingsAutoLoadAt = 0;
+  let settingsNeedsRefresh = false;
   let lastCoordinatorTurnStamp = '';
+  let sidecarFetchSupportsSignal = null;
   let settingsWorktreeGroups = [];
   let settingsReadOnlyGroups = [];
   let dispatchModelGroups = [];
@@ -1771,12 +1776,16 @@
   function normalizeComparableTokens(str) {
     return String(str || '')
       .toLowerCase()
-      .replace(/\bextra[\s_-]*high\b/g, ' xhigh ')
-      .replace(/\bx[\s_-]+high\b/g, ' xhigh ')
+      .replace(/(?:^|[^a-z0-9])extra[\s_-]*high(?=$|[^a-z0-9])/g, ' xhigh ')
+      .replace(/(?:^|[^a-z0-9])x[\s_-]+high(?=$|[^a-z0-9])/g, ' xhigh ')
       .replace(/\(thinking\)|[-_]thinking\b/g, ' ')
       .replace(/\btiered\b|\bdisabled\b/g, ' ')
       .split(/[^a-z0-9]+/)
       .filter(Boolean);
+  }
+
+  function hasThinkingVariantMarker(str) {
+    return /\(\s*thinking\s*\)|(?:^|[^a-z0-9])thinking(?=$|[^a-z0-9])/i.test(String(str || ''));
   }
 
   function isSameModelFamily(displayName, slug) {
@@ -1784,6 +1793,11 @@
     const b = normalizeComparableTokens(slug);
     if (!a.length || a.length !== b.length) return false;
     return a.every((tok, idx) => tok === b[idx]);
+  }
+
+  function isSameModelVariant(a, b) {
+    if (!isSameModelFamily(a, b)) return false;
+    return hasThinkingVariantMarker(a) === hasThinkingVariantMarker(b);
   }
 
   const TIER_SORT_RANK = {
@@ -2169,15 +2183,20 @@
       }
 
       if (!/^MODEL_PLACEHOLDER_/i.test(raw)) {
+        const variantMatches = [];
         for (const g of familyGroups) {
           for (const t of g.tiers || []) {
             if (
-              isSameModelFamily(raw, t.modelId || t.value || t.rawLabel) ||
-              (t.rawLabel && isSameModelFamily(raw, t.rawLabel))
+              isSameModelVariant(raw, t.modelId || t.value || t.rawLabel) ||
+              (t.rawLabel && isSameModelVariant(raw, t.rawLabel))
             ) {
-              return { groups: list, groupKey: g.key, value: t.value, group: g, tier: t, isFallback: false };
+              variantMatches.push({ group: g, tier: t });
             }
           }
+        }
+        if (variantMatches.length === 1) {
+          const { group: g, tier: t } = variantMatches[0];
+          return { groups: list, groupKey: g.key, value: t.value, group: g, tier: t, isFallback: false };
         }
       }
     }
@@ -2408,7 +2427,7 @@
     return err;
   }
 
-  async function safeReadJson(res, { url = '' } = {}) {
+  async function safeReadJson(res, { url = '', allowEmptyBody = false } = {}) {
     const t = L();
     const status = Number(res?.status) || 0;
     const ok = Boolean(res?.ok);
@@ -2458,7 +2477,16 @@
       });
     }
 
-    if (!trimmed) return {};
+    if (!trimmed) {
+      if (allowEmptyBody) return {};
+      throw createApiError(t.apiInvalidJsonErr, {
+        code: 'invalid_json',
+        status,
+        url,
+        bodySnippet: '',
+        isBackendMismatch: false,
+      });
+    }
 
     if (contentType && !looksJsonContentType && !looksJsonBody) {
       throw createApiError(looksNotFound ? t.sidecarMismatchErr : t.apiInvalidJsonErr, {
@@ -2466,7 +2494,7 @@
         status,
         url,
         bodySnippet: trimmed.slice(0, 120),
-        isBackendMismatch: looksNotFound || /^text\/plain/i.test(contentType),
+        isBackendMismatch: looksNotFound,
       });
     }
 
@@ -2478,22 +2506,54 @@
         status,
         url,
         bodySnippet: trimmed.slice(0, 120),
-        isBackendMismatch: looksNotFound || (Boolean(contentType) && !looksJsonContentType),
+        isBackendMismatch: looksNotFound,
       });
     }
   }
 
+  function isSignalCloneError(err) {
+    if (!err) return false;
+    if (err.name === 'DataCloneError') return true;
+    const msg = String(err.message || '');
+    return /DataCloneError|could not be cloned|structured clone|AbortSignal/i.test(msg);
+  }
+
+  async function invokeFetch(url, options = {}, controller = null) {
+    const isNativeFetch = typeof fetch === 'function' && doFetch === fetch;
+    const shouldAttachSignal = Boolean(
+      controller && (isNativeFetch || sidecarFetchSupportsSignal !== false),
+    );
+    if (!shouldAttachSignal) {
+      return await doFetch(url, options);
+    }
+    try {
+      const res = await doFetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      if (!isNativeFetch) sidecarFetchSupportsSignal = true;
+      return res;
+    } catch (err) {
+      if (!isNativeFetch && isSignalCloneError(err)) {
+        sidecarFetchSupportsSignal = false;
+        return await doFetch(url, options);
+      }
+      throw err;
+    }
+  }
+
   async function fetchWithTimeout(url, options = {}, timeoutMs = API_READ_TIMEOUT_MS) {
-    const ms = Math.max(200, Number(timeoutMs) || API_READ_TIMEOUT_MS);
+    const rawTimeout = Number(timeoutMs);
+    const hasTimeout = Number.isFinite(rawTimeout) && rawTimeout > 0;
+    if (!hasTimeout) {
+      return invokeFetch(url, options, null);
+    }
+    const ms = Math.max(50, rawTimeout);
     const controller = typeof AbortController === 'function' ? new AbortController() : null;
     let timer = null;
     let timedOut = false;
-    const fetchPromise = Promise.resolve().then(() =>
-      doFetch(url, {
-        ...options,
-        ...(controller ? { signal: controller.signal } : {}),
-      }),
-    );
+    const fetchPromise = invokeFetch(url, options, controller);
+    fetchPromise.catch(() => {});
     const timeoutPromise = new Promise((_, reject) => {
       timer = setTimeout(() => {
         timedOut = true;
@@ -2527,7 +2587,72 @@
     }
   }
 
-  function inspectServerInfo(data, { fromState = false } = {}) {
+  async function fetchJsonWithTimeout(
+    url,
+    options = {},
+    { timeoutMs = API_READ_TIMEOUT_MS, allowEmptyBody = false, returnRawOnStatus = [] } = {},
+  ) {
+    const rawTimeout = Number(timeoutMs);
+    const hasTimeout = Number.isFinite(rawTimeout) && rawTimeout > 0;
+    const ms = hasTimeout ? Math.max(50, rawTimeout) : 0;
+    const controller = hasTimeout && typeof AbortController === 'function' ? new AbortController() : null;
+    const statusSet = Array.isArray(returnRawOnStatus) && returnRawOnStatus.length
+      ? new Set(returnRawOnStatus)
+      : null;
+
+    let timer = null;
+    let timedOut = false;
+
+    const workPromise = (async () => {
+      const res = await invokeFetch(url, options, controller);
+      if (statusSet && statusSet.has(Number(res?.status))) {
+        return { fallbackToGet: true, status: Number(res.status), data: null };
+      }
+      const data = await safeReadJson(res, { url, allowEmptyBody });
+      return { fallbackToGet: false, status: Number(res?.status) || 200, data };
+    })();
+
+    if (!hasTimeout) {
+      return workPromise;
+    }
+
+    // Prevent unhandled rejection if workPromise settles after timeout fires
+    workPromise.catch(() => {});
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        if (controller) {
+          try {
+            controller.abort();
+          } catch {
+            // Ignore abort errors
+          }
+        }
+        reject(
+          createApiError(L().apiTimeoutErr(Math.max(1, Math.round(ms / 1000))), {
+            code: 'timeout',
+            url,
+          }),
+        );
+      }, ms);
+    });
+
+    try {
+      return await Promise.race([workPromise, timeoutPromise]);
+    } catch (err) {
+      if (timedOut || err?.name === 'AbortError' || err?.code === 'timeout') {
+        throw createApiError(L().apiTimeoutErr(Math.max(1, Math.round(ms / 1000))), {
+          code: 'timeout',
+          url,
+        });
+      }
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  function inspectServerInfo(data, { fromState = false, expectServerInfo = false } = {}) {
     if (!data || typeof data !== 'object') return;
     const info = data.serverInfo && typeof data.serverInfo === 'object' ? data.serverInfo : null;
     const prevKey = backendVersionMismatch
@@ -2555,7 +2680,7 @@
       } else {
         backendVersionMismatch = null;
       }
-    } else if (fromState && !data.error && 'threads' in data) {
+    } else if (expectServerInfo || (fromState && !data.error && 'threads' in data)) {
       backendVersionMismatch = {
         kind: 'stale_backend',
         startedVersion: '',
@@ -2574,47 +2699,31 @@
 
   async function postApi(postPath, getFallbackPath, payload = {}, options = {}) {
     const {
-      timeoutMs = API_WRITE_TIMEOUT_MS,
+      timeoutMs = 0,
       allowGetFallback = true,
+      expectServerInfo = false,
     } = options || {};
-    let shouldFallbackToGet = false;
-    try {
-      const res = await fetchWithTimeout(
-        postPath,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        },
+    const postResult = await fetchJsonWithTimeout(
+      postPath,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      {
         timeoutMs,
-      );
-      if (res.ok) {
-        const json = await safeReadJson(res, { url: postPath });
-        if (json?.locale) applyLocale(json.locale);
-        inspectServerInfo(json);
-        return json;
-      }
-      if ((res.status === 404 || res.status === 405) && allowGetFallback && getFallbackPath) {
-        shouldFallbackToGet = true;
-      } else {
-        const errJson = await safeReadJson(res, { url: postPath });
-        if (errJson?.locale) applyLocale(errJson.locale);
-        return errJson;
-      }
-    } catch (err) {
-      if (err?.code === 'timeout' || !allowGetFallback || !getFallbackPath) {
-        throw err;
-      }
-      if (err?.code === 'http_error' && err.status !== 404 && err.status !== 405) {
-        throw err;
-      }
-      shouldFallbackToGet = true;
+        returnRawOnStatus: allowGetFallback && getFallbackPath ? [404, 405] : [],
+      },
+    );
+
+    if (!postResult.fallbackToGet) {
+      const json = postResult.data;
+      if (json?.locale) applyLocale(json.locale);
+      inspectServerInfo(json, { expectServerInfo });
+      return json;
     }
 
-    if (!shouldFallbackToGet) {
-      throw createApiError(L().apiInvalidJsonErr, { code: 'invalid_json', url: postPath });
-    }
-
+    // Only downgrade POST -> GET when POST explicitly received HTTP 404/405 (never replay on timeout/network/parse errors)
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(payload || {})) {
       if (v !== undefined && v !== null) {
@@ -2622,10 +2731,10 @@
       }
     }
     const fallbackUrl = `${getFallbackPath}?${qs}`;
-    const res2 = await fetchWithTimeout(fallbackUrl, { method: 'GET' }, timeoutMs);
-    const json2 = await safeReadJson(res2, { url: fallbackUrl });
+    const getResult = await fetchJsonWithTimeout(fallbackUrl, { method: 'GET' }, { timeoutMs });
+    const json2 = getResult.data;
     if (json2?.locale) applyLocale(json2.locale);
-    inspectServerInfo(json2);
+    inspectServerInfo(json2, { expectServerInfo });
     return json2;
   }
 
@@ -4118,9 +4227,12 @@
   function hasBoundCoordinatorSession() {
     return Boolean(
       lastSnap?.coordinator?.conversationId ||
-        loadedSettingsData?.effective?.coordinatorId ||
-        getHostConvId(),
+        loadedSettingsData?.effective?.coordinatorId,
     );
+  }
+
+  function isSelectElementFocused(el) {
+    return Boolean(el && typeof document !== 'undefined' && document.activeElement === el);
   }
 
   function getSettingsInheritOptionLabel() {
@@ -4271,6 +4383,12 @@
       fallbackValue,
     });
     const nextGroups = sel.groups;
+    if (
+      (isSelectElementFocused(elModel) || isSelectElementFocused(elTier)) &&
+      elModel.options?.length > 0
+    ) {
+      return nextGroups;
+    }
     elModel.innerHTML = nextGroups
       .map((g) => `<option value="${esc(g.key)}">${esc(g.label)}</option>`)
       .join('');
@@ -4331,18 +4449,20 @@
     const wtFollows = isSettingsSlotFollowingCoordinator('worktree');
     const roFollows = isSettingsSlotFollowingCoordinator('readOnly');
     const anyFollows = wtFollows || roFollows;
+    const isInitialLoading = !loadedSettingsData && !coordName;
     const noteText = coordName ? t.settingsInheritActiveNote(coordName) : t.settingsInheritDraftNote;
 
     if (elSetWorktree) {
-      elSetWorktree.title = wtFollows ? noteText : '';
+      elSetWorktree.title = wtFollows && !isInitialLoading ? noteText : '';
     }
     if (elSetReadOnly) {
-      elSetReadOnly.title = roFollows ? noteText : '';
+      elSetReadOnly.title = roFollows && !isInitialLoading ? noteText : '';
     }
     if (elSettingsInheritNote) {
-      elSettingsInheritNote.hidden = !anyFollows;
-      elSettingsInheritNote.classList.toggle('is-draft', anyFollows && !coordName);
-      elSettingsInheritNote.textContent = anyFollows ? noteText : '';
+      const showNote = anyFollows && !isInitialLoading;
+      elSettingsInheritNote.hidden = !showNote;
+      elSettingsInheritNote.classList.toggle('is-draft', showNote && !coordName);
+      elSettingsInheritNote.textContent = showNote ? noteText : '';
     }
   }
 
@@ -4471,35 +4591,51 @@
   }
 
   async function loadSettingsData({ syncInputs = false, forceRefresh = false } = {}) {
-    try {
-      await syncHostConversationScope();
-      const qs = new URLSearchParams(
-        buildScopePayload(forceRefresh ? { refresh: '1' } : {}),
-      );
-      const url = `/api/settings?${qs}`;
-      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
-      const data = await safeReadJson(res, { url });
-      if (data?.locale) applyLocale(data.locale);
-      inspectServerInfo(data);
-      if (data?.ok) {
-        loadedSettingsData = {
-          settings: data.settings,
-          effective: data.effective,
-          scopeKey: data.scopeKey || data.effective?.scopeKey || '',
-          coordinatorModelDisplayName:
-            data.coordinatorModelDisplayName || data.effective?.coordinatorModelDisplayName || '',
-          coordinatorModel: data.coordinatorModel || data.effective?.coordinatorModel || '',
-        };
-        populateDispatchModelSelect();
-        if (settingsScreenOpen) {
-          renderSettingsScreen(syncInputs);
-        }
-        return true;
-      }
-    } catch {
-      // Keep cached/default settings if endpoint is temporarily busy
+    if (settingsLoadInFlight && !forceRefresh) {
+      return settingsLoadInFlight;
     }
-    return false;
+    const req = (async () => {
+      try {
+        await syncHostConversationScope();
+        const qs = new URLSearchParams(
+          buildScopePayload(forceRefresh ? { refresh: '1' } : {}),
+        );
+        const url = `/api/settings?${qs}`;
+        const { data } = await fetchJsonWithTimeout(
+          url,
+          { method: 'GET' },
+          { timeoutMs: API_READ_TIMEOUT_MS },
+        );
+        if (data?.locale) applyLocale(data.locale);
+        inspectServerInfo(data, { expectServerInfo: Boolean(data?.ok) });
+        if (data?.ok) {
+          lastSettingsAutoLoadAt = Date.now();
+          settingsNeedsRefresh = false;
+          loadedSettingsData = {
+            settings: data.settings,
+            effective: data.effective,
+            scopeKey: data.scopeKey || data.effective?.scopeKey || '',
+            coordinatorModelDisplayName:
+              data.coordinatorModelDisplayName || data.effective?.coordinatorModelDisplayName || '',
+            coordinatorModel: data.coordinatorModel || data.effective?.coordinatorModel || '',
+          };
+          populateDispatchModelSelect();
+          if (settingsScreenOpen) {
+            renderSettingsScreen(syncInputs);
+          }
+          return true;
+        }
+      } catch {
+        // Keep cached/default settings if endpoint is temporarily busy
+      } finally {
+        if (settingsLoadInFlight === req) {
+          settingsLoadInFlight = null;
+        }
+      }
+      return false;
+    })();
+    settingsLoadInFlight = req;
+    return req;
   }
 
   function openSettingsScreen() {
@@ -4554,9 +4690,10 @@
 
     try {
       await syncHostConversationScope();
+      const prevScopeKey = loadedSettingsData?.scopeKey || '';
       const payload = buildScopePayload({
         scope: activeScope,
-        ...(activeScope === 'project' ? { workspaceKey: scopeKey } : {}),
+        ...(scopeKey ? { workspaceKey: scopeKey } : {}),
         reset,
       });
       if (!reset) {
@@ -4567,7 +4704,7 @@
         '/api/settings_save',
         '/api/settings_save_get',
         payload,
-        { timeoutMs: API_WRITE_TIMEOUT_MS },
+        { timeoutMs: API_WRITE_TIMEOUT_MS, expectServerInfo: true },
       );
       if (!res?.ok) {
         const msg = res?.error || t.settingsSaveErr;
@@ -4578,17 +4715,29 @@
         flashToast(msg, 'err', 3600);
         return;
       }
+      const nextScopeKey =
+        activeScope === 'global' && prevScopeKey
+          ? prevScopeKey
+          : res.scopeKey || res.effective?.scopeKey || scopeKey;
       loadedSettingsData = {
         settings: res.settings,
         effective: res.effective,
-        scopeKey: res.scopeKey || res.effective?.scopeKey || scopeKey,
+        scopeKey: nextScopeKey,
         coordinatorModelDisplayName:
-          res.coordinatorModelDisplayName || res.effective?.coordinatorModelDisplayName || '',
-        coordinatorModel: res.coordinatorModel || res.effective?.coordinatorModel || '',
+          res.coordinatorModelDisplayName ||
+          res.effective?.coordinatorModelDisplayName ||
+          (res.degraded ? loadedSettingsData?.coordinatorModelDisplayName || '' : ''),
+        coordinatorModel:
+          res.coordinatorModel ||
+          res.effective?.coordinatorModel ||
+          (res.degraded ? loadedSettingsData?.coordinatorModel || '' : ''),
       };
       settingsDirtyByUser = false;
       populateDispatchModelSelect();
       renderSettingsScreen(true);
+      if (res.degraded) {
+        loadSettingsData({ syncInputs: false });
+      }
       flashToast(
         reset
           ? activeScope === 'project'
@@ -4624,8 +4773,11 @@
       try {
         const qs = force ? '?refresh=1' : '';
         const url = `/api/models${qs}`;
-        const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
-        const data = await safeReadJson(res, { url });
+        const { data } = await fetchJsonWithTimeout(
+          url,
+          { method: 'GET' },
+          { timeoutMs: API_READ_TIMEOUT_MS },
+        );
         if (data?.locale) applyLocale(data.locale);
         if (Array.isArray(data?.models)) {
           selectableModels = data.models;
@@ -4664,8 +4816,8 @@
     if (!liveLabel) return false;
     if (m.label === liveLabel) return true;
     return Boolean(
-      isSameModelFamily(liveLabel, m.modelId || m.id || m.label) ||
-        (m.label && isSameModelFamily(liveLabel, m.label)),
+      isSameModelVariant(liveLabel, m.modelId || m.id || m.label) ||
+        (m.label && isSameModelVariant(liveLabel, m.label)),
     );
   }
 
@@ -4702,13 +4854,12 @@
       null;
     if (exact) return exact;
     if (!/^MODEL_PLACEHOLDER_/i.test(raw)) {
-      return (
-        selectableModels.find(
-          (m) =>
-            isSameModelFamily(raw, m.modelId || m.id || m.label) ||
-            (m.label && isSameModelFamily(raw, m.label)),
-        ) || null
+      const variantMatches = selectableModels.filter(
+        (m) =>
+          isSameModelVariant(raw, m.modelId || m.id || m.label) ||
+          (m.label && isSameModelVariant(raw, m.label)),
       );
+      if (variantMatches.length === 1) return variantMatches[0];
     }
     return null;
   }
@@ -5633,8 +5784,11 @@
         markRead: markRead ? '1' : '0',
       });
       const url = `/api/thread_messages?${qs}`;
-      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
-      const data = await safeReadJson(res, { url });
+      const { data } = await fetchJsonWithTimeout(
+        url,
+        { method: 'GET' },
+        { timeoutMs: API_READ_TIMEOUT_MS },
+      );
       if (data.locale) applyLocale(data.locale);
       if (!data.ok) {
         elChatStream.innerHTML = `<div class="msg-err">${esc(data.error || 'Error')}</div>`;
@@ -5724,8 +5878,11 @@
       await syncHostConversationScope();
       const qs = new URLSearchParams(buildScopePayload());
       const url = `/api/memory?${qs}`;
-      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
-      const data = await safeReadJson(res, { url });
+      const { data } = await fetchJsonWithTimeout(
+        url,
+        { method: 'GET' },
+        { timeoutMs: API_READ_TIMEOUT_MS },
+      );
       if (data.locale) applyLocale(data.locale);
       if (data.ok) {
         const shortPath = (data.path || '').split(/[\\/]/).slice(-3).join('/');
@@ -5750,8 +5907,11 @@
         }),
       );
       const url = `/api/state?${qs}`;
-      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
-      const data = await safeReadJson(res, { url });
+      const { data } = await fetchJsonWithTimeout(
+        url,
+        { method: 'GET' },
+        { timeoutMs: API_READ_TIMEOUT_MS },
+      );
       if (data.locale) applyLocale(data.locale);
       inspectServerInfo(data, { fromState: true });
       if (data.error) {
@@ -5794,12 +5954,24 @@
           loadMemory();
         }
       }
-      if (
+
+      const drawerOpen = Boolean(elDrawer && elDrawer.classList?.contains('open'));
+      const mustRefreshSettingsNow =
         scopeChanged ||
         convChanged ||
-        coordTurnChanged ||
         !loadedSettingsData ||
-        nextScopeKey !== String(loadedSettingsData.scopeKey || '')
+        nextScopeKey !== String(loadedSettingsData.scopeKey || '');
+      if (coordTurnChanged) {
+        settingsNeedsRefresh = true;
+      }
+      if (mustRefreshSettingsNow) {
+        loadSettingsData({
+          syncInputs: settingsScreenOpen && !settingsDirtyByUser && !isSettingsDraftDirty(),
+        });
+      } else if (
+        settingsNeedsRefresh &&
+        (settingsScreenOpen || drawerOpen) &&
+        Date.now() - lastSettingsAutoLoadAt >= SETTINGS_AUTO_REFRESH_MIN_MS
       ) {
         loadSettingsData({
           syncInputs: settingsScreenOpen && !settingsDirtyByUser && !isSettingsDraftDirty(),
@@ -6188,7 +6360,7 @@
             channel: ctx.channel || '',
             persistChannel: true,
           },
-          { timeoutMs: API_UPDATE_TIMEOUT_MS },
+          { timeoutMs: API_UPDATE_TIMEOUT_MS, allowGetFallback: false, expectServerInfo: true },
         );
         pluginUpdateApplying = false;
         if (!res?.ok) {
@@ -6794,15 +6966,20 @@
     const qs = new URLSearchParams({ bg: bg ? '1' : '0' });
     const url = `/api/update_status?${qs}`;
     try {
-      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
-      const data = await safeReadJson(res, { url });
+      const { data } = await fetchJsonWithTimeout(
+        url,
+        { method: 'GET' },
+        { timeoutMs: API_READ_TIMEOUT_MS },
+      );
       if (data?.locale) applyLocale(data.locale);
-      inspectServerInfo(data);
+      inspectServerInfo(data, { expectServerInfo: true });
       if (data && typeof data === 'object' && ('currentVersion' in data || 'hasUpdate' in data)) {
+        const prevCheckedAt = pluginUpdateState?.checkedAt || '';
         pluginUpdateState = data;
-        updateCardError = data.ok === false && data.error ? String(data.error) : '';
-        if (!data.serverInfo?.versionDrifted) {
-          backendVersionMismatch = null;
+        if (data.ok === false && data.error) {
+          updateCardError = String(data.error);
+        } else if (!bg || (data.checkedAt && data.checkedAt !== prevCheckedAt)) {
+          updateCardError = '';
         }
         syncSettingsUpdateDot();
         if (settingsScreenOpen) renderUpdateCard();
@@ -6842,13 +7019,10 @@
         '/api/update_check',
         '/api/update_check_get',
         payload,
-        { timeoutMs: API_UPDATE_TIMEOUT_MS },
+        { timeoutMs: API_UPDATE_TIMEOUT_MS, expectServerInfo: true },
       );
       if (res && typeof res === 'object') {
         pluginUpdateState = res;
-        if (!res.serverInfo?.versionDrifted) {
-          backendVersionMismatch = null;
-        }
       }
       syncSettingsUpdateDot();
       if (res?.ok === false) {
