@@ -62,19 +62,25 @@
           <label id="lbl-f-title" for="f-title">Thread title</label>
           <input id="f-title" type="text" autocomplete="off">
         </div>
-        <div class="row2 field">
-          <div>
-            <label id="lbl-f-branch" for="f-branch">Git branch (optional)</label>
-            <input id="f-branch" type="text" placeholder="thread/thr-xxx-..." autocomplete="off">
-          </div>
-          <div>
-            <label id="lbl-f-model" for="f-model">Model</label>
-            <select id="f-model">
-              <option value="">Use Settings Default (Gemini Pro)</option>
-              <option value="pro">Pro</option>
-              <option value="flash">Flash</option>
-              <option value="flash_lite">Flash Lite</option>
-            </select>
+        <div class="field">
+          <label id="lbl-f-branch" for="f-branch">Git branch (optional)</label>
+          <input id="f-branch" type="text" placeholder="thread/thr-xxx-..." autocomplete="off">
+        </div>
+        <div class="field">
+          <div class="settings-model-row">
+            <div class="settings-col-model">
+              <label id="lbl-f-model" for="f-model">Model</label>
+              <select id="f-model">
+                <option value="__follow_global__">Use Settings Default (Follow Coordinator)</option>
+                <option value="__inherit__">Follow Coordinator (inherit)</option>
+              </select>
+            </div>
+            <div class="settings-col-tier">
+              <label id="lbl-f-tier" for="f-tier">Effort</label>
+              <select id="f-tier" disabled>
+                <option value="">—</option>
+              </select>
+            </div>
           </div>
         </div>
         <label class="chk">
@@ -226,15 +232,33 @@
           </button>
         </div>
 
-        <div class="field">
-          <label id="lbl-set-worktree" for="set-worktree-model">Code-Editing / Worktree Threads</label>
-          <select id="set-worktree-model"></select>
+        <div class="field settings-model-group">
+          <div id="lbl-set-worktree" class="settings-group-label">Code-Editing / Worktree Threads</div>
+          <div class="settings-model-row">
+            <div class="settings-col-model">
+              <label id="lbl-set-worktree-model" for="set-worktree-model" class="settings-sublabel">Model</label>
+              <select id="set-worktree-model"></select>
+            </div>
+            <div class="settings-col-tier">
+              <label id="lbl-set-worktree-tier" for="set-worktree-tier" class="settings-sublabel">Effort</label>
+              <select id="set-worktree-tier"></select>
+            </div>
+          </div>
           <div id="desc-set-worktree" class="settings-field-hint"></div>
         </div>
 
-        <div class="field">
-          <label id="lbl-set-readonly" for="set-readonly-model">Read-Only / Investigation Threads</label>
-          <select id="set-readonly-model"></select>
+        <div class="field settings-model-group">
+          <div id="lbl-set-readonly" class="settings-group-label">Read-Only / Investigation Threads</div>
+          <div class="settings-model-row">
+            <div class="settings-col-model">
+              <label id="lbl-set-readonly-model" for="set-readonly-model" class="settings-sublabel">Model</label>
+              <select id="set-readonly-model"></select>
+            </div>
+            <div class="settings-col-tier">
+              <label id="lbl-set-readonly-tier" for="set-readonly-tier" class="settings-sublabel">Effort</label>
+              <select id="set-readonly-tier"></select>
+            </div>
+          </div>
           <div id="desc-set-readonly" class="settings-field-hint"></div>
         </div>
 
@@ -244,29 +268,6 @@
           <span id="settings-toast" class="toast" role="status" aria-live="polite"></span>
         </div>
         <div id="settings-err" class="err" hidden></div>
-      </div>
-
-      <div class="pt-card settings-preview-card">
-        <div class="goal-kicker">
-          <span id="lbl-settings-preview-title">EFFECTIVE FOR CURRENT PROJECT</span>
-          <span id="settings-unsaved-badge" class="settings-unsaved-pill" hidden></span>
-        </div>
-        <div class="settings-preview-rows">
-          <div class="settings-preview-row">
-            <span id="lbl-preview-wt" class="settings-preview-key">Worktree</span>
-            <span class="settings-preview-val">
-              <span id="val-preview-wt" class="o2-wchip"></span>
-              <span id="src-preview-wt" class="settings-src-pill"></span>
-            </span>
-          </div>
-          <div class="settings-preview-row">
-            <span id="lbl-preview-ro" class="settings-preview-key">Read-Only</span>
-            <span class="settings-preview-val">
-              <span id="val-preview-ro" class="o2-wchip"></span>
-              <span id="src-preview-ro" class="settings-src-pill"></span>
-            </span>
-          </div>
-        </div>
       </div>
     </div>
   </section>

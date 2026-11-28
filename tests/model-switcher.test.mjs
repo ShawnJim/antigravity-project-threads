@@ -4,6 +4,7 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import vm from 'node:vm';
 
 import {
   buildSendUserCascadeMessagePayload,
@@ -532,19 +533,29 @@ test('static checks: Sidecar UI wires #btn-comp-model, .pt-model-menu outside #c
   const metaPos = indexHtml.indexOf('id="composer-meta"');
   assert.ok(wrapStart !== -1 && menuPos > wrapStart && menuPos < pillPos && pillPos < metaPos);
 
-  // Switchable button + chevron + pending state + popover + /api/models + #f-model
+  // Switchable button + chevron + pending state + popover + 2-level drill-down + /api/models + #f-model/#f-tier
   assert.match(appJs, /id="btn-comp-model"/);
   assert.match(appJs, /comp-model-chev/);
   assert.match(appJs, /pendingModelByThread/);
+  assert.match(appJs, /modelMenuFamilyKey/);
+  assert.match(appJs, /data-family-key/);
+  assert.match(appJs, /pt-model-back/);
+  assert.match(appJs, /pt-model-effort/);
   assert.match(appJs, /\/api\/models/);
   assert.match(appJs, /populateDispatchModelSelect/);
+  assert.match(appJs, /id="f-model"|getElementById\(['"]f-model['"]\)/);
+  assert.match(appJs, /getElementById\(['"]f-tier['"]\)/);
+  assert.match(indexHtml, /id="f-model"/);
+  assert.match(indexHtml, /id="f-tier"/);
   assert.match(appJs, /modelRunningHint/);
   assert.match(appJs, /Escape/);
   assert.match(themeCss, /\.pt-model-menu\b/);
+  assert.match(themeCss, /\.pt-model-back\b/);
+  assert.match(themeCss, /\.pt-model-effort\b/);
   assert.match(themeCss, /button\.comp-model-pill\b/);
 
   // All 3 locales define model switcher strings
-  for (const key of ['modelSwitchTip', 'modelPendingTip', 'modelMenuTitle', 'modelRunningHint', 'modelGroupModels']) {
+  for (const key of ['modelSwitchTip', 'modelPendingTip', 'modelMenuTitle', 'modelBack', 'modelRunningHint', 'modelGroupModels', 'fTier']) {
     const matches = appJs.match(new RegExp(`\\b${key}:`, 'g')) || [];
     assert.equal(matches.length, 3, `${key} must be localized in en, zh-CN, and zh-TW`);
   }
@@ -558,6 +569,7 @@ test('static checks: Sidecar UI wires #btn-comp-model, .pt-model-menu outside #c
   // LF line endings on all .mjs files
   for (const rel of [
     '../lib/ls-client.mjs',
+    '../lib/model-format.mjs',
     '../lib/store.mjs',
     '../sidecars/threads/main.mjs',
     '../tests/model-display.test.mjs',
@@ -566,4 +578,220 @@ test('static checks: Sidecar UI wires #btn-comp-model, .pt-model-menu outside #c
     const raw = readFileSync(new URL(rel, import.meta.url));
     assert.ok(!raw.includes(Buffer.from('\r')), `${rel} must use LF line endings`);
   }
+});
+
+function loadUiComposerMenuContext() {
+  const src = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
+  const start1 = src.indexOf('function formatModelDisplay(');
+  const end1 = src.indexOf('function normalizeActivityText(', start1);
+  const start2 = src.indexOf('function matchesLiveThreadModel(');
+  const end2 = src.indexOf('function renderThreadHeader(', start2);
+  assert.notEqual(start1, -1, 'formatModelDisplay must exist in app.js');
+  assert.notEqual(end1, -1, 'normalizeActivityText must follow model helpers in app.js');
+  assert.notEqual(start2, -1, 'matchesLiveThreadModel must exist in app.js');
+  assert.notEqual(end2, -1, 'renderThreadHeader must follow model menu helpers in app.js');
+
+  const ctx = {};
+  vm.runInNewContext(
+    `
+    let curLocale = 'en';
+    let selectableModels = [];
+    let selectableModelsLoading = false;
+    let selectableModelsLoadedAt = Date.now();
+    let modelMenuOpen = false;
+    let modelMenuFamilyKey = '';
+    let openThreadId = '';
+    let openThreadObj = null;
+    const pendingModelByThread = new Map();
+    const elModelMenu = {
+      hidden: true,
+      dataset: {},
+      innerHTML: '',
+      querySelector() {
+        return null;
+      },
+    };
+    const elChatInput = { focus() {} };
+    const ICONS = {
+      check: '<svg>check</svg>',
+      chevronLeft: '<svg>left</svg>',
+      chevronRight: '<svg>right</svg>',
+    };
+    const esc = (s) =>
+      String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const L = () => ({
+      modelMenuTitle: 'Model',
+      modelBack: 'Back',
+      modelRunningHint: 'Thread is running — new model applies on your next message',
+      modelNextMsgHint: 'Applies on your next message',
+      modelLoading: 'Loading models…',
+      modelEmpty: 'Live model catalog unavailable',
+      modelDefaultBadge: 'Default',
+      settingsTierDefault: 'Default',
+      settingsTierStandard: 'Standard',
+    });
+    function loadSelectableModels() {}
+    function renderThreadHeader() {}
+
+    ${src.slice(start1, end1)}
+    ${src.slice(start2, end2)}
+
+    this.api = {
+      buildComposerModelMenuData,
+      getModelByIdFromCatalog,
+      openModelMenu,
+      renderModelMenu,
+      closeModelMenu,
+      selectThreadModel,
+      setState(patch = {}) {
+        if ('selectableModels' in patch) {
+          selectableModels = patch.selectableModels;
+          selectableModelsLoadedAt = Date.now();
+        }
+        if ('selectableModelsLoading' in patch) {
+          selectableModelsLoading = patch.selectableModelsLoading;
+        }
+        if ('openThreadId' in patch) openThreadId = patch.openThreadId;
+        if ('openThreadObj' in patch) openThreadObj = patch.openThreadObj;
+        if ('modelMenuOpen' in patch) modelMenuOpen = patch.modelMenuOpen;
+        if ('modelMenuFamilyKey' in patch) modelMenuFamilyKey = patch.modelMenuFamilyKey;
+      },
+      getState() {
+        return {
+          modelMenuOpen,
+          modelMenuFamilyKey,
+          elModelMenu,
+          pendingModelByThread,
+        };
+      },
+    };
+    `,
+    ctx,
+  );
+  return ctx.api;
+}
+
+test('two-level composer .pt-model-menu groups families (Level 1) and efforts (Level 2) preserving catalog sort order', () => {
+  const ui = loadUiComposerMenuContext();
+  const catalog = extractSelectableModels(SAMPLE_MODEL_CONFIG_DATA);
+
+  // Active model is Gemini 4 Hydrogen (XHigh)
+  const rawFamilies = ui.buildComposerModelMenuData(catalog, {
+    id: 'gemini-4-hydrogen-xhigh',
+    modelId: 'gemini-4-hydrogen-xhigh',
+    modelEnum: 'MODEL_PLACEHOLDER_M528',
+    label: 'Gemini 4 Hydrogen (XHigh)',
+  });
+  const families = JSON.parse(JSON.stringify(rawFamilies));
+
+  // 6 concrete variants collapse into 4 Level-1 families in clientModelSorts order
+  assert.deepEqual(
+    families.map((f) => f.label),
+    [
+      'Gemini 4 Neon',
+      'Gemini 4 Hydrogen',
+      'Gemini 3.8 Flash (Medium)',
+      'GPT-OSS 120B (Medium)',
+    ],
+  );
+
+  // Inactive multi-effort family shows its default effort ('High'), quota, tag, and hasTiers: true
+  const neon = families[0];
+  assert.equal(neon.hasTiers, true);
+  assert.equal(neon.active, false);
+  assert.equal(neon.activeEffortLabel, 'High');
+  assert.equal(neon.tagTitle, 'New');
+  assert.equal(neon.quotaInfo?.remainingFraction, 0.96);
+  assert.deepEqual(
+    neon.tiers.map((t) => t.label),
+    ['Low', 'High'],
+  );
+
+  // Active multi-effort family shows active checkmark & active effort ('XHigh'), and marks Level-2 tier active
+  const hydro = families[1];
+  assert.equal(hydro.hasTiers, true);
+  assert.equal(hydro.active, true);
+  assert.equal(hydro.activeEffortLabel, 'XHigh');
+  assert.deepEqual(
+    hydro.tiers.map((t) => [t.label, t.active]),
+    [
+      ['Low', false],
+      ['XHigh', true],
+    ],
+  );
+
+  // Single-variant models pick directly without Level 2 drill-down
+  const flash38 = families[2];
+  assert.equal(flash38.hasTiers, false);
+  assert.equal(flash38.activeEffortLabel, '');
+  assert.equal(flash38.singleModelKey, 'gemini-3.8-flash-medium');
+  assert.equal(flash38.tagTitle, 'Leaving Soon');
+
+  const gpt = families[3];
+  assert.equal(gpt.hasTiers, false);
+  assert.equal(gpt.singleModelKey, 'gpt-oss-120b-medium');
+
+  // Verify live renderModelMenu() Level 1 -> Level 2 drill-down -> 1.2s poll stability -> Reopen -> single-variant pick
+  ui.setState({
+    selectableModels: catalog,
+    openThreadId: 'thr-1',
+    openThreadObj: {
+      threadId: 'thr-1',
+      runState: 'RUN_STATE_RUNNING',
+      archived: false,
+      modelEnum: 'MODEL_PLACEHOLDER_M528',
+      resolvedModel: 'gemini-4-hydrogen-xhigh',
+      modelDisplayName: 'Gemini 4 Hydrogen (XHigh)',
+    },
+  });
+
+  // 1. Open starts at Level 1 with family rows
+  ui.openModelMenu();
+  const state1 = ui.getState();
+  assert.equal(state1.modelMenuOpen, true);
+  assert.equal(state1.modelMenuFamilyKey, '');
+  assert.equal(state1.elModelMenu.hidden, false);
+  assert.equal(state1.elModelMenu.dataset.menuMode, 'level1');
+  assert.match(state1.elModelMenu.innerHTML, /data-family-key="family:gemini 4 neon"/);
+  assert.match(state1.elModelMenu.innerHTML, /data-family-key="family:gemini 4 hydrogen"/);
+  assert.match(state1.elModelMenu.innerHTML, /data-model-key="gpt-oss-120b-medium"/);
+  assert.match(state1.elModelMenu.innerHTML, /pt-model-effort">XHigh</);
+
+  // 2. Drill into Level 2 for Gemini 4 Hydrogen -> sticky Back header + Low & XHigh effort rows
+  ui.setState({ modelMenuFamilyKey: 'family:gemini 4 hydrogen' });
+  ui.renderModelMenu();
+  const state2 = ui.getState();
+  assert.equal(state2.elModelMenu.dataset.menuMode, 'level2:family:gemini 4 hydrogen');
+  assert.match(state2.elModelMenu.innerHTML, /class="pt-model-back"/);
+  assert.match(state2.elModelMenu.innerHTML, /pt-model-menu-family[^>]*>Gemini 4 Hydrogen</);
+  assert.match(state2.elModelMenu.innerHTML, /data-model-key="gemini-4-hydrogen-low"/);
+  assert.match(state2.elModelMenu.innerHTML, /data-model-key="gemini-4-hydrogen-xhigh"/);
+
+  // 3. Simulated 1.2s background poll calling renderModelMenu() preserves Level 2 intact (early no-op)
+  state2.elModelMenu.innerHTML += '<!--sentinel-->';
+  ui.renderModelMenu();
+  assert.ok(ui.getState().elModelMenu.innerHTML.endsWith('<!--sentinel-->'));
+  assert.equal(ui.getState().modelMenuFamilyKey, 'family:gemini 4 hydrogen');
+
+  // 4. Selecting an effort row sets pendingModelByThread and closes menu cleanly
+  const chosenLow = ui.getModelByIdFromCatalog('gemini-4-hydrogen-low');
+  ui.selectThreadModel(chosenLow);
+  assert.equal(ui.getState().modelMenuOpen, false);
+  assert.equal(ui.getState().modelMenuFamilyKey, '');
+  assert.equal(ui.getState().pendingModelByThread.get('thr-1')?.id, 'gemini-4-hydrogen-low');
+
+  // 5. Reopening always starts at Level 1
+  ui.openModelMenu();
+  assert.equal(ui.getState().modelMenuFamilyKey, '');
+  assert.equal(ui.getState().elModelMenu.dataset.menuMode, 'level1');
+
+  // 6. Selecting single-variant model directly closes menu and updates pending selection
+  const chosenGpt = ui.getModelByIdFromCatalog('gpt-oss-120b-medium');
+  ui.selectThreadModel(chosenGpt);
+  assert.equal(ui.getState().modelMenuOpen, false);
+  assert.equal(ui.getState().pendingModelByThread.get('thr-1')?.id, 'gpt-oss-120b-medium');
 });

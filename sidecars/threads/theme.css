@@ -3098,6 +3098,39 @@ button.comp-model-pill:disabled .comp-model-chev {
   gap: 2px;
   flex-shrink: 0;
 }
+.pt-model-menu-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+button.pt-model-back {
+  height: 22px;
+  padding: 0 7px 0 4px;
+  border-radius: var(--pt-r-sm);
+  border: 1px solid var(--pt-line);
+  background: var(--pt-surface-2);
+  color: var(--pt-fg-2);
+  font-size: 11px;
+  font-weight: 500;
+  gap: 2px;
+  flex-shrink: 0;
+}
+button.pt-model-back:hover:not(:disabled) {
+  background: var(--pt-surface-3);
+  border-color: var(--pt-line-strong);
+  color: var(--pt-fg);
+}
+.pt-model-menu-family {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--pt-text-xs);
+  font-weight: 600;
+  color: var(--pt-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .pt-model-menu-title {
   font-size: 11px;
   font-weight: 600;
@@ -3180,6 +3213,26 @@ button.pt-model-opt.active {
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
+}
+.pt-model-effort {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pt-dim);
+  white-space: nowrap;
+}
+button.pt-model-opt.active .pt-model-effort {
+  color: var(--pt-accent);
+}
+.pt-model-chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pt-dim);
+  flex-shrink: 0;
+}
+button.pt-model-opt:hover .pt-model-chev,
+button.pt-model-opt:focus-visible .pt-model-chev {
+  color: var(--pt-fg-2);
 }
 .pt-model-tag {
   font-size: 10px;
@@ -3511,8 +3564,42 @@ button.row-act.act-clean-wt:hover:not(:disabled) {
   color: var(--pt-fg);
 }
 
+.settings-model-group + .settings-model-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pt-line);
+}
+.settings-group-label {
+  font-size: var(--pt-text-xs);
+  font-weight: 600;
+  color: var(--pt-fg);
+  margin-bottom: 6px;
+}
+.settings-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 65fr) minmax(96px, 35fr);
+  gap: 8px;
+  align-items: end;
+}
+.settings-model-row > div {
+  min-width: 0;
+}
+.settings-model-row select {
+  text-overflow: ellipsis;
+}
+.settings-model-row select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.field label.settings-sublabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pt-sub);
+  margin-bottom: 3px;
+}
+
 .settings-field-hint {
-  margin-top: 4px;
+  margin-top: 5px;
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--pt-dim);
@@ -3529,61 +3616,6 @@ button.row-act.act-clean-wt:hover:not(:disabled) {
   margin-top: 8px;
 }
 
-.settings-preview-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin-top: 9px;
-}
-.settings-preview-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 22px;
-}
-.settings-preview-key {
-  font-size: var(--pt-text-xs);
-  font-weight: 500;
-  color: var(--pt-sub);
-  flex-shrink: 0;
-}
-.settings-preview-val {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  justify-content: flex-end;
-}
-.settings-preview-val .o2-wchip {
-  max-width: min(210px, 54vw);
-}
-.settings-src-pill {
-  font-size: 10.5px;
-  font-weight: 500;
-  padding: 1.5px 6px;
-  border-radius: var(--pt-r-pill);
-  background: var(--pt-surface-2);
-  color: var(--pt-sub);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.settings-src-pill.project {
-  background: var(--pt-accent-soft);
-  color: var(--pt-accent);
-}
-.settings-unsaved-pill {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1.5px 6px;
-  border-radius: var(--pt-r-pill);
-  background: var(--pt-warn-soft);
-  color: var(--pt-warn);
-  text-transform: none;
-  letter-spacing: normal;
-  white-space: nowrap;
-}
-
 @media (max-width: 360px) {
   .settings-hdr {
     padding: 0 10px 0 8px;
@@ -3593,8 +3625,9 @@ button.row-act.act-clean-wt:hover:not(:disabled) {
     padding: 0 6px;
     font-size: 10.5px;
   }
-  .settings-preview-row {
-    flex-wrap: wrap;
-    gap: 4px;
+}
+@media (max-width: 320px) {
+  .settings-model-row {
+    grid-template-columns: 1fr;
   }
 }
