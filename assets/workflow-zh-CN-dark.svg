@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="580" viewBox="0 0 1200 580" role="img" aria-labelledby="title" lang="zh-CN" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title" lang="zh-CN" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', sans-serif">
   <title id="title">Antigravity Project Threads 核心工作流</title>
   <style>
     .flow { animation: flow 1.6s linear infinite; }
@@ -25,23 +25,30 @@
       <stop offset="0%" stop-color="#FBBF24"/>
       <stop offset="100%" stop-color="#F97316"/>
     </linearGradient>
-    <linearGradient id="gEdgeWt" gradientUnits="userSpaceOnUse" x1="340" y1="0" x2="440" y2="0">
+    <linearGradient id="gEdgeWt" gradientUnits="userSpaceOnUse" x1="332" y1="0" x2="424" y2="0">
       <stop offset="0%" stop-color="#2DD4BF"/><stop offset="100%" stop-color="#34D399"/>
     </linearGradient>
-    <linearGradient id="gEdgeRo" gradientUnits="userSpaceOnUse" x1="340" y1="0" x2="440" y2="0">
-      <stop offset="0%" stop-color="#2DD4BF"/><stop offset="100%" stop-color="#818CF8"/>
+    <linearGradient id="gEdgeRo" gradientUnits="userSpaceOnUse" x1="332" y1="0" x2="424" y2="0">
+      <stop offset="0%" stop-color="#2DD4BF"/><stop offset="100%" stop-color="#60A5FA"/>
     </linearGradient>
-    <linearGradient id="gEdgeOutWt" gradientUnits="userSpaceOnUse" x1="780" y1="0" x2="880" y2="0">
+    <linearGradient id="gEdgeRv" gradientUnits="userSpaceOnUse" x1="332" y1="0" x2="424" y2="0">
+      <stop offset="0%" stop-color="#60A5FA"/><stop offset="100%" stop-color="#C084FC"/>
+    </linearGradient>
+    <linearGradient id="gEdgeOutWt" gradientUnits="userSpaceOnUse" x1="788" y1="0" x2="880" y2="0">
       <stop offset="0%" stop-color="#34D399"/><stop offset="100%" stop-color="#FBBF24"/>
     </linearGradient>
-    <linearGradient id="gEdgeOutRo" gradientUnits="userSpaceOnUse" x1="780" y1="0" x2="880" y2="0">
-      <stop offset="0%" stop-color="#818CF8"/><stop offset="100%" stop-color="#FBBF24"/>
+    <linearGradient id="gEdgeOutRo" gradientUnits="userSpaceOnUse" x1="788" y1="0" x2="880" y2="0">
+      <stop offset="0%" stop-color="#60A5FA"/><stop offset="100%" stop-color="#FBBF24"/>
     </linearGradient>
-    <linearGradient id="gLoop" gradientUnits="userSpaceOnUse" x1="1015" y1="0" x2="195" y2="0">
+    <linearGradient id="gEdgeOutRv" gradientUnits="userSpaceOnUse" x1="788" y1="0" x2="880" y2="0">
+      <stop offset="0%" stop-color="#C084FC"/><stop offset="100%" stop-color="#FBBF24"/>
+    </linearGradient>
+    <linearGradient id="gLoop" gradientUnits="userSpaceOnUse" x1="1017" y1="0" x2="189" y2="0">
       <stop offset="0%" stop-color="#A78BFA"/><stop offset="100%" stop-color="#2DD4BF"/>
     </linearGradient>
     <marker id="arrowGreen" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 L2.5 5 z" fill="#34D399"/></marker>
-    <marker id="arrowIndigo" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 L2.5 5 z" fill="#818CF8"/></marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 L2.5 5 z" fill="#60A5FA"/></marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 L2.5 5 z" fill="#C084FC"/></marker>
     <marker id="arrowAmber" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 L2.5 5 z" fill="#FBBF24"/></marker>
     <marker id="arrowTeal" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 L2.5 5 z" fill="#2DD4BF"/></marker>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
@@ -53,122 +60,151 @@
   </defs>
 
   <!-- Canvas -->
-  <rect width="1200" height="580" rx="28" fill="#0D1117"/>
-  <rect width="1200" height="580" rx="28" fill="url(#dots)" opacity="0.7"/>
-  <rect width="1200" height="580" rx="28" fill="url(#gGlow)"/>
+  <rect width="1200" height="680" rx="28" fill="#0D1117"/>
+  <rect width="1200" height="680" rx="28" fill="url(#dots)" opacity="0.7"/>
+  <rect width="1200" height="680" rx="28" fill="url(#gGlow)"/>
 
   <!-- Heading -->
-  <text x="600" y="54" font-size="13" font-weight="700" fill="#6E7681" text-anchor="middle" letter-spacing="3">ANTIGRAVITY PROJECT THREADS</text>
-  <text x="600" y="96" font-size="32" font-weight="800" fill="#E6EDF3" text-anchor="middle">把注意力留给决策，把并行开发交给后台线程</text>
+  <text x="600" y="48" font-size="13" font-weight="700" fill="#6E7681" text-anchor="middle" letter-spacing="3">ANTIGRAVITY PROJECT THREADS</text>
+  <text x="600" y="90" font-size="32" font-weight="800" fill="#E6EDF3" text-anchor="middle">把注意力留给决策，把并行开发交给后台线程</text>
 
   <!-- Edges -->
-  <path d="M340 290 C 395 290, 385 212, 434 212" fill="none" stroke="url(#gEdgeWt)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowGreen)"/>
-    <path class="flow" d="M340 290 C 395 290, 385 212, 434 212" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
-    <path d="M340 290 C 395 290, 385 367, 434 367" fill="none" stroke="url(#gEdgeRo)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowIndigo)"/>
-    <path class="flow" d="M340 290 C 395 290, 385 367, 434 367" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
-    <path d="M780 212 C 835 212, 825 280, 874 280" fill="none" stroke="url(#gEdgeOutWt)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
-    <path class="flow" d="M780 212 C 835 212, 825 280, 874 280" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
-    <path d="M780 367 C 835 367, 825 300, 874 300" fill="none" stroke="url(#gEdgeOutRo)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
-    <path class="flow" d="M780 367 C 835 367, 825 300, 874 300" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
+  <path d="M332 344 C 382 344, 374 206, 418 206" fill="none" stroke="url(#gEdgeWt)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowGreen)"/>
+    <path class="flow" d="M332 344 C 382 344, 374 206, 418 206" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
+    <path d="M332 344 H 418" fill="none" stroke="url(#gEdgeRo)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowBlue)"/>
+    <path class="flow" d="M332 344 H 418" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
+    <path d="M332 344 C 382 344, 374 482, 418 482" fill="none" stroke="url(#gEdgeRv)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowPurple)"/>
+    <path class="flow" d="M332 344 C 382 344, 374 482, 418 482" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
+    <path d="M788 206 C 838 206, 830 326, 874 326" fill="none" stroke="url(#gEdgeOutWt)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
+    <path class="flow" d="M788 206 C 838 206, 830 326, 874 326" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
+    <path d="M788 344 H 874" fill="none" stroke="url(#gEdgeOutRo)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
+    <path class="flow" d="M788 344 H 874" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
+    <path d="M788 482 C 838 482, 830 362, 874 362" fill="none" stroke="url(#gEdgeOutRv)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowAmber)"/>
+    <path class="flow" d="M788 482 C 838 482, 830 362, 874 362" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
 
   <!-- Loop back -->
-  <path d="M1015 430 V 500 Q 1015 522 993 522 H 217 Q 195 522 195 500 V 438" fill="none" stroke="url(#gLoop)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowTeal)"/>
-  <path class="flow" d="M1015 430 V 500 Q 1015 522 993 522 H 217 Q 195 522 195 500 V 438" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
+  <path d="M1017 542 V 602 Q 1017 624 995 624 H 211 Q 189 624 189 602 V 550" fill="none" stroke="url(#gLoop)" stroke-width="3" stroke-linecap="round" marker-end="url(#arrowTeal)"/>
+  <path class="flow" d="M1017 542 V 602 Q 1017 624 995 624 H 211 Q 189 624 189 602 V 550" fill="none" stroke="#0D1117" stroke-opacity="0.85" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 16"/>
   <g>
-    <rect x="458" y="503" width="284" height="38" rx="19" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
-    <circle cx="477" cy="522" r="11" fill="url(#gLoop)"/>
-    <text x="477" y="526.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">4</text>
-    <text x="498" y="527" font-size="14" font-weight="600" fill="#E6EDF3" text-anchor="start">自动摘要回传，一键响应与验收归档</text>
+    <rect x="458" y="605" width="284" height="38" rx="19" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
+    <circle cx="477" cy="624" r="11" fill="url(#gLoop)"/>
+    <text x="477" y="628.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">4</text>
+    <text x="498" y="629" font-size="14" font-weight="600" fill="#E6EDF3" text-anchor="start">自动摘要回传，一键响应与验收归档</text>
   </g>
 
   <!-- 1. Coordinator -->
   <g>
-    <rect x="50" y="150" width="290" height="280" rx="22" fill="#161B22" stroke="url(#gCoordBorder)" stroke-width="2" filter="url(#glow)"/>
-    <circle cx="195" cy="214" r="28" fill="url(#gCoordIcon)"/>
-    <g transform="translate(181 200) scale(1.1666666666666667)" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></g>
-    <text x="195" y="272" font-size="22" font-weight="800" fill="#E6EDF3" text-anchor="middle">Coordinator 总控</text>
-    <text x="195" y="296" font-size="14" font-weight="400" fill="#8B949E" text-anchor="middle">你的主对话窗口</text>
-    <rect x="80" y="319" width="230" height="34" rx="17" fill="#0D1117" stroke="#30363D"/>
-    <circle cx="142" cy="336" r="8" fill="#34D399"/><g transform="translate(137 331) scale(0.4166666666666667)" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><polyline points="20 6 9 17 4 12"/></g>
-    <text x="158" y="341" font-size="14" font-weight="500" fill="#C9D1D9" text-anchor="start">拆解任务与拍板</text>
-    <rect x="80" y="363" width="230" height="34" rx="17" fill="#0D1117" stroke="#30363D"/>
-    <circle cx="149" cy="380" r="8" fill="#2DD4BF" opacity="0.18"/><circle cx="149" cy="380" r="3.5" fill="#2DD4BF"/>
-    <text x="165" y="385" font-size="14" font-weight="500" fill="#C9D1D9" text-anchor="start">告别反复切窗</text>
+    <rect x="46" y="146" width="286" height="396" rx="22" fill="#161B22" stroke="url(#gCoordBorder)" stroke-width="2" filter="url(#glow)"/>
+    <circle cx="189" cy="234" r="30" fill="url(#gCoordIcon)"/>
+    <g transform="translate(174 219) scale(1.25)" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></g>
+    <text x="189" y="296" font-size="22" font-weight="800" fill="#E6EDF3" text-anchor="middle">Coordinator 总控</text>
+    <text x="189" y="321" font-size="14" font-weight="400" fill="#8B949E" text-anchor="middle">你的主对话窗口</text>
+    <rect x="72" y="358" width="234" height="36" rx="18" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="136" cy="376" r="8" fill="#34D399"/><g transform="translate(131 371) scale(0.4166666666666667)" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><polyline points="20 6 9 17 4 12"/></g>
+    <text x="152" y="381" font-size="14" font-weight="500" fill="#C9D1D9" text-anchor="start">拆解任务与拍板</text>
+    <rect x="72" y="406" width="234" height="36" rx="18" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="143" cy="424" r="8" fill="#2DD4BF" opacity="0.18"/><circle cx="143" cy="424" r="3.5" fill="#2DD4BF"/>
+    <text x="159" y="429" font-size="14" font-weight="500" fill="#C9D1D9" text-anchor="start">告别反复切窗</text>
+    <rect x="72" y="454" width="234" height="36" rx="18" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="143" cy="472" r="8" fill="#C084FC" opacity="0.18"/><circle cx="143" cy="472" r="3.5" fill="#C084FC"/>
+    <text x="159" y="477" font-size="14" font-weight="500" fill="#C9D1D9" text-anchor="start">按需共享记忆</text>
   </g>
 
-  <!-- 2. Parallel threads -->
+  <!-- 2. Parallel threads (3 rails) -->
   <g>
-    <rect x="440" y="150" width="340" height="125" rx="18" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
-    <clipPath id="clip-branch"><rect x="440" y="150" width="340" height="125" rx="18"/></clipPath>
-    <rect x="440" y="150" width="5" height="125" fill="#34D399" clip-path="url(#clip-branch)"/>
-    <rect x="466" y="172" width="44" height="44" rx="12" fill="#0F2E25"/>
-    <g transform="translate(476 182) scale(1)" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#34D399"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></g>
-    <text x="524" y="192" font-size="19" font-weight="700" fill="#E6EDF3" text-anchor="start">Worktree 代码线程</text>
-    <text x="524" y="214" font-size="14" font-weight="400" fill="#8B949E" text-anchor="start">独立分支隔离改代码</text>
+    <rect x="424" y="146" width="364" height="120" rx="18" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
+    <clipPath id="clip-branch"><rect x="424" y="146" width="364" height="120" rx="18"/></clipPath>
+    <rect x="424" y="146" width="5" height="120" fill="#34D399" clip-path="url(#clip-branch)"/>
+    <rect x="448" y="167" width="42" height="42" rx="12" fill="#0F2E25"/>
+    <g transform="translate(457 176) scale(1)" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#34D399"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></g>
+    <text x="504" y="186" font-size="18.5" font-weight="700" fill="#E6EDF3" text-anchor="start">Worktree 代码线程</text>
+    <text x="504" y="207" font-size="13.5" font-weight="400" fill="#8B949E" text-anchor="start">独立分支隔离改代码</text>
     <g>
-    <rect x="466" y="234" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
-    <circle cx="483" cy="248" r="7" fill="#34D399"/><g transform="translate(478.5 243.5) scale(0.375)" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><polyline points="20 6 9 17 4 12"/></g>
-    <text x="497" y="252.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#1 架构重构</text>
+    <rect x="448" y="225" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="465" cy="239" r="7" fill="#34D399"/><g transform="translate(460.5 234.5) scale(0.375)" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><polyline points="20 6 9 17 4 12"/></g>
+    <text x="479" y="243.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#1 架构重构</text>
   </g>
     <g>
-    <rect x="588.5" y="234" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
-    <circle cx="605.5" cy="248" r="7" fill="#60A5FA" opacity="0.22"/><circle cx="605.5" cy="248" r="3.6" fill="#60A5FA"/>
-    <text x="619.5" y="252.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#2 界面优化</text>
+    <rect x="570.5" y="225" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="587.5" cy="239" r="7" fill="#60A5FA" opacity="0.22"/><circle cx="587.5" cy="239" r="3.6" fill="#60A5FA"/>
+    <text x="601.5" y="243.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#2 界面优化</text>
   </g>
   </g>
   <g>
-    <rect x="440" y="305" width="340" height="125" rx="18" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
-    <clipPath id="clip-search"><rect x="440" y="305" width="340" height="125" rx="18"/></clipPath>
-    <rect x="440" y="305" width="5" height="125" fill="#818CF8" clip-path="url(#clip-search)"/>
-    <rect x="466" y="327" width="44" height="44" rx="12" fill="#1E2147"/>
-    <g transform="translate(476 337) scale(1)" fill="none" stroke="#818CF8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#818CF8"><circle cx="11" cy="11" r="7"/><line x1="20.5" y1="20.5" x2="16" y2="16"/></g>
-    <text x="524" y="347" font-size="19" font-weight="700" fill="#E6EDF3" text-anchor="start">只读排查线程</text>
-    <text x="524" y="369" font-size="14" font-weight="400" fill="#8B949E" text-anchor="start">零拷贝秒开，排查与审查</text>
+    <rect x="424" y="284" width="364" height="120" rx="18" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
+    <clipPath id="clip-search"><rect x="424" y="284" width="364" height="120" rx="18"/></clipPath>
+    <rect x="424" y="284" width="5" height="120" fill="#60A5FA" clip-path="url(#clip-search)"/>
+    <rect x="448" y="305" width="42" height="42" rx="12" fill="#10263F"/>
+    <g transform="translate(457 314) scale(1)" fill="none" stroke="#60A5FA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#60A5FA"><circle cx="11" cy="11" r="7"/><line x1="20.5" y1="20.5" x2="16" y2="16"/></g>
+    <text x="504" y="324" font-size="18.5" font-weight="700" fill="#E6EDF3" text-anchor="start">只读排查线程</text>
+    <text x="504" y="345" font-size="13.5" font-weight="400" fill="#8B949E" text-anchor="start">零拷贝快速调研与排障</text>
     <g>
-    <rect x="466" y="389" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
-    <circle cx="483" cy="403" r="7" fill="#60A5FA" opacity="0.22"/><circle cx="483" cy="403" r="3.6" fill="#60A5FA"/>
-    <text x="497" y="407.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#3 日志排查</text>
+    <rect x="448" y="363" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="465" cy="377" r="7" fill="#60A5FA" opacity="0.22"/><circle cx="465" cy="377" r="3.6" fill="#60A5FA"/>
+    <text x="479" y="381.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#3 日志排查</text>
   </g>
     <g>
-    <rect x="588.5" y="389" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
-    <circle cx="605.5" cy="403" r="6" fill="none" stroke="#818CF8" stroke-width="2"/><circle cx="605.5" cy="403" r="2" fill="#818CF8"/>
-    <text x="619.5" y="407.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#4 代码审查</text>
+    <rect x="570.5" y="363" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="587.5" cy="377" r="7" fill="#34D399"/><g transform="translate(583 372.5) scale(0.375)" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><polyline points="20 6 9 17 4 12"/></g>
+    <text x="601.5" y="381.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#4 链路调研</text>
+  </g>
+  </g>
+  <g>
+    <rect x="424" y="422" width="364" height="120" rx="18" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
+    <clipPath id="clip-shieldCheck"><rect x="424" y="422" width="364" height="120" rx="18"/></clipPath>
+    <rect x="424" y="422" width="5" height="120" fill="#C084FC" clip-path="url(#clip-shieldCheck)"/>
+    <rect x="448" y="443" width="42" height="42" rx="12" fill="#28193B"/>
+    <g transform="translate(457 452) scale(1)" fill="none" stroke="#C084FC" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#C084FC"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></g>
+    <text x="504" y="462" font-size="18.5" font-weight="700" fill="#E6EDF3" text-anchor="start">Review 审查线程</text>
+    <text x="504" y="483" font-size="13.5" font-weight="400" fill="#8B949E" text-anchor="start">专属 Review 模型跨模型交叉审查</text>
+    <g>
+    <rect x="448" y="501" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="465" cy="515" r="6.5" fill="#C084FC" opacity="0.2"/><circle cx="465" cy="515" r="3.6" fill="#C084FC"/>
+    <text x="479" y="519.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#5 变更审查</text>
+  </g>
+    <g>
+    <rect x="570.5" y="501" width="114.5" height="28" rx="14" fill="#0D1117" stroke="#30363D"/>
+    <circle cx="587.5" cy="515" r="7" fill="#34D399"/><g transform="translate(583 510.5) scale(0.375)" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><polyline points="20 6 9 17 4 12"/></g>
+    <text x="601.5" y="519.6" font-size="13" font-weight="500" fill="#C9D1D9" text-anchor="start">#6 风险复核</text>
   </g>
   </g>
 
   <!-- 3. Board -->
   <g>
-    <rect x="880" y="150" width="270" height="280" rx="22" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
-    <circle cx="1015" cy="206" r="24" fill="url(#gBoardIcon)"/>
-    <g transform="translate(1003 194) scale(1)" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></g>
-    <text x="1015" y="252" font-size="19" font-weight="800" fill="#E6EDF3" text-anchor="middle">右侧线程看板</text>
-    <rect x="900" y="268" width="230" height="116" rx="14" fill="#2A2110" stroke="#8A6A1F"/>
-    <text x="1015" y="292" font-size="14" font-weight="700" fill="#FCD34D" text-anchor="middle">待决策队列</text>
-    <rect x="916" y="304" width="198" height="32" rx="10" fill="#2F81F7"/>
-    <text x="1015" y="325" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">一键合入</text>
-    <rect x="916" y="343" width="198" height="30" rx="10" fill="#161B22" stroke="#3D444D"/>
-    <text x="1015" y="363" font-size="14" font-weight="500" fill="#C9D1D9" text-anchor="middle">内联预览</text>
-    <rect x="900" y="394" width="230" height="30" rx="15" fill="#221B3A" stroke="#4C3D8F"/>
-    <text x="1015" y="414" font-size="13" font-weight="600" fill="#C4B5FD" text-anchor="middle">不切窗直接追问</text>
+    <rect x="880" y="146" width="274" height="396" rx="22" fill="#161B22" stroke="#30363D" filter="url(#shadow)"/>
+    <circle cx="1017" cy="216" r="26" fill="url(#gBoardIcon)"/>
+    <g transform="translate(1004 203) scale(1.0833333333333333)" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:#FFFFFF"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></g>
+    <text x="1017" y="268" font-size="19" font-weight="800" fill="#E6EDF3" text-anchor="middle">右侧线程看板</text>
+    <rect x="900" y="286" width="234" height="166" rx="14" fill="#2A2110" stroke="#8A6A1F"/>
+    <text x="1017" y="311" font-size="14" font-weight="700" fill="#FCD34D" text-anchor="middle">待决策队列</text>
+    <rect x="915" y="324" width="204" height="32" rx="10" fill="#2F81F7"/>
+    <text x="1017" y="345" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">一键合入</text>
+    <rect x="915" y="364" width="204" height="30" rx="10" fill="#161B22" stroke="#3D444D"/>
+    <text x="1017" y="384" font-size="14" font-weight="500" fill="#C9D1D9" text-anchor="middle">内联预览</text>
+    <rect x="915" y="404" width="204" height="32" rx="10" fill="#1A160B" stroke="#6B5218" stroke-dasharray="4 3"/>
+    <text x="927" y="425" font-size="12.5" font-weight="500" fill="#D29922" text-anchor="start">或输入自定义指令...</text>
+    <g transform="translate(1095 413) scale(0.5833333333333334)" fill="none" stroke="#D29922" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#D29922"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></g>
+    <rect x="900" y="470" width="234" height="34" rx="17" fill="#221B3A" stroke="#4C3D8F"/>
+    <text x="1017" y="492" font-size="13.5" font-weight="600" fill="#C4B5FD" text-anchor="middle">不切窗直接追问</text>
   </g>
 
   <!-- Step badges -->
   <g>
-    <rect x="143.44" y="136" width="103.12" height="28" rx="14" fill="#0C2D48"/>
-    <circle cx="159.44" cy="150" r="10" fill="#38BDF8"/>
-    <text x="159.44" y="154.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">1</text>
-    <text x="177.44" y="154.6" font-size="13" font-weight="600" fill="#7DD3FC" text-anchor="start">专注主线</text>
+    <rect x="137.44" y="132" width="103.12" height="28" rx="14" fill="#0C2D48"/>
+    <circle cx="153.44" cy="146" r="10" fill="#38BDF8"/>
+    <text x="153.44" y="150.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">1</text>
+    <text x="171.44" y="150.6" font-size="13" font-weight="600" fill="#7DD3FC" text-anchor="start">专注主线</text>
   </g>
   <g>
-    <rect x="558.44" y="136" width="103.12" height="28" rx="14" fill="#0F3324"/>
-    <circle cx="574.44" cy="150" r="10" fill="#22C55E"/>
-    <text x="574.44" y="154.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">2</text>
-    <text x="592.44" y="154.6" font-size="13" font-weight="600" fill="#86EFAC" text-anchor="start">后台并行</text>
+    <rect x="554.44" y="132" width="103.12" height="28" rx="14" fill="#0F3324"/>
+    <circle cx="570.44" cy="146" r="10" fill="#22C55E"/>
+    <text x="570.44" y="150.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">2</text>
+    <text x="588.44" y="150.6" font-size="13" font-weight="600" fill="#86EFAC" text-anchor="start">后台并行</text>
   </g>
   <g>
-    <rect x="963.44" y="136" width="103.12" height="28" rx="14" fill="#3A2A08"/>
-    <circle cx="979.44" cy="150" r="10" fill="#F59E0B"/>
-    <text x="979.44" y="154.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">3</text>
-    <text x="997.44" y="154.6" font-size="13" font-weight="600" fill="#FCD34D" text-anchor="start">一键拍板</text>
+    <rect x="965.44" y="132" width="103.12" height="28" rx="14" fill="#3A2A08"/>
+    <circle cx="981.44" cy="146" r="10" fill="#F59E0B"/>
+    <text x="981.44" y="150.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">3</text>
+    <text x="999.44" y="150.6" font-size="13" font-weight="600" fill="#FCD34D" text-anchor="start">一键拍板</text>
   </g>
 </svg>

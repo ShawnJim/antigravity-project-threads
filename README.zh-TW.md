@@ -26,10 +26,10 @@
 | 亮點 | 帶來的體驗 |
 | --- | --- |
 | 🧭 **總控專注決策** | 主窗常駐總控專攻拆解與拍板，遠離檢索日誌洗版。 |
-| 🌿 **隔離平行執行** | 寫程式自動隔離 Worktree，查程式零拷貝互不衝突。 |
-| 📥 **待決策一鍵收口** | 完工自動彙總，選擇、合併與封存置頂一鍵回應。 |
-| 👀 **右側內嵌預覽** | 側欄直接 1:1 追問、看進度與切模型，無需切離主窗。 |
-| 🧠 **隔離與共享記憶** | 多專案獨立 `#N` 編號防串線，專案規範自動同步。 |
+| 🌿 **三軌隔離並行** | Worktree 改程式、唯讀零拷貝調研與獨立 Review 模型審查三軌並行。 |
+| 📥 **待決策一鍵收口** | 完工自動彙總置頂，支援快捷按鈕一鍵回應或直接輸入自訂指令。 |
+| 👀 **內嵌預覽與防卡死** | 側欄 1:1 預覽進度、追問與切模型，背景非阻塞看門狗自動巡檢防卡死。 |
+| 🧠 **分層共享記憶** | 多專案獨立 `#N` 隔離，薄索引配按需專題知識庫同步規範且防上下文膨脹。 |
 | 🔄 **換綁與安全更新** | 一鍵換綁總控，內建穩定版與開發版雙渠道安全升級。 |
 
 ## 核心工作流
@@ -38,7 +38,7 @@
   <img src="./assets/workflow-zh-TW-light.svg#gh-light-mode-only" width="100%" alt="Antigravity Project Threads 核心工作流" />
   <img src="./assets/workflow-zh-TW-dark.svg#gh-dark-mode-only" width="100%" alt="Antigravity Project Threads 核心工作流" />
 </p>
-<p align="center"><sub>你只管拍板，總控拆解派發，背景執行緒並行執行，結果自動回流看板一鍵處理。</sub></p>
+<p align="center"><sub>你只管拍板，總控按需派發程式、唯讀與審查三軌並行執行緒，結果自動回流看板一鍵處理。</sub></p>
 
 ## 快速開始
 
@@ -65,21 +65,22 @@ New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null; g
 
 | 工具名稱 | 作用說明 |
 | --- | --- |
-| `init_project_coordinator` | 將目前工作階段綁定為 `[Coordinator]`，註冊生命週期鉤子並初始化 `.agents/rules/project-memory.md`。 |
-| `dispatch_thread` | 透過 `ConversationService` 背景派發獨立 Git Worktree（`createWorktree: true`）或零拷貝唯讀（`createWorktree: false`）執行緒。 |
-| `list_threads` | 依專案作用域同步並列出活躍或已封存執行緒，顯示 `#N` / `thr-xxx`、即時 `runState`、Git 狀態與最新摘要。 |
+| `init_project_coordinator` | 將目前工作階段綁定為 `[Coordinator]`，註冊生命週期鉤子並初始化薄索引 `.agents/rules/project-memory.md` 與預設合併規範。 |
+| `dispatch_thread` | 透過 `ConversationService` 依 `threadType`（`worktree` / `readonly` / `review`）背景派發隔離 Git Worktree 或零拷貝執行緒，自動套用對應預設模型並按需推薦匹配專題。 |
+| `list_threads` | 依專案作用域同步並列出活躍或已封存執行緒，顯示 `#N` / `thr-xxx`、即時 `runState`、步驟進度、Git 狀態與最新摘要。 |
 | `get_thread_detail` | 僅局部重新整理並查詢單一執行緒的中繼資料、Git 狀態與總結，支援 `thr-xxx`、專案內 `#N` 或會話 UUID。 |
 | `send_thread_message` | 不切走左側總控工作階段，向既有工作執行緒背景傳送追問、糾偏或補充指令。 |
 | `archive_thread` | 封存已完成或廢棄的執行緒，並於工作區乾淨且已合併（含 `cherry-pick` 等價提交）時安全移除 Worktree 與分支。 |
-| `update_project_memory` | 讀取、附加或重寫 `.agents/rules/project-memory.md`，並向本專案下所有活躍 Worktree 自動廣播同步。 |
-| `manage_decisions` | 登記（`add`）、列出（`list`）、解決（`resolve`）或忽略（`dismiss`）置頂於右側看板的 **待決策** 卡片與 1–3 個快捷按鈕。 |
+| `update_project_memory` | 讀取、列出、附加、重寫或刪除雙層共享記憶：薄索引（`.agents/rules/project-memory.md`，`<= 60` 行）與按需專題（`.agents/memory/<topic>.md`），自動同步至所有活躍 Worktree。 |
+| `manage_decisions` | 登記（`add`）、列出（`list`）、解決（`resolve`）或忽略（`dismiss`）置頂於右側看板的 **待決策** 卡片，支援 1–3 個快捷按鈕與自訂指令直接回覆（`custom_reply`）。 |
 
 ### 核心機制與工程約定
 
-- **`v14` 協議與總控換綁**：由 `PreInvocation` / `PreToolUse` / `Stop` 鉤子守護；看板 **`切換總控`** / **`換綁目前`** 平滑遷移本專案活躍執行緒與顯式待決策（避免觸發歷史閒置執行緒回呼雪崩），退場舊總控收到提示並攔截過期單執行緒寫入操作。
-- **依模式封存與待決策去重**：唯讀執行緒回報後可自主封存；Worktree 程式碼執行緒（位於 `../.worktrees/<repo>/<thread-slug>`）保留至使用者驗收通過後自動封存，並相容一般合併與 `cherry-pick` 清理。顯式決策支援 `send_coordinator` / `archive_thread` / `dismiss` 快捷按鈕，並與 Worktree 自動合併/封存提示依執行緒去重。
-- **Fail-Closed 隔離與非同步背景感知**：基於即時 `GetConversation` 中繼資料與 Git 主儲存庫根執行跨專案隔離；`get_thread_detail`、`send_thread_message`、`archive_thread` 預設強制檢核作用域（`coordinatorId` / `workspacePath` / `projectId`），除非顯式傳入 `scope: "*"`；專案內 `#N` 檢索須帶前導 `#`。自動識別執行中的非同步 `run_command` 任務，並經原子鎖（`wx`）去重推送完成卡片。
-- **模型選擇、遙測與原生預覽**：兩級模型家族 + 思考檔位懸浮選擇器，支援執行緒中途切模型、`Extra High` 全鏈路正規化、依模式設定預設模型與原生 **`inherit`（跟隨總控）**；零額外 RPC 顯示 Token 總計、壓縮線進度與壓縮次數（支援快取離線日誌回退）。Swarm 風格看板採用 `--pt-*` 獨立權杖、`ReadProject` 真實專案名、1:1 內嵌 **`Preview`** 抽屜與 **`Open ↗`** 彈出，介面自動跟隨 `English / 简体中文 / 繁體中文`。
+- **`v17` 協議與總控換綁**：由 `PreInvocation` / `PreToolUse` / `Stop` 鉤子守護；看板 **`切換總控`** / **`換綁目前`** 平滑遷移本專案活躍執行緒與顯式待決策（避免觸發歷史閒置執行緒回呼雪崩），退場舊總控收到提示並攔截過期單執行緒寫入操作。
+- **依模式封存與待決策收口**：唯讀與 Review 執行緒回報後可自主封存；Worktree 程式碼執行緒（位於 `../.worktrees/<repo>/<thread-slug>`）保留至使用者驗收通過後自動封存，並相容一般合併與 `cherry-pick` 清理。顯式決策支援 `send_coordinator` / `archive_thread` / `dismiss` 快捷按鈕與內嵌 `custom_reply` 自訂指令回覆（具備冪等認領與解決後 `merge_ready` 回彈抑制），並與 Worktree 自動提示依執行緒去重。
+- **雙層共享專案記憶**：將 `.agents/rules/project-memory.md` 保持為常駐薄索引（`<= 60` 行 / `~4KB`），模組細節沉澱至按需 `.agents/memory/<topic>.md` 並於派發時依關鍵字自動推薦。支援存量單檔記憶一鍵無損升級（保留驗證通過的 `legacy` 封存與原子回滾）、受控預設合併規範以及跨程序檔案鎖保護。
+- **Fail-Closed 隔離、背景看門狗與步驟追蹤**：基於即時 `GetConversation` 中繼資料與 Git 主儲存庫根執行跨專案隔離（`get_thread_detail` / `send_thread_message` / `archive_thread` 預設強制檢核作用域，除非顯式傳入 `scope: "*"`；專案內 `#N` 檢索須帶前導 `#`）。內建依專案獨立運作的非阻塞背景看門狗（`lib/watchdog.mjs`），巡檢長時卡滯、非同步 `run_command` 任務與狀態失配並支援靜默、冷卻與原子認領去重；子執行緒提示詞聯動 `update_steps` 實現目前輪次即時步驟追蹤。
+- **三檔預設模型、遙測與原生預覽**：兩級模型家族 + 思考檔位懸浮選擇器，支援執行緒中途切模型、`Extra High` 全鏈路正規化、三檔獨立預設模型（Worktree / 唯讀 / Review）與原生 **`inherit`（跟隨總控）**；零額外 RPC 顯示 Token 總計、壓縮線進度與壓縮次數（支援快取離線日誌回退）。Swarm 風格看板採用 `--pt-*` 獨立權杖、`ReadProject` 真實專案名、1:1 內嵌 **`Preview`** 抽屜與 **`Open ↗`** 彈出，介面自動跟隨 `English / 简体中文 / 繁體中文`。
 - **雙渠道安全更新器**：可於 Sidecar **設定 → 版本與更新** 中切換 **`stable`**（`origin/main` / `vX.Y.Z`）與 **`dev`**（`origin/dev` 先行版）；Git 一鍵更新嚴格檢查乾淨工作區並僅執行 `--ff-only` 快進（絕不執行 `git reset --hard`），非 Git 安裝安全引導前往 Releases，並內建版本漂移偵測與請求逾時保護。
 
 </details>
@@ -106,17 +107,23 @@ project-threads/
 ├── plugin.json                 # Antigravity 2.0 外掛清單
 ├── mcp_config.json             # Coordinator MCP 工具服務宣告
 ├── hooks.json                  # PreInvocation / PreToolUse / Stop 生命週期鉤子
-├── assets/logo.svg             # 向量外掛與儲存庫 Logo
+├── assets/
+│   ├── logo.svg                # 向量外掛與儲存庫 Logo
+│   └── workflow-*.svg          # 深淺色自適應三語三軌工作流配圖
 ├── rules/AGENTS.md             # Coordinator 與 Worktree 隔離規則
 ├── skills/coord/SKILL.md       # /coord 技能工作流指引
 ├── mcp/server.mjs              # Stdio MCP Server（8 個總控編排工具）
-├── scripts/hook-handler.mjs    # 完成擷取、原子去重、舊總控保護與 v14 指令續期
+├── scripts/
+│   ├── hook-handler.mjs        # 完成擷取、原子去重、舊總控保護與 v17 指令續期
+│   └── run-hook.{sh,cmd}       # 跨平台生命週期鉤子啟動封裝腳本
 ├── lib/
 │   ├── ls-client.mjs           # 本地 ConversationService / LanguageServerService 用戶端
+│   ├── memory.mjs              # 雙層薄索引、按需專題記憶、併發鎖與存量無損升級
 │   ├── model-format.mjs        # 兩級模型目錄、思考檔位格式化與 inherit 解析
 │   ├── store.mjs               # 專案隔離註冊表、#N 序號、待決策、換綁與 Worktree 同步
-│   ├── transcript.mjs          # 對話日誌解析、非同步任務偵測與 Token/壓縮遙測
-│   └── updater.mjs             # 雙渠道外掛版本檢查與安全快進本地更新器
+│   ├── transcript.mjs          # 對話日誌解析、非同步任務/步驟偵測與 Token/壓縮遙測
+│   ├── updater.mjs             # 雙渠道外掛版本檢查與安全快進本地更新器
+│   └── watchdog.mjs            # 依專案獨立非阻塞背景看門狗巡檢與卡滯恢復
 ├── sidecars/threads/
 │   ├── sidecar.json            # Auxiliary Pane Sidecar 檢視設定
 │   ├── package.json
