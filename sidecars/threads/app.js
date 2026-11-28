@@ -3,6 +3,12 @@
 
   const BOARD_POLL_MS = 2200;
   const CHAT_POLL_MS = 1200;
+  const EXPECTED_SERVER_API_REVISION = 2;
+  const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
+  const API_READ_TIMEOUT_MS = 10_000;
+  const API_WRITE_TIMEOUT_MS = 12_000;
+  const API_UPDATE_TIMEOUT_MS = 30_000;
+  const HOST_META_TIMEOUT_MS = 2000;
   const params = new URLSearchParams(location.search);
   const getHostConvId = () =>
     (window.sidecar && window.sidecar.conversationId) ||
@@ -272,6 +278,18 @@
       updateToastApplied: 'Updated — toggle plugin or reload window',
       updateToastCheckErr: 'Update check failed',
       updateToastApplyErr: 'Plugin update failed',
+      apiTimeoutErr: (sec) => `Request timed out after ${sec}s. Please try again.`,
+      apiHttpErr: (status) => `Sidecar request failed (HTTP ${status})`,
+      apiInvalidJsonErr: 'Received an unexpected non-JSON response from the sidecar backend.',
+      sidecarMismatchErr:
+        'Sidecar backend process is outdated (missing new API routes). Toggle "project-threads" off and back on in the plugin manager, or reload the Antigravity window.',
+      updateBadgeReloadRequired: 'Reload required',
+      updateChannelMismatchHint:
+        'Channel status is unavailable until the outdated sidecar backend process is reloaded.',
+      updateBackendMismatchBanner: (startedVer, diskVer) =>
+        startedVer && diskVer && startedVer !== diskVer
+          ? `Sidecar backend process (v${startedVer}) lags behind installed plugin files (v${diskVer}). Toggle "project-threads" off and back on in the plugin manager, or reload the Antigravity window.`
+          : 'Sidecar backend process is behind the current UI version. Toggle "project-threads" off and back on in the plugin manager, or reload the Antigravity window.',
       settingsBack: 'Back',
       settingsScopeGlobal: 'Global',
       settingsScopeProject: 'This Project',
@@ -301,9 +319,14 @@
       settingsTierStandard: 'Standard',
       settingsTierNone: '—',
       settingsInheritOption: 'Follow Coordinator (inherit)',
+      settingsInheritDraftOption: 'Follow Coordinator (no turn yet)',
       settingsInheritWithModel: (lbl) => `Follow Coordinator (${lbl})`,
       settingsInheritShort: 'Follow Coordinator',
-      settingsRefreshModelsTip: 'Refresh live model catalog',
+      settingsInheritActiveNote: (model) =>
+        `Follow Coordinator tracks the model from the Coordinator's last executed turn (current: ${model}). After switching the model in the main composer, send one message for it to take effect.`,
+      settingsInheritDraftNote:
+        'Follow Coordinator tracks the model from the Coordinator\'s last executed turn. No executed turn has been recorded yet (draft state) — send a message in the Coordinator session to sync its model; until then, new threads fall back safely to Gemini Pro.',
+      settingsRefreshModelsTip: 'Refresh live model catalog & Coordinator model',
       useSettingsDefault: (lbl) => `Use Settings Default (${lbl})`,
       usageTokensLabel: 'Tokens',
       usageCompactLine: 'Compact line',
@@ -586,6 +609,18 @@
       updateToastApplied: '已更新至新版本，请重载插件或窗口生效',
       updateToastCheckErr: '检查更新失败',
       updateToastApplyErr: '插件更新失败',
+      apiTimeoutErr: (sec) => `请求超时（超过 ${sec} 秒），请稍后重试。`,
+      apiHttpErr: (status) => `侧边栏服务请求失败（HTTP ${status}）`,
+      apiInvalidJsonErr: '侧边栏后端返回了非 JSON 响应，请稍后重试或重载插件。',
+      sidecarMismatchErr:
+        '检测到插件后端进程版本滞后（缺少新接口路由）。请在插件管理器中关闭再开启 project-threads，或重载 Antigravity 窗口生效。',
+      updateBadgeReloadRequired: '需重载插件',
+      updateChannelMismatchHint:
+        '后端进程版本滞后，重载插件或窗口前暂无法确认当前渠道状态。',
+      updateBackendMismatchBanner: (startedVer, diskVer) =>
+        startedVer && diskVer && startedVer !== diskVer
+          ? `当前常驻后端进程（v${startedVer}）落后于磁盘插件版本（v${diskVer}）。请在插件管理器中关闭再开启 project-threads，或重载 Antigravity 窗口生效。`
+          : '检测到常驻 Sidecar 后端进程版本滞后于当前页面。请在插件管理器中关闭再开启 project-threads，或重载 Antigravity 窗口生效。',
       settingsBack: '返回',
       settingsScopeGlobal: '全局默认',
       settingsScopeProject: '当前项目',
@@ -615,9 +650,14 @@
       settingsTierStandard: '标准',
       settingsTierNone: '—',
       settingsInheritOption: '跟随主会话模型 (inherit)',
+      settingsInheritDraftOption: '跟随主会话模型 (尚无回合记录)',
       settingsInheritWithModel: (lbl) => `跟随主会话模型 (${lbl})`,
       settingsInheritShort: '跟随主会话模型',
-      settingsRefreshModelsTip: '刷新实时模型列表',
+      settingsInheritActiveNote: (model) =>
+        `「跟随主会话模型」读取总控最近一次已执行回合的模型（当前：${model}）。在主窗口切换模型后，发送一条消息即可同步生效。`,
+      settingsInheritDraftNote:
+        '「跟随主会话模型」读取总控最近一次已执行回合的模型。当前尚无已执行回合记录（草稿态），在总控会话发送一条消息后即可同步；在此之前新建线程将安全回退至 Gemini Pro。',
+      settingsRefreshModelsTip: '刷新模型列表与主会话模型',
       useSettingsDefault: (lbl) => `使用设置默认 (${lbl})`,
       usageTokensLabel: 'Tokens',
       usageCompactLine: '压缩线',
@@ -900,6 +940,18 @@
       updateToastApplied: '已更新至新版本，請重新載入外掛或視窗生效',
       updateToastCheckErr: '檢查更新失敗',
       updateToastApplyErr: '外掛更新失敗',
+      apiTimeoutErr: (sec) => `請求逾時（超過 ${sec} 秒），請稍後重試。`,
+      apiHttpErr: (status) => `側邊欄服務請求失敗（HTTP ${status}）`,
+      apiInvalidJsonErr: '側邊欄後端回傳了非 JSON 回應，請稍後重試或重新載入外掛。',
+      sidecarMismatchErr:
+        '偵測到外掛後端程序版本滯後（缺少新介面路由）。請在外掛管理器中關閉再開啟 project-threads，或重新載入 Antigravity 視窗生效。',
+      updateBadgeReloadRequired: '需重新載入',
+      updateChannelMismatchHint:
+        '後端程序版本滯後，重新載入外掛或視窗前暫無法確認目前渠道狀態。',
+      updateBackendMismatchBanner: (startedVer, diskVer) =>
+        startedVer && diskVer && startedVer !== diskVer
+          ? `目前常駐後端程序（v${startedVer}）落後於磁碟外掛版本（v${diskVer}）。請在外掛管理器中關閉再開啟 project-threads，或重新載入 Antigravity 視窗生效。`
+          : '偵測到常駐 Sidecar 後端程序版本滯後於目前頁面。請在外掛管理器中關閉再開啟 project-threads，或重新載入 Antigravity 視窗生效。',
       settingsBack: '返回',
       settingsScopeGlobal: '全域預設',
       settingsScopeProject: '目前專案',
@@ -929,9 +981,14 @@
       settingsTierStandard: '標準',
       settingsTierNone: '—',
       settingsInheritOption: '跟隨主會話模型 (inherit)',
+      settingsInheritDraftOption: '跟隨主會話模型 (尚無回合記錄)',
       settingsInheritWithModel: (lbl) => `跟隨主會話模型 (${lbl})`,
       settingsInheritShort: '跟隨主會話模型',
-      settingsRefreshModelsTip: '重新整理即時模型清單',
+      settingsInheritActiveNote: (model) =>
+        `「跟隨主會話模型」讀取總控最近一次已執行回合的模型（目前：${model}）。在主視窗切換模型後，傳送一則訊息即可同步生效。`,
+      settingsInheritDraftNote:
+        '「跟隨主會話模型」讀取總控最近一次已執行回合的模型。目前尚無已執行回合記錄（草稿態），在總控會話傳送一則訊息後即可同步；在此之前新增執行緒將安全回退至 Gemini Pro。',
+      settingsRefreshModelsTip: '重新整理模型清單與主會話模型',
       useSettingsDefault: (lbl) => `使用設定預設 (${lbl})`,
       usageTokensLabel: 'Tokens',
       usageCompactLine: '壓縮線',
@@ -1031,7 +1088,9 @@
   let settingsScope = 'global'; // 'global' | 'project'
   let loadedSettingsData = null; // { settings, effective, scopeKey, coordinatorModelDisplayName, coordinatorModel }
   let settingsSaving = false;
+  let settingsRefreshing = false;
   let settingsDirtyByUser = false;
+  let lastCoordinatorTurnStamp = '';
   let settingsWorktreeGroups = [];
   let settingsReadOnlyGroups = [];
   let dispatchModelGroups = [];
@@ -1040,6 +1099,10 @@
   let pluginUpdateApplying = false;
   let pluginUpdateAppliedVersion = '';
   let pluginUpdatePollTimer = null;
+  let backendVersionMismatch = null;
+  let updateCardError = '';
+  let updateStatusTimer = null;
+  let updateStatusNotice = { text: '', tone: 'ok' };
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
@@ -1062,6 +1125,7 @@
   const elBtnSettingsRefreshModels = document.getElementById('btn-settings-refresh-models');
   const elSettingsToast = document.getElementById('settings-toast');
   const elSettingsErr = document.getElementById('settings-err');
+  const elSettingsInheritNote = document.getElementById('settings-inherit-note');
   const elUpdateCard = document.getElementById('settings-update-card');
   const elUpdateBadge = document.getElementById('update-status-badge');
   const elBtnChannelStable = document.getElementById('btn-channel-stable');
@@ -1073,6 +1137,7 @@
   const elUpdateNonGitHint = document.getElementById('update-nongit-hint');
   const elUpdateReloadBanner = document.getElementById('update-reload-banner');
   const elUpdateErr = document.getElementById('update-err');
+  const elUpdateStatusMsg = document.getElementById('update-status-msg');
   const elBoardBody = document.getElementById('board-body');
   const elLivePill = document.getElementById('live-pill');
   const elLiveLabel = document.getElementById('live-label');
@@ -1133,8 +1198,14 @@
     hostProjectId = '';
     lastBoardKey = '';
     if (convId && window.sidecar?.agent?.getConversationMetadata) {
+      let metaTimer = null;
       try {
-        const meta = await window.sidecar.agent.getConversationMetadata(convId);
+        const meta = await Promise.race([
+          Promise.resolve(window.sidecar.agent.getConversationMetadata(convId)),
+          new Promise((_, reject) => {
+            metaTimer = setTimeout(() => reject(new Error('host_meta_timeout')), HOST_META_TIMEOUT_MS);
+          }),
+        ]);
         const nestedMeta =
           meta?.response?.conversationMetadata?.metadata ||
           meta?.response?.conversation_metadata?.metadata ||
@@ -1148,6 +1219,8 @@
         }
       } catch {
         // Backend also resolves authoritative projectId via LS GetConversation
+      } finally {
+        if (metaTimer) clearTimeout(metaTimer);
       }
     }
     return true;
@@ -1698,6 +1771,8 @@
   function normalizeComparableTokens(str) {
     return String(str || '')
       .toLowerCase()
+      .replace(/\bextra[\s_-]*high\b/g, ' xhigh ')
+      .replace(/\bx[\s_-]+high\b/g, ' xhigh ')
       .replace(/\(thinking\)|[-_]thinking\b/g, ' ')
       .replace(/\btiered\b|\bdisabled\b/g, ' ')
       .split(/[^a-z0-9]+/)
@@ -2096,7 +2171,10 @@
       if (!/^MODEL_PLACEHOLDER_/i.test(raw)) {
         for (const g of familyGroups) {
           for (const t of g.tiers || []) {
-            if (isSameModelFamily(raw, t.modelId || t.value || t.rawLabel)) {
+            if (
+              isSameModelFamily(raw, t.modelId || t.value || t.rawLabel) ||
+              (t.rawLabel && isSameModelFamily(raw, t.rawLabel))
+            ) {
               return { groups: list, groupKey: g.key, value: t.value, group: g, tier: t, isFallback: false };
             }
           }
@@ -2317,30 +2395,237 @@
     flashToast(L().switchedCoordToast);
   }
 
-  async function postApi(postPath, getFallbackPath, payload) {
-    try {
-      const res = await doFetch(postPath, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+  function createApiError(
+    message,
+    { code = '', status = 0, url = '', bodySnippet = '', isBackendMismatch = false } = {},
+  ) {
+    const err = new Error(message);
+    err.code = code;
+    err.status = status;
+    err.url = url;
+    err.bodySnippet = bodySnippet;
+    err.isBackendMismatch = Boolean(isBackendMismatch);
+    return err;
+  }
+
+  async function safeReadJson(res, { url = '' } = {}) {
+    const t = L();
+    const status = Number(res?.status) || 0;
+    const ok = Boolean(res?.ok);
+    const contentType = String(res?.headers?.get?.('content-type') || '').toLowerCase();
+    let rawText = '';
+    if (typeof res?.text === 'function') {
+      rawText = await res.text();
+    } else if (typeof res?.json === 'function') {
+      rawText = JSON.stringify(await res.json());
+    }
+    const trimmed = String(rawText || '').trim();
+    const looksNotFound = status === 404 || /^not found$/i.test(trimmed);
+    const looksJsonContentType = /\bjson\b/i.test(contentType);
+    const looksJsonBody = trimmed.startsWith('{') || trimmed.startsWith('[');
+
+    if (!ok) {
+      if (looksNotFound) {
+        throw createApiError(t.sidecarMismatchErr, {
+          code: 'sidecar_route_not_found',
+          status: status || 404,
+          url,
+          bodySnippet: trimmed.slice(0, 120),
+          isBackendMismatch: true,
+        });
+      }
+      if (looksJsonBody) {
+        try {
+          const parsedErr = JSON.parse(trimmed);
+          const serverMsg = String(parsedErr?.error || parsedErr?.message || '').trim();
+          if (serverMsg) {
+            throw createApiError(serverMsg, {
+              code: 'http_error',
+              status,
+              url,
+              bodySnippet: trimmed.slice(0, 120),
+            });
+          }
+        } catch (inner) {
+          if (inner?.code === 'http_error') throw inner;
+        }
+      }
+      throw createApiError(t.apiHttpErr(status || 500), {
+        code: 'http_error',
+        status,
+        url,
+        bodySnippet: trimmed.slice(0, 120),
       });
+    }
+
+    if (!trimmed) return {};
+
+    if (contentType && !looksJsonContentType && !looksJsonBody) {
+      throw createApiError(looksNotFound ? t.sidecarMismatchErr : t.apiInvalidJsonErr, {
+        code: 'invalid_content_type',
+        status,
+        url,
+        bodySnippet: trimmed.slice(0, 120),
+        isBackendMismatch: looksNotFound || /^text\/plain/i.test(contentType),
+      });
+    }
+
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      throw createApiError(looksNotFound ? t.sidecarMismatchErr : t.apiInvalidJsonErr, {
+        code: 'invalid_json',
+        status,
+        url,
+        bodySnippet: trimmed.slice(0, 120),
+        isBackendMismatch: looksNotFound || (Boolean(contentType) && !looksJsonContentType),
+      });
+    }
+  }
+
+  async function fetchWithTimeout(url, options = {}, timeoutMs = API_READ_TIMEOUT_MS) {
+    const ms = Math.max(200, Number(timeoutMs) || API_READ_TIMEOUT_MS);
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    let timer = null;
+    let timedOut = false;
+    const fetchPromise = Promise.resolve().then(() =>
+      doFetch(url, {
+        ...options,
+        ...(controller ? { signal: controller.signal } : {}),
+      }),
+    );
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        if (controller) {
+          try {
+            controller.abort();
+          } catch {
+            // Ignore abort errors
+          }
+        }
+        reject(
+          createApiError(L().apiTimeoutErr(Math.max(1, Math.round(ms / 1000))), {
+            code: 'timeout',
+            url,
+          }),
+        );
+      }, ms);
+    });
+    try {
+      return await Promise.race([fetchPromise, timeoutPromise]);
+    } catch (err) {
+      if (timedOut || err?.name === 'AbortError' || err?.code === 'timeout') {
+        throw createApiError(L().apiTimeoutErr(Math.max(1, Math.round(ms / 1000))), {
+          code: 'timeout',
+          url,
+        });
+      }
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  function inspectServerInfo(data, { fromState = false } = {}) {
+    if (!data || typeof data !== 'object') return;
+    const info = data.serverInfo && typeof data.serverInfo === 'object' ? data.serverInfo : null;
+    const prevKey = backendVersionMismatch
+      ? `${backendVersionMismatch.kind}|${backendVersionMismatch.startedVersion}|${backendVersionMismatch.diskVersion}`
+      : '';
+
+    if (info) {
+      const caps = Array.isArray(info.capabilities) ? info.capabilities : [];
+      const rev = Number(info.apiRevision) || 0;
+      const missingCaps = REQUIRED_UPDATE_CAPABILITIES.some((c) => !caps.includes(c));
+      if (rev < EXPECTED_SERVER_API_REVISION || missingCaps) {
+        backendVersionMismatch = {
+          kind: 'stale_backend',
+          startedVersion: String(info.startedVersion || ''),
+          diskVersion: String(info.diskVersion || ''),
+          reason: 'missing_capabilities',
+        };
+      } else if (info.versionDrifted) {
+        backendVersionMismatch = {
+          kind: 'version_drifted',
+          startedVersion: String(info.startedVersion || ''),
+          diskVersion: String(info.diskVersion || ''),
+          reason: 'version_drifted',
+        };
+      } else {
+        backendVersionMismatch = null;
+      }
+    } else if (fromState && !data.error && 'threads' in data) {
+      backendVersionMismatch = {
+        kind: 'stale_backend',
+        startedVersion: '',
+        diskVersion: '',
+        reason: 'missing_server_info',
+      };
+    }
+
+    const nextKey = backendVersionMismatch
+      ? `${backendVersionMismatch.kind}|${backendVersionMismatch.startedVersion}|${backendVersionMismatch.diskVersion}`
+      : '';
+    if (nextKey !== prevKey && settingsScreenOpen) {
+      renderUpdateCard();
+    }
+  }
+
+  async function postApi(postPath, getFallbackPath, payload = {}, options = {}) {
+    const {
+      timeoutMs = API_WRITE_TIMEOUT_MS,
+      allowGetFallback = true,
+    } = options || {};
+    let shouldFallbackToGet = false;
+    try {
+      const res = await fetchWithTimeout(
+        postPath,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+        timeoutMs,
+      );
       if (res.ok) {
-        const json = await res.json();
+        const json = await safeReadJson(res, { url: postPath });
         if (json?.locale) applyLocale(json.locale);
+        inspectServerInfo(json);
         return json;
       }
-    } catch {
-      // Fallback to GET query route
+      if ((res.status === 404 || res.status === 405) && allowGetFallback && getFallbackPath) {
+        shouldFallbackToGet = true;
+      } else {
+        const errJson = await safeReadJson(res, { url: postPath });
+        if (errJson?.locale) applyLocale(errJson.locale);
+        return errJson;
+      }
+    } catch (err) {
+      if (err?.code === 'timeout' || !allowGetFallback || !getFallbackPath) {
+        throw err;
+      }
+      if (err?.code === 'http_error' && err.status !== 404 && err.status !== 405) {
+        throw err;
+      }
+      shouldFallbackToGet = true;
     }
+
+    if (!shouldFallbackToGet) {
+      throw createApiError(L().apiInvalidJsonErr, { code: 'invalid_json', url: postPath });
+    }
+
     const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(payload)) {
+    for (const [k, v] of Object.entries(payload || {})) {
       if (v !== undefined && v !== null) {
         qs.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
       }
     }
-    const res2 = await doFetch(`${getFallbackPath}?${qs}`);
-    const json2 = await res2.json();
+    const fallbackUrl = `${getFallbackPath}?${qs}`;
+    const res2 = await fetchWithTimeout(fallbackUrl, { method: 'GET' }, timeoutMs);
+    const json2 = await safeReadJson(res2, { url: fallbackUrl });
     if (json2?.locale) applyLocale(json2.locale);
+    inspectServerInfo(json2);
     return json2;
   }
 
@@ -3830,6 +4115,22 @@
     ).trim();
   }
 
+  function hasBoundCoordinatorSession() {
+    return Boolean(
+      lastSnap?.coordinator?.conversationId ||
+        loadedSettingsData?.effective?.coordinatorId ||
+        getHostConvId(),
+    );
+  }
+
+  function getSettingsInheritOptionLabel() {
+    const t = L();
+    const coordName = getCoordinatorModelDisplayName();
+    if (coordName) return t.settingsInheritWithModel(coordName);
+    if (hasBoundCoordinatorSession()) return t.settingsInheritDraftOption;
+    return t.settingsInheritOption;
+  }
+
   function resolveSettingsOptionValue(rawVal) {
     const val = String(rawVal || '').trim();
     if (!val) return '';
@@ -3849,9 +4150,9 @@
       const t = L();
       const coordName = getCoordinatorModelDisplayName();
       if (compactInherit) {
-        return coordName ? `${t.settingsInheritShort} · ${coordName}` : t.settingsInheritShort;
+        return coordName ? `${t.settingsInheritShort}: ${coordName}` : t.settingsInheritShort;
       }
-      return coordName ? t.settingsInheritWithModel(coordName) : t.settingsInheritOption;
+      return getSettingsInheritOptionLabel();
     }
     const matched = getModelByIdFromCatalog(val);
     if (matched?.label) return matched.label;
@@ -3902,10 +4203,7 @@
           ? eff.worktreeModelLabel || resolveSettingsModelDisplay(effModelId)
           : eff.readOnlyModelLabel || resolveSettingsModelDisplay(effModelId);
 
-    const coordName = getCoordinatorModelDisplayName();
-    const inheritLabel = coordName
-      ? t.settingsInheritWithModel(coordName)
-      : t.settingsInheritOption;
+    const inheritLabel = getSettingsInheritOptionLabel();
     const baseGroups = buildModelFamilyGroups(selectableModels, {
       includeFollowGlobal: true,
       followGlobalLabel: t.useSettingsDefault(effLabel || t.settingsInheritShort),
@@ -3928,10 +4226,7 @@
 
   function buildSettingsSlotGroups(scope, followGlobalLabel = '') {
     const t = L();
-    const coordName = getCoordinatorModelDisplayName();
-    const inheritLabel = coordName
-      ? t.settingsInheritWithModel(coordName)
-      : t.settingsInheritOption;
+    const inheritLabel = getSettingsInheritOptionLabel();
     return buildModelFamilyGroups(selectableModels, {
       includeFollowGlobal: scope === 'project',
       followGlobalLabel,
@@ -4018,6 +4313,39 @@
     );
   }
 
+  function isSettingsSlotFollowingCoordinator(kind) {
+    const val = readSettingsSlotValue(kind);
+    if (String(val || '').toLowerCase() === 'inherit') return true;
+    if (settingsScope === 'project' && !val) {
+      const eff = getCurrentEffectiveSettings();
+      const globalRaw = kind === 'worktree' ? eff.global?.worktreeModel : eff.global?.readOnlyModel;
+      return !globalRaw || String(globalRaw).toLowerCase() === 'inherit';
+    }
+    return false;
+  }
+
+  function syncSettingsInheritHint() {
+    if (!elSettingsScreen) return;
+    const t = L();
+    const coordName = getCoordinatorModelDisplayName();
+    const wtFollows = isSettingsSlotFollowingCoordinator('worktree');
+    const roFollows = isSettingsSlotFollowingCoordinator('readOnly');
+    const anyFollows = wtFollows || roFollows;
+    const noteText = coordName ? t.settingsInheritActiveNote(coordName) : t.settingsInheritDraftNote;
+
+    if (elSetWorktree) {
+      elSetWorktree.title = wtFollows ? noteText : '';
+    }
+    if (elSetReadOnly) {
+      elSetReadOnly.title = roFollows ? noteText : '';
+    }
+    if (elSettingsInheritNote) {
+      elSettingsInheritNote.hidden = !anyFollows;
+      elSettingsInheritNote.classList.toggle('is-draft', anyFollows && !coordName);
+      elSettingsInheritNote.textContent = anyFollows ? noteText : '';
+    }
+  }
+
   function syncSettingsActionState() {
     if (!elSettingsScreen) return;
     const t = L();
@@ -4030,6 +4358,7 @@
       elBtnSettingsReset.disabled =
         settingsScope === 'project' && !eff.hasProjectOverride && !draftWt && !draftRo;
     }
+    syncSettingsInheritHint();
   }
 
   function renderSettingsScreen(syncInputs = false) {
@@ -4141,13 +4470,17 @@
     syncSettingsActionState();
   }
 
-  async function loadSettingsData({ syncInputs = false } = {}) {
+  async function loadSettingsData({ syncInputs = false, forceRefresh = false } = {}) {
     try {
       await syncHostConversationScope();
-      const qs = new URLSearchParams(buildScopePayload());
-      const res = await doFetch(`/api/settings?${qs}`);
-      const data = await res.json();
+      const qs = new URLSearchParams(
+        buildScopePayload(forceRefresh ? { refresh: '1' } : {}),
+      );
+      const url = `/api/settings?${qs}`;
+      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
+      const data = await safeReadJson(res, { url });
       if (data?.locale) applyLocale(data.locale);
+      inspectServerInfo(data);
       if (data?.ok) {
         loadedSettingsData = {
           settings: data.settings,
@@ -4161,10 +4494,12 @@
         if (settingsScreenOpen) {
           renderSettingsScreen(syncInputs);
         }
+        return true;
       }
     } catch {
       // Keep cached/default settings if endpoint is temporarily busy
     }
+    return false;
   }
 
   function openSettingsScreen() {
@@ -4177,6 +4512,7 @@
       elSettingsErr.hidden = true;
       elSettingsErr.textContent = '';
     }
+    clearUpdateCardNotice();
     elBoardScreen.hidden = true;
     elThreadScreen.hidden = true;
     elSettingsScreen.classList.remove('screen-slide');
@@ -4227,7 +4563,12 @@
         payload.worktreeModel = readSettingsSlotValue('worktree');
         payload.readOnlyModel = readSettingsSlotValue('readOnly');
       }
-      const res = await postApi('/api/settings_save', '/api/settings_save_get', payload);
+      const res = await postApi(
+        '/api/settings_save',
+        '/api/settings_save_get',
+        payload,
+        { timeoutMs: API_WRITE_TIMEOUT_MS },
+      );
       if (!res?.ok) {
         const msg = res?.error || t.settingsSaveErr;
         if (elSettingsErr) {
@@ -4282,8 +4623,9 @@
     const req = (async () => {
       try {
         const qs = force ? '?refresh=1' : '';
-        const res = await doFetch(`/api/models${qs}`);
-        const data = await res.json();
+        const url = `/api/models${qs}`;
+        const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
+        const data = await safeReadJson(res, { url });
         if (data?.locale) applyLocale(data.locale);
         if (Array.isArray(data?.models)) {
           selectableModels = data.models;
@@ -4319,7 +4661,12 @@
       if (m.modelEnum && m.modelEnum === th.resolvedModel) return true;
     }
     const liveLabel = formatModelDisplay(th.modelDisplayName || th.resolvedModel || th.model);
-    return Boolean(liveLabel && m.label === liveLabel);
+    if (!liveLabel) return false;
+    if (m.label === liveLabel) return true;
+    return Boolean(
+      isSameModelFamily(liveLabel, m.modelId || m.id || m.label) ||
+        (m.label && isSameModelFamily(liveLabel, m.label)),
+    );
   }
 
   function isModelActiveForThread(m, th) {
@@ -4337,7 +4684,7 @@
     if (!raw) return null;
     const low = raw.toLowerCase();
     const untiered = low.replace(/-tiered-/g, '-');
-    return (
+    const exact =
       selectableModels.find(
         (m) =>
           m.id === raw ||
@@ -4352,8 +4699,18 @@
           (m.modelId && m.modelId.toLowerCase().replace(/-tiered-/g, '-') === untiered) ||
           (m.label && m.label.toLowerCase() === low),
       ) ||
-      null
-    );
+      null;
+    if (exact) return exact;
+    if (!/^MODEL_PLACEHOLDER_/i.test(raw)) {
+      return (
+        selectableModels.find(
+          (m) =>
+            isSameModelFamily(raw, m.modelId || m.id || m.label) ||
+            (m.label && isSameModelFamily(raw, m.label)),
+        ) || null
+      );
+    }
+    return null;
   }
 
   const MODEL_MENU_SUB_WIDTH = 152;
@@ -5275,8 +5632,9 @@
         stamp: forceBottom ? '' : lastThreadStamp,
         markRead: markRead ? '1' : '0',
       });
-      const res = await doFetch(`/api/thread_messages?${qs}`);
-      const data = await res.json();
+      const url = `/api/thread_messages?${qs}`;
+      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
+      const data = await safeReadJson(res, { url });
       if (data.locale) applyLocale(data.locale);
       if (!data.ok) {
         elChatStream.innerHTML = `<div class="msg-err">${esc(data.error || 'Error')}</div>`;
@@ -5365,8 +5723,9 @@
     try {
       await syncHostConversationScope();
       const qs = new URLSearchParams(buildScopePayload());
-      const res = await doFetch(`/api/memory?${qs}`);
-      const data = await res.json();
+      const url = `/api/memory?${qs}`;
+      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
+      const data = await safeReadJson(res, { url });
       if (data.locale) applyLocale(data.locale);
       if (data.ok) {
         const shortPath = (data.path || '').split(/[\\/]/).slice(-3).join('/');
@@ -5390,9 +5749,11 @@
           allWorkspaces: '0',
         }),
       );
-      const res = await doFetch(`/api/state?${qs}`);
-      const data = await res.json();
+      const url = `/api/state?${qs}`;
+      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
+      const data = await safeReadJson(res, { url });
       if (data.locale) applyLocale(data.locale);
+      inspectServerInfo(data, { fromState: true });
       if (data.error) {
         setLiveStatus(false);
         return;
@@ -5407,6 +5768,23 @@
       const scopeChanged = activeScopeKey !== null && nextScopeKey !== activeScopeKey;
       activeScopeKey = nextScopeKey;
 
+      const nextCoordTurnStamp = String(
+        data.coordinatorTurnStamp ||
+          (data.coordinator?.conversationId
+            ? `${data.coordinator.conversationId}|${Number(data.coordinator.lastStepCount) || 0}`
+            : ''),
+      );
+      const coordTurnChanged = Boolean(
+        nextCoordTurnStamp &&
+          lastCoordinatorTurnStamp &&
+          nextCoordTurnStamp !== lastCoordinatorTurnStamp,
+      );
+      if (nextCoordTurnStamp) {
+        lastCoordinatorTurnStamp = nextCoordTurnStamp;
+      } else if (scopeChanged || convChanged) {
+        lastCoordinatorTurnStamp = '';
+      }
+
       if (scopeChanged || convChanged) {
         lastBoardKey = '';
         lastHasGitRepo = null;
@@ -5419,6 +5797,7 @@
       if (
         scopeChanged ||
         convChanged ||
+        coordTurnChanged ||
         !loadedSettingsData ||
         nextScopeKey !== String(loadedSettingsData.scopeKey || '')
       ) {
@@ -5800,11 +6179,17 @@
     try {
       if (ctx.mode === 'plugin_update') {
         pluginUpdateApplying = true;
+        clearUpdateCardNotice();
         renderUpdateCard();
-        const res = await postApi('/api/update_apply', '/api/update_apply_get', {
-          channel: ctx.channel || '',
-          persistChannel: true,
-        });
+        const res = await postApi(
+          '/api/update_apply',
+          '/api/update_apply_get',
+          {
+            channel: ctx.channel || '',
+            persistChannel: true,
+          },
+          { timeoutMs: API_UPDATE_TIMEOUT_MS },
+        );
         pluginUpdateApplying = false;
         if (!res?.ok) {
           ctx.busy = false;
@@ -5823,8 +6208,8 @@
               dirtyFiles: res.dirtyFiles || pluginUpdateState.dirtyFiles || [],
             };
           }
+          setUpdateCardNotice(errMsg, 'err');
           renderUpdateCard();
-          flashToast(errMsg, 'err', 4200);
           return;
         }
         closePtModal(true);
@@ -5834,8 +6219,8 @@
         pluginUpdateAppliedVersion =
           res.currentVersion || res.status?.currentVersion || pluginUpdateState?.currentVersion || '';
         syncSettingsUpdateDot();
+        setUpdateCardNotice(L().updateToastApplied, 'ok', 4800);
         renderUpdateCard();
-        flashToast(L().updateToastApplied, 'ok', 4800);
         return;
       }
       if (ctx.mode === 'archive') {
@@ -5870,6 +6255,15 @@
       ctx.busy = false;
       if (ctx.mode === 'plugin_update') {
         pluginUpdateApplying = false;
+        if (err?.isBackendMismatch) {
+          backendVersionMismatch = {
+            kind: 'stale_backend',
+            startedVersion: '',
+            diskVersion: '',
+            reason: err.code || 'route_not_found',
+          };
+        }
+        setUpdateCardNotice(err?.message || L().updateToastApplyErr, 'err');
         renderUpdateCard();
       }
       elModalErr.hidden = false;
@@ -5980,8 +6374,22 @@
     });
   }
   if (elBtnSettingsRefreshModels) {
-    elBtnSettingsRefreshModels.addEventListener('click', () => {
-      loadSelectableModels(true);
+    elBtnSettingsRefreshModels.addEventListener('click', async () => {
+      if (settingsRefreshing) return;
+      settingsRefreshing = true;
+      elBtnSettingsRefreshModels.disabled = true;
+      elBtnSettingsRefreshModels.classList.add('spinning');
+      try {
+        const shouldSync = !settingsDirtyByUser && !isSettingsDraftDirty();
+        await Promise.allSettled([
+          loadSelectableModels(true),
+          loadSettingsData({ syncInputs: shouldSync, forceRefresh: true }),
+        ]);
+      } finally {
+        settingsRefreshing = false;
+        elBtnSettingsRefreshModels.disabled = false;
+        elBtnSettingsRefreshModels.classList.remove('spinning');
+      }
     });
   }
   if (elBtnSettingsSave) {
@@ -6082,11 +6490,68 @@
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
       if (openThreadId) refreshOpenThread(false, false);
+      if (settingsScreenOpen) {
+        loadSettingsData({
+          syncInputs: !settingsDirtyByUser && !isSettingsDraftDirty(),
+        });
+      }
       refreshBoard(false);
     }
   });
 
   // ---------- Plugin Version & Update Checker ----------
+  function renderUpdateStatusNotice() {
+    if (!elUpdateStatusMsg) return;
+    const text = String(updateStatusNotice?.text || '');
+    const tone = updateStatusNotice?.tone || 'ok';
+    elUpdateStatusMsg.className =
+      tone === 'err'
+        ? 'toast update-toast err'
+        : tone === 'warn'
+          ? 'toast update-toast warn'
+          : 'toast update-toast';
+    elUpdateStatusMsg.textContent = text;
+    elUpdateStatusMsg.title = text;
+  }
+
+  function clearUpdateCardNotice() {
+    if (updateStatusTimer) {
+      clearTimeout(updateStatusTimer);
+      updateStatusTimer = null;
+    }
+    updateCardError = '';
+    updateStatusNotice = { text: '', tone: 'ok' };
+    renderUpdateStatusNotice();
+  }
+
+  function setUpdateCardNotice(msg, tone = 'ok', durationMs = 3600) {
+    if (updateStatusTimer) {
+      clearTimeout(updateStatusTimer);
+      updateStatusTimer = null;
+    }
+    const text = String(msg || '').trim();
+    if (tone === 'err') {
+      updateCardError = text;
+      updateStatusNotice = { text: '', tone: 'ok' };
+      renderUpdateStatusNotice();
+      if (elUpdateErr) {
+        elUpdateErr.hidden = !text;
+        elUpdateErr.textContent = text;
+      }
+      return;
+    }
+    updateCardError = '';
+    updateStatusNotice = { text, tone };
+    renderUpdateStatusNotice();
+    if (text && durationMs > 0) {
+      updateStatusTimer = setTimeout(() => {
+        updateStatusTimer = null;
+        updateStatusNotice = { text: '', tone: 'ok' };
+        renderUpdateStatusNotice();
+      }, durationMs);
+    }
+  }
+
   function syncSettingsUpdateDot() {
     if (!elBtnSettings) return;
     const t = L();
@@ -6105,7 +6570,9 @@
     if (!elUpdateCard) return;
     const t = L();
     const st = pluginUpdateState;
-    const activeChannel = st?.channel === 'dev' ? 'dev' : 'stable';
+    const mismatch = backendVersionMismatch;
+    const staleWithoutStatus = Boolean(mismatch && !st);
+    const activeChannel = st ? (st.channel === 'dev' ? 'dev' : 'stable') : '';
     const isGit = st ? Boolean(st.isGitInstall) : true;
     const isDirty = Boolean(isGit && st?.isDirty);
     const hasChecked = Boolean(st?.checkedAt);
@@ -6118,17 +6585,23 @@
     if (elBtnChannelStable && elBtnChannelDev) {
       elBtnChannelStable.textContent = t.updateChannelStable;
       elBtnChannelDev.textContent = t.updateChannelDev;
-      elBtnChannelStable.classList.toggle('active', activeChannel === 'stable');
-      elBtnChannelDev.classList.toggle('active', activeChannel === 'dev');
-      elBtnChannelStable.setAttribute('aria-selected', activeChannel === 'stable' ? 'true' : 'false');
-      elBtnChannelDev.setAttribute('aria-selected', activeChannel === 'dev' ? 'true' : 'false');
-      elBtnChannelStable.disabled = busy;
-      elBtnChannelDev.disabled = busy;
+      const stableActive = !staleWithoutStatus && (activeChannel === 'stable' || (!activeChannel && !mismatch));
+      const devActive = !staleWithoutStatus && activeChannel === 'dev';
+      elBtnChannelStable.classList.toggle('active', stableActive);
+      elBtnChannelDev.classList.toggle('active', devActive);
+      elBtnChannelStable.setAttribute('aria-selected', stableActive ? 'true' : 'false');
+      elBtnChannelDev.setAttribute('aria-selected', devActive ? 'true' : 'false');
+      elBtnChannelStable.disabled = busy || staleWithoutStatus;
+      elBtnChannelDev.disabled = busy || staleWithoutStatus;
     }
     const descChan = document.getElementById('desc-update-channel');
     if (descChan) {
-      descChan.textContent =
-        activeChannel === 'dev' ? t.updateChannelHintDev : t.updateChannelHintStable;
+      if (staleWithoutStatus) {
+        descChan.textContent = t.updateChannelMismatchHint;
+      } else {
+        descChan.textContent =
+          activeChannel === 'dev' ? t.updateChannelHintDev : t.updateChannelHintStable;
+      }
     }
 
     if (elUpdateBadge) {
@@ -6136,6 +6609,9 @@
       if (pluginUpdateChecking || st?.checking) {
         elUpdateBadge.className = 'update-badge';
         elUpdateBadge.textContent = t.updateBadgeChecking;
+      } else if (mismatch) {
+        elUpdateBadge.className = 'update-badge warn';
+        elUpdateBadge.textContent = t.updateBadgeReloadRequired;
       } else if (isDirty) {
         elUpdateBadge.className = 'update-badge warn';
         elUpdateBadge.textContent = t.updateBadgeDirty;
@@ -6164,6 +6640,8 @@
       const curPills = [];
       if (st?.currentVersion) {
         curPills.push(`<span class="update-pill">v${esc(st.currentVersion)}</span>`);
+      } else if (mismatch?.startedVersion) {
+        curPills.push(`<span class="update-pill">v${esc(mismatch.startedVersion)}</span>`);
       }
       if (st) {
         if (isGit) {
@@ -6228,9 +6706,11 @@
 
     const elChecked = document.getElementById('update-checked-meta');
     if (elChecked) {
-      elChecked.textContent = st?.checkedAt
-        ? t.updateCheckedAgo(relTimeAgo(st.checkedAt))
-        : t.updateNotCheckedYet;
+      elChecked.textContent = staleWithoutStatus
+        ? t.updateChannelMismatchHint
+        : st?.checkedAt
+          ? t.updateCheckedAgo(relTimeAgo(st.checkedAt))
+          : t.updateNotCheckedYet;
     }
 
     if (elUpdateDirtyWarn) {
@@ -6248,18 +6728,35 @@
     }
 
     if (elUpdateReloadBanner) {
-      const showReload = Boolean(pluginUpdateAppliedVersion);
-      elUpdateReloadBanner.hidden = !showReload;
-      if (showReload) {
+      if (pluginUpdateAppliedVersion) {
+        elUpdateReloadBanner.hidden = false;
+        elUpdateReloadBanner.classList.remove('warn');
         elUpdateReloadBanner.textContent = t.updateReloadBanner(pluginUpdateAppliedVersion);
+      } else if (mismatch) {
+        elUpdateReloadBanner.hidden = false;
+        elUpdateReloadBanner.classList.add('warn');
+        elUpdateReloadBanner.textContent = t.updateBackendMismatchBanner(
+          mismatch.startedVersion || '',
+          mismatch.diskVersion || '',
+        );
+      } else {
+        elUpdateReloadBanner.hidden = true;
+        elUpdateReloadBanner.classList.remove('warn');
+        elUpdateReloadBanner.textContent = '';
       }
     }
 
     if (elUpdateErr) {
-      const errText = st && st.ok === false && st.error ? String(st.error) : '';
-      elUpdateErr.hidden = !errText;
-      elUpdateErr.textContent = errText;
+      const statusErr = st && st.ok === false && st.error ? String(st.error) : '';
+      const errText = updateCardError || statusErr;
+      const redundantWithBanner = Boolean(
+        mismatch && !pluginUpdateAppliedVersion && errText === t.sidecarMismatchErr,
+      );
+      elUpdateErr.hidden = !errText || redundantWithBanner;
+      elUpdateErr.textContent = redundantWithBanner ? '' : errText;
     }
+
+    renderUpdateStatusNotice();
 
     if (elBtnUpdateCheck) {
       elBtnUpdateCheck.disabled = busy;
@@ -6267,7 +6764,7 @@
     }
 
     if (elBtnUpdateApply) {
-      const showApply = Boolean(st && isGit && st.canApplyUpdate);
+      const showApply = Boolean(st && isGit && st.canApplyUpdate && !staleWithoutStatus);
       elBtnUpdateApply.hidden = !showApply;
       elBtnUpdateApply.disabled = busy || isDirty;
       elBtnUpdateApply.textContent = pluginUpdateApplying
@@ -6294,13 +6791,19 @@
       clearTimeout(pluginUpdatePollTimer);
       pluginUpdatePollTimer = null;
     }
+    const qs = new URLSearchParams({ bg: bg ? '1' : '0' });
+    const url = `/api/update_status?${qs}`;
     try {
-      const qs = new URLSearchParams({ bg: bg ? '1' : '0' });
-      const res = await doFetch(`/api/update_status?${qs}`);
-      const data = await res.json();
+      const res = await fetchWithTimeout(url, { method: 'GET' }, API_READ_TIMEOUT_MS);
+      const data = await safeReadJson(res, { url });
       if (data?.locale) applyLocale(data.locale);
+      inspectServerInfo(data);
       if (data && typeof data === 'object' && ('currentVersion' in data || 'hasUpdate' in data)) {
         pluginUpdateState = data;
+        updateCardError = data.ok === false && data.error ? String(data.error) : '';
+        if (!data.serverInfo?.versionDrifted) {
+          backendVersionMismatch = null;
+        }
         syncSettingsUpdateDot();
         if (settingsScreenOpen) renderUpdateCard();
         if (data.checking && retryCount < 3) {
@@ -6309,8 +6812,20 @@
           }, 2500);
         }
       }
-    } catch {
-      // Non-fatal: keep last known update status
+    } catch (err) {
+      if (err?.isBackendMismatch) {
+        backendVersionMismatch = {
+          kind: 'stale_backend',
+          startedVersion: backendVersionMismatch?.startedVersion || '',
+          diskVersion: backendVersionMismatch?.diskVersion || '',
+          reason: err.code || 'route_not_found',
+        };
+        updateCardError = err.message || L().sidecarMismatchErr;
+        if (settingsScreenOpen) renderUpdateCard();
+      } else if (!pluginUpdateState && settingsScreenOpen && err?.message) {
+        updateCardError = err.message;
+        renderUpdateCard();
+      }
     }
   }
 
@@ -6318,24 +6833,41 @@
     if (pluginUpdateChecking || pluginUpdateApplying) return;
     const t = L();
     pluginUpdateChecking = true;
+    clearUpdateCardNotice();
     renderUpdateCard();
     try {
       const payload = { force: true, persistChannel: true };
       if (channelOverride) payload.channel = channelOverride;
-      const res = await postApi('/api/update_check', '/api/update_check_get', payload);
+      const res = await postApi(
+        '/api/update_check',
+        '/api/update_check_get',
+        payload,
+        { timeoutMs: API_UPDATE_TIMEOUT_MS },
+      );
       if (res && typeof res === 'object') {
         pluginUpdateState = res;
+        if (!res.serverInfo?.versionDrifted) {
+          backendVersionMismatch = null;
+        }
       }
       syncSettingsUpdateDot();
       if (res?.ok === false) {
-        flashToast(res.error || t.updateToastCheckErr, 'err', 3800);
+        setUpdateCardNotice(res.error || t.updateToastCheckErr, 'err');
       } else if (res?.hasUpdate) {
-        flashToast(t.updateToastAvailable(res.targetVersion || ''), 'ok', 3200);
+        setUpdateCardNotice(t.updateToastAvailable(res.targetVersion || ''), 'ok', 3600);
       } else {
-        flashToast(t.updateToastUpToDate, 'ok', 2400);
+        setUpdateCardNotice(t.updateToastUpToDate, 'ok', 2800);
       }
     } catch (err) {
-      flashToast(err?.message || t.updateToastCheckErr, 'err', 3800);
+      if (err?.isBackendMismatch) {
+        backendVersionMismatch = {
+          kind: 'stale_backend',
+          startedVersion: backendVersionMismatch?.startedVersion || '',
+          diskVersion: backendVersionMismatch?.diskVersion || '',
+          reason: err.code || 'route_not_found',
+        };
+      }
+      setUpdateCardNotice(err?.message || t.updateToastCheckErr, 'err');
     } finally {
       pluginUpdateChecking = false;
       renderUpdateCard();
@@ -6403,12 +6935,14 @@
 
   if (elBtnChannelStable) {
     elBtnChannelStable.addEventListener('click', () => {
+      if (backendVersionMismatch && !pluginUpdateState) return;
       if (pluginUpdateState?.channel === 'stable' && pluginUpdateState?.checkedAt) return;
       runManualUpdateCheck('stable');
     });
   }
   if (elBtnChannelDev) {
     elBtnChannelDev.addEventListener('click', () => {
+      if (backendVersionMismatch && !pluginUpdateState) return;
       if (pluginUpdateState?.channel === 'dev' && pluginUpdateState?.checkedAt) return;
       runManualUpdateCheck('dev');
     });

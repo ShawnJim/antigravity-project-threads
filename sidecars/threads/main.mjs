@@ -1,8 +1,9 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Response, SidecarApp } from 'sidecar_sdk';
-import { getCascadeModelCatalog, getSelectableModels, resolveLsEndpoint } from '../../lib/ls-client.mjs';
+import { getCascadeModelCatalog, resolveLsEndpoint } from '../../lib/ls-client.mjs';
 import {
   applyPluginUpdate,
   checkPluginUpdate,
@@ -10,7 +11,6 @@ import {
 } from '../../lib/updater.mjs';
 import {
   archiveThread,
-  canonicalizeModelForSettings,
   cleanupThreadWorktree,
   dispatchThread,
   executeDecisionAction,
@@ -22,7 +22,7 @@ import {
   readProjectMemory,
   resolveAppLocale,
   resolveProjectScope,
-  saveSettings,
+  saveSettingsWithFastResponse,
   sendThreadMessage,
   syncCompletionToCoordinator,
   syncThreads,
@@ -30,9 +30,67 @@ import {
 } from '../../lib/store.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT = join(HERE, '..', '..');
+const SERVER_API_REVISION = 2;
+const SERVER_CAPABILITIES = [
+  'settings',
+  'settings_save_fast',
+  'update_status',
+  'update_check',
+  'update_apply',
+  'decisions',
+];
 const app = new SidecarApp();
 
 resolveLsEndpoint();
+
+function readPluginManifestVersion() {
+  try {
+    const raw = readFileSync(join(PLUGIN_ROOT, 'plugin.json'), 'utf8');
+    return String(JSON.parse(raw)?.version || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function readStartupGitSha() {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd: PLUGIN_ROOT,
+      encoding: 'utf8',
+      timeout: 2000,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
+const STARTED_VERSION = readPluginManifestVersion();
+const STARTED_GIT_SHA = readStartupGitSha();
+const STARTED_AT = new Date().toISOString();
+
+function buildServerInfo() {
+  const diskVersion = readPluginManifestVersion();
+  return {
+    startedVersion: STARTED_VERSION,
+    diskVersion: diskVersion || STARTED_VERSION,
+    startedGitSha: STARTED_GIT_SHA,
+    startedAt: STARTED_AT,
+    apiRevision: SERVER_API_REVISION,
+    capabilities: SERVER_CAPABILITIES,
+    versionDrifted: Boolean(STARTED_VERSION && diskVersion && diskVersion !== STARTED_VERSION),
+  };
+}
+
+function buildStaticHeaders() {
+  return {
+    'Cache-Control': 'no-store',
+    'X-PT-Server-Version': STARTED_VERSION || 'unknown',
+    'X-PT-Api-Revision': String(SERVER_API_REVISION),
+  };
+}
 
 function readStaticAsset(filename, fallback = '') {
   const target = join(HERE, filename);
@@ -53,21 +111,21 @@ function registerDualApi(basePath, handler) {
 app.page('/', () =>
   new Response(readStaticAsset('index.html', '<!doctype html><title>Project Threads</title>'), {
     contentType: 'text/html; charset=utf-8',
-    headers: { 'Cache-Control': 'no-store' },
+    headers: buildStaticHeaders(),
   }),
 );
 
 app.page('/theme.css', () =>
   new Response(readStaticAsset('theme.css', '/* loading */'), {
     contentType: 'text/css; charset=utf-8',
-    headers: { 'Cache-Control': 'no-store' },
+    headers: buildStaticHeaders(),
   }),
 );
 
 app.page('/app.js', () =>
   new Response(readStaticAsset('app.js', '// loading'), {
     contentType: 'application/javascript; charset=utf-8',
-    headers: { 'Cache-Control': 'no-store' },
+    headers: buildStaticHeaders(),
   }),
 );
 
@@ -82,7 +140,7 @@ app.api(
       const projectId = data.projectId || '';
       const includeArchived = data.includeArchived === '1' || data.includeArchived === 'true';
       const allWorkspaces = data.allWorkspaces === '1' || data.allWorkspaces === 'true';
-      return await syncThreads({
+      const snap = await syncThreads({
         workspacePath,
         conversationId,
         coordinatorId,
@@ -90,8 +148,14 @@ app.api(
         includeArchived,
         allWorkspaces,
       });
+      return { ...snap, serverInfo: buildServerInfo() };
     } catch (err) {
-      return { error: 'sync_failed', message: err.message, locale: resolveAppLocale() };
+      return {
+        error: 'sync_failed',
+        message: err.message,
+        locale: resolveAppLocale(),
+        serverInfo: buildServerInfo(),
+      };
     }
   },
   'GET',
@@ -349,10 +413,12 @@ async function handleSettings(data = {}) {
   try {
     const scopeOpts = buildSettingsScopeOpts(data);
     const scopeKey = await resolveSettingsScopeKey(data);
+    const forceRefresh = parseBool(data.refresh, false);
     const settings = loadSettings();
     const effective = await getEffectiveSettings({
       ...scopeOpts,
       workspaceKey: scopeKey,
+      forceRefresh,
     });
     return {
       ok: true,
@@ -364,65 +430,30 @@ async function handleSettings(data = {}) {
       scopeLabel: effective.scopeLabel || '',
       coordinatorModelDisplayName: effective.coordinatorModelDisplayName || '',
       coordinatorModel: effective.coordinatorModel || '',
+      serverInfo: buildServerInfo(),
     };
   } catch (err) {
-    return { ok: false, error: err.message, locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/settings', handleSettings);
 
 async function handleSaveSettings(data = {}) {
   try {
-    const scope = data.scope === 'project' ? 'project' : 'global';
-    const reset = parseBool(data.reset, false);
-    const scopeOpts = buildSettingsScopeOpts(data);
-    const scopeKey = await resolveSettingsScopeKey(data);
-    if (scope === 'project' && !scopeKey) {
-      return {
-        ok: false,
-        error: 'No active project scope to save project override.',
-        locale: resolveAppLocale(),
-      };
-    }
-
-    const models = await getSelectableModels({ timeoutMs: 2500 });
-    const labels = {};
-    const patch = {
-      scope,
-      reset,
-      ...(scope === 'project' ? { workspaceKey: scopeKey } : {}),
-    };
-
-    if (!reset) {
-      for (const field of ['worktreeModel', 'readOnlyModel']) {
-        if (!(field in data)) continue;
-        const { value, label } = canonicalizeModelForSettings(data[field], models);
-        patch[field] = value;
-        if (value && value !== 'inherit' && label) labels[value] = label;
-      }
-      if (Object.keys(labels).length > 0) {
-        patch.labels = labels;
-      }
-    }
-
-    const settings = saveSettings(patch);
-    const effective = await getEffectiveSettings({
-      ...scopeOpts,
-      workspaceKey: scopeKey,
-    });
-    return {
-      ok: true,
-      locale: resolveAppLocale(),
-      settings,
-      effective,
-      scopeKey: effective.scopeKey || scopeKey || '',
-      projectName: effective.projectName || '',
-      scopeLabel: effective.scopeLabel || '',
-      coordinatorModelDisplayName: effective.coordinatorModelDisplayName || '',
-      coordinatorModel: effective.coordinatorModel || '',
-    };
+    const res = await saveSettingsWithFastResponse(data);
+    return { ...res, serverInfo: buildServerInfo() };
   } catch (err) {
-    return { ok: false, error: err.message, locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/settings_save', handleSaveSettings);
@@ -433,9 +464,14 @@ async function handleUpdateStatus(data = {}) {
       channel: data.channel || '',
       backgroundRefresh: parseBool(data.bg, true),
     });
-    return { ...status, locale: resolveAppLocale() };
+    return { ...status, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
   } catch (err) {
-    return { ok: false, error: err.message, locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/update_status', handleUpdateStatus);
@@ -447,9 +483,14 @@ async function handleUpdateCheck(data = {}) {
       force: parseBool(data.force, true),
       persistChannel: parseBool(data.persistChannel, true),
     });
-    return { ...status, locale: resolveAppLocale() };
+    return { ...status, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
   } catch (err) {
-    return { ok: false, error: err.message, locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/update_check', handleUpdateCheck);
@@ -460,9 +501,14 @@ async function handleUpdateApply(data = {}) {
       channel: data.channel || '',
       persistChannel: parseBool(data.persistChannel, true),
     });
-    return { ...res, locale: resolveAppLocale() };
+    return { ...res, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
   } catch (err) {
-    return { ok: false, error: err.message, locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/update_apply', handleUpdateApply);
