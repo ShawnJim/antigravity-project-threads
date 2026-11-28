@@ -5,9 +5,9 @@ import {
   buildBoardDecisions,
   dismissDecision,
   dispatchThread,
+  getThreadDetail,
   initCoordinator,
   listDecisions,
-  loadRegistry,
   readProjectMemory,
   resolveDecision,
   resolveProjectScope,
@@ -152,13 +152,33 @@ const TOOLS = [
   },
   {
     name: 'get_thread_detail',
-    description: 'Inspect full metadata, Git status, and latest completion summary of a specific Worker Thread by threadId (e.g. thr-001) or conversationId.',
+    description:
+      'Inspect full metadata, Git status, and latest completion summary of a specific Worker Thread by threadId (e.g. "thr-001"), project-local sequence (e.g. "#1" or "1" when project scope is provided), or conversationId. When project scope parameters are provided, enforces strict fail-closed cross-project isolation and refreshes only the target thread.',
     inputSchema: {
       type: 'object',
       properties: {
         threadId: {
           type: 'string',
-          description: 'Thread ID (e.g., "thr-001") or Antigravity conversation UUID.',
+          description:
+            'Global Thread ID (e.g., "thr-001"), project-local display sequence (e.g., "#1" or "1" with project scope), or Antigravity conversation UUID.',
+        },
+        workspacePath: {
+          type: 'string',
+          description:
+            'Optional absolute path of the project repository to enforce strict project scope isolation and enable project-local sequence lookup.',
+        },
+        coordinatorId: {
+          type: 'string',
+          description:
+            'Optional Coordinator conversation ID to enforce strict project scope isolation and enable project-local sequence lookup.',
+        },
+        conversationId: {
+          type: 'string',
+          description: 'Optional current conversation ID to resolve project scope.',
+        },
+        projectId: {
+          type: 'string',
+          description: 'Optional Antigravity Project ID for strict project isolation.',
         },
       },
       required: ['threadId'],
@@ -206,17 +226,36 @@ const TOOLS = [
   {
     name: 'send_thread_message',
     description:
-      'Send a follow-up instruction or question to an existing Worker Thread in the background without navigating away from the center Coordinator session.',
+      'Send a follow-up instruction or question to an existing Worker Thread in the background without navigating away from the center Coordinator session. When project scope parameters are provided, enforces strict fail-closed cross-project isolation.',
     inputSchema: {
       type: 'object',
       properties: {
         threadId: {
           type: 'string',
-          description: 'Target Thread ID (e.g., "thr-001") or conversation UUID.',
+          description:
+            'Target global Thread ID (e.g., "thr-001"), project-local sequence (e.g., "#1" or "1" with project scope), or conversation UUID.',
         },
         message: {
           type: 'string',
           description: 'Follow-up instruction, clarification, or feedback to send to the Worker Thread.',
+        },
+        workspacePath: {
+          type: 'string',
+          description:
+            'Optional absolute path of the project repository to enforce strict project scope isolation and enable project-local sequence lookup.',
+        },
+        coordinatorId: {
+          type: 'string',
+          description:
+            'Optional Coordinator conversation ID to enforce strict project scope isolation and enable project-local sequence lookup.',
+        },
+        conversationId: {
+          type: 'string',
+          description: 'Optional current conversation ID to resolve project scope.',
+        },
+        projectId: {
+          type: 'string',
+          description: 'Optional Antigravity Project ID for strict project isolation.',
         },
       },
       required: ['threadId', 'message'],
@@ -225,13 +264,32 @@ const TOOLS = [
   {
     name: 'archive_thread',
     description:
-      'Archive a completed or obsolete Worker Thread conversation (hides it from active lists while preserving its transcript) and safely remove its clean, merged Git worktree & branch (unless dirty or unmerged).',
+      'Archive a completed or obsolete Worker Thread conversation (hides it from active lists while preserving its transcript) and safely remove its clean, merged Git worktree & branch (unless dirty or unmerged). When project scope parameters are provided, enforces strict fail-closed cross-project isolation.',
     inputSchema: {
       type: 'object',
       properties: {
         threadId: {
           type: 'string',
-          description: 'Thread ID (e.g., "thr-001") or conversation UUID.',
+          description:
+            'Global Thread ID (e.g., "thr-001"), project-local sequence (e.g., "#1" or "1" with project scope), or conversation UUID.',
+        },
+        workspacePath: {
+          type: 'string',
+          description:
+            'Optional absolute path of the project repository to enforce strict project scope isolation and enable project-local sequence lookup.',
+        },
+        coordinatorId: {
+          type: 'string',
+          description:
+            'Optional Coordinator conversation ID to enforce strict project scope isolation and enable project-local sequence lookup.',
+        },
+        conversationId: {
+          type: 'string',
+          description: 'Optional current conversation ID to resolve project scope.',
+        },
+        projectId: {
+          type: 'string',
+          description: 'Optional Antigravity Project ID for strict project isolation.',
         },
         removeWorktree: {
           type: 'boolean',
@@ -341,6 +399,13 @@ const TOOLS = [
   },
 ];
 
+function formatThreadIdLabel(t) {
+  if (!t) return '';
+  if (t.localId && t.threadId) return `\`${t.localId}\` (\`${t.threadId}\`)`;
+  if (t.threadId) return `\`${t.threadId}\``;
+  return t.localId ? `\`${t.localId}\`` : '';
+}
+
 function formatThreadsMarkdown(snapshot) {
   const lines = [];
   if (snapshot.coordinator) {
@@ -365,13 +430,14 @@ function formatThreadsMarkdown(snapshot) {
         : t.runState === 'RUN_STATE_IDLE'
           ? 'IDLE'
           : t.runState;
+    const idCell = formatThreadIdLabel(t) || '-';
     const link = `[${t.title}](conversation://${t.conversationId})`;
     const br = t.branch ? `\`${t.branch}\`` : '-';
     const git = t.git
       ? `+${t.git.aheadCount || 0} commits${t.git.merged && t.git.aheadCount > 0 ? ` (${t.git.mergeMethod || 'merged'})` : ''}, ${t.git.dirtyCount || 0} dirty`
       : '-';
     const sum = (t.lastSummary || '').replace(/\r?\n+/g, ' ').slice(0, 90);
-    lines.push(`| \`${t.threadId}\` | **${state}** | ${link} | ${br} | ${git} | ${sum || '-'} |`);
+    lines.push(`| ${idCell} | **${state}** | ${link} | ${br} | ${git} | ${sum || '-'} |`);
   }
   return lines.join('\n');
 }
@@ -403,8 +469,9 @@ async function handleToolCall(name, args = {}) {
       const dispatchArgs = { ...args };
       if (!dispatchArgs.model) delete dispatchArgs.model;
       const t = await dispatchThread(dispatchArgs);
+      const idHeading = t.localId ? `**\`${t.localId}\`** (\`${t.threadId}\`)` : `**\`${t.threadId}\`**`;
       const text = [
-        `Dispatched Worker Thread **\`${t.threadId}\`**: [${t.title}](conversation://${t.conversationId})`,
+        `Dispatched Worker Thread ${idHeading}: [${t.title}](conversation://${t.conversationId})`,
         `- Conversation ID: \`${t.conversationId}\``,
         `- Project Scope: \`${t.workspaceKey}\`${t.projectId ? ` (projectId: \`${t.projectId}\`)` : ''}`,
         `- Model: \`${t.modelDisplayName || t.model}\` | Initial State: \`${t.runState}\``,
@@ -425,21 +492,24 @@ async function handleToolCall(name, args = {}) {
     }
 
     case 'get_thread_detail': {
-      await syncThreads({ includeArchived: true, allWorkspaces: true });
-      const reg = loadRegistry();
-      const t =
-        reg.threads[args.threadId] ||
-        Object.values(reg.threads).find((x) => x.conversationId === args.threadId);
-      if (!t) {
+      try {
+        const t = await getThreadDetail({
+          threadId: args.threadId || '',
+          workspacePath: args.workspacePath || '',
+          coordinatorId: args.coordinatorId || '',
+          conversationId: args.conversationId || '',
+          projectId: args.projectId || '',
+        });
+        return {
+          content: [{ type: 'text', text: JSON.stringify(t, null, 2) }],
+          structuredContent: t,
+        };
+      } catch (err) {
         return {
           isError: true,
-          content: [{ type: 'text', text: `Thread not found: ${args.threadId}` }],
+          content: [{ type: 'text', text: err.message }],
         };
       }
-      return {
-        content: [{ type: 'text', text: JSON.stringify(t, null, 2) }],
-        structuredContent: t,
-      };
     }
 
     case 'update_project_memory': {
@@ -490,11 +560,14 @@ async function handleToolCall(name, args = {}) {
 
     case 'send_thread_message': {
       const res = await sendThreadMessage(args);
+      const idLabel = res.thread.localId
+        ? `**\`${res.thread.localId}\`** (\`${res.thread.threadId}\`)`
+        : `**\`${res.thread.threadId}\`**`;
       return {
         content: [
           {
             type: 'text',
-            text: `Sent follow-up message to **\`${res.thread.threadId}\`** (${res.thread.title}). It is now running in the background; live progress is visible in the right-hand Project Threads panel.`,
+            text: `Sent follow-up message to ${idLabel} (${res.thread.title}). It is now running in the background; live progress is visible in the right-hand Project Threads panel.`,
           },
         ],
         structuredContent: res,
@@ -503,14 +576,21 @@ async function handleToolCall(name, args = {}) {
 
     case 'archive_thread': {
       const res = await archiveThread(args.threadId, {
+        workspacePath: args.workspacePath || '',
+        coordinatorId: args.coordinatorId || '',
+        conversationId: args.conversationId || '',
+        projectId: args.projectId || '',
         removeWorktree: args.removeWorktree !== undefined ? Boolean(args.removeWorktree) : true,
         forceWorktree: Boolean(args.forceWorktree),
         deleteBranch: args.deleteBranch !== undefined ? Boolean(args.deleteBranch) : true,
       });
       const removedPath = res.removedWorktreePath || res.thread?.worktreePath || '';
       const branchName = res.deletedBranch || res.thread?.branch || '';
+      const idLabel = res.thread?.localId
+        ? `\`${res.thread.localId}\` (\`${res.thread.threadId}\`)`
+        : `\`${res.thread.threadId}\``;
       const lines = [
-        `Archived thread \`${res.thread.threadId}\` ([${res.thread.title}](conversation://${res.thread.conversationId})).`,
+        `Archived thread ${idLabel} ([${res.thread.title}](conversation://${res.thread.conversationId})).`,
         `- Worktree removed: \`${res.worktreeRemoved}\`${res.worktreeRemoved && removedPath ? ` (\`${removedPath}\`)` : ''}`,
         `- Branch deleted: \`${res.branchDeleted}\`${res.branchDeleted && branchName ? ` (\`${branchName}\`)` : ''}`,
       ];

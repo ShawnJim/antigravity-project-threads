@@ -1553,9 +1553,14 @@
     elModalTitle.textContent = mode === 'cleanup' ? t.modalCleanTitle : t.modalArchiveTitle;
     elModalClose.title = t.closeTip;
     elModalCancel.textContent = t.fCancel;
-    elModalThread.textContent = thread.threadId
-      ? `[${thread.threadId}] ${thread.title || ''}`
-      : thread.title || '';
+    const modalDisplayId =
+      thread.localId || (Number(thread.projectSeq) > 0 ? `#${Number(thread.projectSeq)}` : '');
+    elModalThread.textContent =
+      modalDisplayId && thread.threadId && modalDisplayId !== thread.threadId
+        ? `[${modalDisplayId} / ${thread.threadId}] ${thread.title || ''}`
+        : thread.threadId
+          ? `[${thread.threadId}] ${thread.title || ''}`
+          : thread.title || '';
 
     const pills = [];
     if (branchName) {
@@ -3034,18 +3039,26 @@
     else if (isWorking) leftIco = ICONS.rowSpinner;
     else if (isWaiting) leftIco = ICONS.waitAlert;
 
+    const displayId =
+      th.localId || (Number(th.projectSeq) > 0 ? `#${Number(th.projectSeq)}` : th.threadId || '');
+    const idTip =
+      displayId && th.threadId && displayId !== th.threadId
+        ? `${displayId} (${th.threadId})`
+        : th.threadId || displayId;
+    const tidPillHtml = `<span class="tid-pill" title="${esc(idTip)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`;
+
     let restRight = '';
     if (isWorking) {
       const sp = th.stepsProgress;
       if (sp && sp.total > 0) {
-        restRight = `<span class="step-pill">${sp.done}/${sp.total}</span><span class="tid-pill">${esc(th.threadId)}</span>`;
+        restRight = `<span class="step-pill">${sp.done}/${sp.total}</span>${tidPillHtml}`;
       } else if (th.toolStepCount > 0) {
-        restRight = `<span class="step-pill">${esc(t.stepsUnit(th.toolStepCount))}</span><span class="tid-pill">${esc(th.threadId)}</span>`;
+        restRight = `<span class="step-pill">${esc(t.stepsUnit(th.toolStepCount))}</span>${tidPillHtml}`;
       } else {
-        restRight = `<span class="tid-pill">${esc(th.threadId)}</span>`;
+        restRight = tidPillHtml;
       }
     } else {
-      restRight = `<span class="tid-pill">${esc(th.threadId)}</span>${
+      restRight = `${tidPillHtml}${
         ago ? `<span class="time-lbl">${esc(ago)}</span>` : ''
       }`;
     }
@@ -3082,8 +3095,9 @@
     const subCls = isWorking ? 'qrow-sub animate-shimmer-text' : 'qrow-sub';
     const rowCls = `qrow two-line${isActiveMain ? ' active-main' : ''}${isArchived && th.worktreePath ? ' arch-has-wt' : ''}`;
 
+    const rowTitleTip = idTip ? `[${idTip}] ${th.title || ''}` : th.displayTitle || th.title;
     return `
-      <div class="${rowCls}" data-tid="${esc(th.threadId)}" title="${esc(th.displayTitle || th.title)}">
+      <div class="${rowCls}" data-tid="${esc(th.threadId)}" title="${esc(rowTitleTip)}">
         <div class="qrow-left">
           ${leftIco}
           <div class="qrow-main">
@@ -3367,12 +3381,19 @@
             ${ICONS.close}
           </button>
         `;
+        const decDisplayTid =
+          dec.threadLocalId ||
+          (Number(dec.threadProjectSeq) > 0 ? `#${Number(dec.threadProjectSeq)}` : dec.threadId || '');
+        const decTidTip =
+          decDisplayTid && dec.threadId && decDisplayTid !== dec.threadId
+            ? `${t.decisionThreadTip(decDisplayTid)} (${dec.threadId})`
+            : t.decisionThreadTip(dec.threadId);
         const topHtml = hasMetaRow
           ? `
             <div class="decision-top">
               ${
                 dec.threadId
-                  ? `<button type="button" class="dec-thread-badge" data-dec-thread="${esc(dec.threadId)}" title="${esc(t.decisionThreadTip(dec.threadId))}">${esc(dec.threadId)}</button>`
+                  ? `<button type="button" class="dec-thread-badge" data-dec-thread="${esc(dec.threadId)}" title="${esc(decTidTip)}">${esc(decDisplayTid)}</button>`
                   : ''
               }
               ${isAuto ? `<span class="dec-auto-tag">${esc(t.decisionAutoTag)}</span>` : ''}
@@ -3596,11 +3617,21 @@
     const sp = th.stepsProgress;
     const ago = relTime(th.updatedAt || th.createdAt);
     const mbarHtml = renderSegmentedMbar(th, isWorking);
+    const displayId =
+      th.localId || (Number(th.projectSeq) > 0 ? `#${Number(th.projectSeq)}` : th.threadId || '');
+    const idTip =
+      displayId && th.threadId && displayId !== th.threadId
+        ? `${displayId} (${th.threadId})`
+        : th.threadId || displayId;
+    const cardTitleTip = idTip ? `[${idTip}] ${th.title || ''}` : th.displayTitle || th.title;
+    const o2TidHtml = displayId
+      ? `<span class="o2-tid" title="${esc(idTip)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`
+      : '';
     let rightMetaHtml = '';
     if (sp && sp.total > 0) {
-      rightMetaHtml = `${mbarHtml}<span>${sp.done}/${sp.total}</span>`;
+      rightMetaHtml = `${mbarHtml}<span>${sp.done}/${sp.total}</span>${o2TidHtml}`;
     } else {
-      rightMetaHtml = `<span>${esc(th.threadId)}</span>${ago ? `<span>· ${esc(ago)}</span>` : ''}`;
+      rightMetaHtml = `${o2TidHtml}${ago ? `<span class="o2-time">${esc(ago)}</span>` : ''}`;
     }
 
     const goalLine = cleanGoalSnippet(th);
@@ -3676,7 +3707,7 @@
       <div class="${cardCls}" data-th-card="${esc(th.threadId)}">
         <div class="o2-thh">
           <span class="o2-thd ${stateCls}" aria-hidden="true"></span>
-          <button type="button" class="o2-tht" data-action="open-primary" data-id="${esc(th.threadId)}" title="${esc(th.displayTitle || th.title)}">
+          <button type="button" class="o2-tht" data-action="open-primary" data-id="${esc(th.threadId)}" title="${esc(cardTitleTip)}">
             <b>${esc(th.title)}</b>
             <em>${esc(statusWord)}</em>
             ${decisionBadgeHtml}
@@ -3845,8 +3876,17 @@
 
   function renderWorktreeCard(th) {
     const t = L();
+    const displayId =
+      th.localId || (Number(th.projectSeq) > 0 ? `#${Number(th.projectSeq)}` : th.threadId || '');
+    const idTip =
+      displayId && th.threadId && displayId !== th.threadId
+        ? `${displayId} (${th.threadId})`
+        : th.threadId || displayId;
     const branchText = th.git?.branch || th.branch || 'worktree';
     const pills = [
+      ...(displayId
+        ? [`<span class="tid-pill" title="${esc(idTip)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`]
+        : []),
       `<span class="branch-pill">${ICONS.branch} <span>${esc(branchText)}</span></span>`,
     ];
     const isCherryPicked = Boolean(th.git?.merged && th.git?.mergeMethod === 'cherry-pick');
@@ -5427,10 +5467,19 @@
   function renderThreadHeader(th) {
     const t = L();
     openThreadObj = th;
-    document.getElementById('chat-tid').textContent = th.threadId || '';
+    const chatTidEl = document.getElementById('chat-tid');
+    const displayId =
+      th.localId || (Number(th.projectSeq) > 0 ? `#${Number(th.projectSeq)}` : th.threadId || '');
+    const idTip =
+      displayId && th.threadId && displayId !== th.threadId
+        ? `${displayId} (${th.threadId})`
+        : th.threadId || displayId;
+    chatTidEl.textContent = idTip || '';
+    chatTidEl.title = idTip || '';
+    if (chatTidEl.dataset) chatTidEl.dataset.threadId = th.threadId || '';
     const titleEl = document.getElementById('chat-title-text');
     titleEl.textContent = th.title || '';
-    titleEl.title = th.title || '';
+    titleEl.title = idTip ? `[${idTip}] ${th.title || ''}` : th.title || '';
 
     const isRunning = !th.archived && th.runState === 'RUN_STATE_RUNNING';
     const isWaiting = !th.archived && th.bucket === 'waiting';

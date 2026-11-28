@@ -182,6 +182,10 @@ app.api(
         threadId: data.threadId || '',
         clientStamp: data.stamp || '',
         markRead: data.markRead === '1' || data.markRead === 'true' || data.markRead === true,
+        workspacePath: data.workspacePath || data.workspace || '',
+        coordinatorId: data.coordinatorId || '',
+        conversationId: data.conversationId || '',
+        projectId: data.projectId || '',
       });
     } catch (err) {
       return { ok: false, error: err.message, locale: resolveAppLocale() };
@@ -232,6 +236,10 @@ async function handleThreadSend(data = {}) {
       modelEnum: data.modelEnum || '',
       modelOrAlias: parsedModelOrAlias,
       modelDisplayName: data.modelDisplayName || '',
+      workspacePath: data.workspacePath || data.workspace || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
     });
     return { ...res, locale: resolveAppLocale() };
   } catch (err) {
@@ -257,6 +265,10 @@ async function handleThreadMarkRead(data = {}) {
   try {
     return await markThreadRead({
       threadId: data.threadId || '',
+      workspacePath: data.workspacePath || data.workspace || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
     });
   } catch (err) {
     return { ok: false, error: err.message, locale: resolveAppLocale() };
@@ -317,6 +329,10 @@ async function handleArchive(data = {}) {
       removeWorktree: parseBool(data.removeWorktree, true),
       forceWorktree: parseBool(data.forceWorktree, false),
       deleteBranch: parseBool(data.deleteBranch, true),
+      workspacePath: data.workspacePath || data.workspace || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
     });
     return { ok: true, locale: resolveAppLocale(), ...res };
   } catch (err) {
@@ -330,6 +346,10 @@ async function handleCleanupWorktree(data = {}) {
     const res = await cleanupThreadWorktree(data.threadId || '', {
       forceWorktree: parseBool(data.forceWorktree, false),
       deleteBranch: parseBool(data.deleteBranch, true),
+      workspacePath: data.workspacePath || data.workspace || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
     });
     return { locale: resolveAppLocale(), ...res };
   } catch (err) {

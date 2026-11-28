@@ -1155,6 +1155,17 @@ button.o2-tht:active:not(:disabled) {
   flex: none;
   white-space: nowrap;
 }
+.o2-tid {
+  font-family: var(--pt-mono);
+  font-size: var(--pt-text-2xs);
+  color: var(--pt-sub);
+  background: var(--pt-surface-2);
+  padding: 1px 5px;
+  border-radius: var(--pt-r-xs);
+}
+.o2-time {
+  color: var(--pt-muted);
+}
 .o2-thc + .o2-chev {
   margin-left: 2px;
 }
