@@ -135,6 +135,7 @@
       modalForceWtOpt:
         'Force remove dirty/unmerged worktree (discards uncommitted changes & unmerged branch)',
       modalStatusClean: 'Clean & merged',
+      modalStatusCherryPicked: 'Clean · cherry-picked',
       modalStatusMissing: 'Directory missing (will prune stale entry)',
       modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
         const parts = [];
@@ -170,6 +171,7 @@
       libSaved: 'Saved & broadcast to worktrees',
       libWt: 'Active Git Worktrees',
       wtClean: 'Clean',
+      wtCherryPicked: 'Cherry-picked',
       backThreads: 'Threads',
       syncCoord: 'Sync',
       syncTip: 'Push conclusion to Coordinator',
@@ -333,6 +335,7 @@
       modalDelBranchOpt: '同时删除关联的线程 Git 分支',
       modalForceWtOpt: '强制删除未提交或未合并的 Worktree（将丢弃未提交改动与未合并分支）',
       modalStatusClean: '干净且已合并',
+      modalStatusCherryPicked: '干净 · 已 cherry-pick 合入',
       modalStatusMissing: '目录已不存在（将自动清理残留记录）',
       modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
         const parts = [];
@@ -364,6 +367,7 @@
       libSaved: '已保存并同步至活跃分支',
       libWt: '活跃 Git Worktree 分支',
       wtClean: '干净',
+      wtCherryPicked: '已 cherry-pick',
       backThreads: '线程',
       syncCoord: '同步总控',
       syncTip: '将当前线程结论推送至总控会话',
@@ -529,6 +533,7 @@
       modalDelBranchOpt: '同時刪除關聯的執行緒 Git 分支',
       modalForceWtOpt: '強制刪除未提交或未合併的 Worktree（將捨棄未提交改動與未合併分支）',
       modalStatusClean: '乾淨且已合併',
+      modalStatusCherryPicked: '乾淨 · 已 cherry-pick 合併',
       modalStatusMissing: '目錄已不存在（將自動清理殘留記錄）',
       modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
         const parts = [];
@@ -560,6 +565,7 @@
       libSaved: '已儲存並同步至活躍分支',
       libWt: '活躍 Git Worktree 分支',
       wtClean: '乾淨',
+      wtCherryPicked: '已 cherry-pick',
       backThreads: '執行緒',
       syncCoord: '同步總控',
       syncTip: '將目前執行緒結論推送至總控會話',
@@ -1016,7 +1022,11 @@
     const dirtyCount = Number(thread.git?.dirtyCount) || 0;
     const aheadCount = Number(thread.git?.aheadCount) || 0;
     const wtExists = thread.git ? thread.git.exists !== false : true;
-    const isDirtyOrUnmerged = wtExists && (dirtyCount > 0 || aheadCount > 0);
+    const isCherryPicked = Boolean(thread.git?.merged && thread.git?.mergeMethod === 'cherry-pick');
+    const isMerged =
+      typeof thread.git?.merged === 'boolean' ? thread.git.merged : aheadCount === 0;
+    const unmergedAheadCount = isMerged ? 0 : aheadCount;
+    const isDirtyOrUnmerged = wtExists && (dirtyCount > 0 || unmergedAheadCount > 0);
     const branchName = thread.git?.branch || thread.branch || '';
 
     activeModalCtx = {
@@ -1041,8 +1051,14 @@
     if (!wtExists) {
       pills.push(`<span class="wt-pill">${esc(t.modalStatusMissing)}</span>`);
     } else if (isDirtyOrUnmerged) {
-      if (aheadCount > 0) pills.push(`<span class="commit-pill">${esc(t.subCommits(aheadCount))}</span>`);
+      if (unmergedAheadCount > 0) {
+        pills.push(`<span class="commit-pill">${esc(t.subCommits(unmergedAheadCount))}</span>`);
+      } else if (isCherryPicked) {
+        pills.push(`<span class="wt-pill">${esc(t.wtCherryPicked)}</span>`);
+      }
       if (dirtyCount > 0) pills.push(`<span class="dirty-pill">${esc(t.subDirty(dirtyCount))}</span>`);
+    } else if (isCherryPicked) {
+      pills.push(`<span class="wt-pill">${esc(t.modalStatusCherryPicked)}</span>`);
     } else {
       pills.push(`<span class="wt-pill">${esc(t.modalStatusClean)}</span>`);
     }
@@ -1053,7 +1069,7 @@
 
     if (isDirtyOrUnmerged) {
       elModalWarn.hidden = false;
-      elModalWarn.textContent = t.modalWarnDirtyUnmerged(dirtyCount, aheadCount);
+      elModalWarn.textContent = t.modalWarnDirtyUnmerged(dirtyCount, unmergedAheadCount);
     } else {
       elModalWarn.hidden = true;
       elModalWarn.textContent = '';
@@ -1598,18 +1614,28 @@
       return th.waitingReason === 'confirm' ? t.subWaitingConfirm : t.subWaitingReview;
     }
     const synced = Boolean(th.pushedToCoordinatorAt || th.notifiedCoordinatorAt);
-    if (th.git?.aheadCount > 0 && th.git?.dirtyCount > 0) {
-      return `${t.subCommits(th.git.aheadCount)} · ${t.subDirty(th.git.dirtyCount)}`;
+    const isCherryPicked = Boolean(th.git?.merged && th.git?.mergeMethod === 'cherry-pick');
+    const isMerged =
+      typeof th.git?.merged === 'boolean' ? th.git.merged : (Number(th.git?.aheadCount) || 0) === 0;
+    const unmergedCommits = isMerged ? 0 : Number(th.git?.aheadCount) || 0;
+    if (unmergedCommits > 0 && th.git?.dirtyCount > 0) {
+      return `${t.subCommits(unmergedCommits)} · ${t.subDirty(th.git.dirtyCount)}`;
     }
-    if (th.git?.aheadCount > 0) {
+    if (unmergedCommits > 0) {
       return th.branch
-        ? `${t.subCommits(th.git.aheadCount)} · ${th.branch}`
-        : t.subCommits(th.git.aheadCount);
+        ? `${t.subCommits(unmergedCommits)} · ${th.branch}`
+        : t.subCommits(unmergedCommits);
+    }
+    if (isCherryPicked && th.git?.dirtyCount > 0) {
+      return `${t.wtCherryPicked} · ${t.subDirty(th.git.dirtyCount)}`;
     }
     if (th.git?.dirtyCount > 0) {
       return th.branch
         ? `${t.subDirty(th.git.dirtyCount)} · ${th.branch}`
         : t.subDirty(th.git.dirtyCount);
+    }
+    if (isCherryPicked) {
+      return th.branch ? `${t.wtCherryPicked} · ${th.branch}` : t.wtCherryPicked;
     }
     if (synced && th.branch) return `${th.branch} · ${t.subSyncedCoord}`;
     if (synced) return t.subSyncedCoord;
@@ -2122,12 +2148,19 @@
     const pills = [
       `<span class="branch-pill">${ICONS.branch} <span>${esc(branchText)}</span></span>`,
     ];
+    const isCherryPicked = Boolean(th.git?.merged && th.git?.mergeMethod === 'cherry-pick');
+    const isMerged =
+      typeof th.git?.merged === 'boolean' ? th.git.merged : (Number(th.git?.aheadCount) || 0) === 0;
     if (th.git?.aheadCount > 0) {
-      pills.push(`<span class="commit-pill">${esc(t.subCommits(th.git.aheadCount))}</span>`);
+      if (isCherryPicked) {
+        pills.push(`<span class="wt-pill">${esc(t.wtCherryPicked)}</span>`);
+      } else if (!isMerged) {
+        pills.push(`<span class="commit-pill">${esc(t.subCommits(th.git.aheadCount))}</span>`);
+      }
     }
     if (th.git?.dirtyCount > 0) {
       pills.push(`<span class="dirty-pill">${esc(t.subDirty(th.git.dirtyCount))}</span>`);
-    } else if (th.git && th.git.aheadCount === 0) {
+    } else if (th.git && isMerged && !isCherryPicked) {
       pills.push(`<span class="wt-pill">${esc(t.wtClean)}</span>`);
     }
     if (th.git?.lastCommit) {

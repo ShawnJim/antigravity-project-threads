@@ -15,6 +15,8 @@ import test from 'node:test';
 import {
   archiveThread,
   cleanupThreadWorktree,
+  ensureProjectMemoryFile,
+  inspectWorktreeGit,
   loadRegistry,
   saveRegistry,
 } from '../lib/store.mjs';
@@ -511,11 +513,210 @@ test('cleanupThreadWorktree() supports forceWorktree, deleteBranch=false, alread
   }
 });
 
+test('archiveThread() and inspectWorktreeGit() recognize cherry-picked commits and delete source branch via -D', async (t) => {
+  const { repoRoot, worktreesBase } = createTempGitAndStateEnv(t, 'pt-arch-cherry-');
+
+  const wtCherry = createWorktreeForThread({
+    repoRoot,
+    worktreesBase,
+    threadId: 'thr-030',
+    branch: 'thread/thr-030-cherry',
+  });
+  writeFileSync(join(wtCherry, 'cherry.txt'), 'cherry picked change\n', 'utf8');
+  execFileSync('git', ['add', 'cherry.txt'], { cwd: wtCherry });
+  execFileSync('git', ['commit', '-m', 'Cherry feature'], { cwd: wtCherry });
+  const cherrySha = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: wtCherry,
+    encoding: 'utf8',
+  }).trim();
+
+  const beforeGit = await inspectWorktreeGit(wtCherry, { baseRef: 'main', repoRoot });
+  assert.equal(beforeGit.aheadCount, 1);
+  assert.equal(beforeGit.merged, false);
+
+  execFileSync('git', ['cherry-pick', cherrySha], { cwd: repoRoot });
+
+  const afterPickGit = await inspectWorktreeGit(wtCherry, { baseRef: 'main', repoRoot });
+  assert.equal(afterPickGit.aheadCount, 1);
+  assert.equal(afterPickGit.dirtyCount, 0);
+  assert.equal(afterPickGit.merged, true);
+  assert.equal(afterPickGit.mergeMethod, 'cherry-pick');
+
+  const wtPartial = createWorktreeForThread({
+    repoRoot,
+    worktreesBase,
+    threadId: 'thr-031',
+    branch: 'thread/thr-031-partial',
+  });
+  writeFileSync(join(wtPartial, 'part1.txt'), 'picked part\n', 'utf8');
+  execFileSync('git', ['add', 'part1.txt'], { cwd: wtPartial });
+  execFileSync('git', ['commit', '-m', 'Part 1'], { cwd: wtPartial });
+  const part1Sha = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: wtPartial,
+    encoding: 'utf8',
+  }).trim();
+  writeFileSync(join(wtPartial, 'part2.txt'), 'unpicked part\n', 'utf8');
+  execFileSync('git', ['add', 'part2.txt'], { cwd: wtPartial });
+  execFileSync('git', ['commit', '-m', 'Part 2'], { cwd: wtPartial });
+  execFileSync('git', ['cherry-pick', part1Sha], { cwd: repoRoot });
+
+  const partialGit = await inspectWorktreeGit(wtPartial, { baseRef: 'main', repoRoot });
+  assert.equal(partialGit.aheadCount, 2);
+  assert.equal(partialGit.merged, false);
+
+  const reg = loadRegistry();
+  reg.threads['thr-030'] = {
+    threadId: 'thr-030',
+    conversationId: 'conv-cherry-030',
+    workspaceKey: repoRoot,
+    repoRoot,
+    worktreePath: wtCherry,
+    branch: 'thread/thr-030-cherry',
+    baseRef: 'main',
+    archived: false,
+    git: afterPickGit,
+  };
+  reg.threads['thr-031'] = {
+    threadId: 'thr-031',
+    conversationId: 'conv-cherry-031',
+    workspaceKey: repoRoot,
+    repoRoot,
+    worktreePath: wtPartial,
+    branch: 'thread/thr-031-partial',
+    baseRef: 'main',
+    archived: false,
+    git: partialGit,
+  };
+  saveRegistry(reg);
+
+  const resCherry = await archiveThread('thr-030');
+  assert.equal(resCherry.ok, true);
+  assert.equal(resCherry.worktreeRemoved, true);
+  assert.equal(resCherry.branchDeleted, true);
+  assert.equal(resCherry.skippedReason, '');
+  assert.equal(existsSync(wtCherry), false);
+  assert.equal(branchExists(repoRoot, 'thread/thr-030-cherry'), false);
+
+  const resPartial = await archiveThread('thr-031');
+  assert.equal(resPartial.ok, true);
+  assert.equal(resPartial.worktreeRemoved, false);
+  assert.equal(resPartial.branchDeleted, false);
+  assert.equal(resPartial.skippedReason, 'unmerged_commits');
+  assert.equal(existsSync(wtPartial), true);
+  assert.equal(branchExists(repoRoot, 'thread/thr-031-partial'), true);
+});
+
+test('inspectWorktreeGit() and cleanupThreadWorktree() unify baseRef fallback through coordinator defaultBranch', async (t) => {
+  const { repoRoot, worktreesBase } = createTempGitAndStateEnv(t, 'pt-arch-baseref-');
+
+  execFileSync('git', ['checkout', '-b', 'feature-v2'], { cwd: repoRoot });
+  execFileSync('git', ['branch', '-D', 'main'], { cwd: repoRoot });
+
+  const wt = createWorktreeForThread({
+    repoRoot,
+    worktreesBase,
+    threadId: 'thr-040',
+    branch: 'thread/thr-040-feat',
+    baseRef: 'feature-v2',
+  });
+  writeFileSync(join(wt, 'feat.txt'), 'feat work\n', 'utf8');
+  execFileSync('git', ['add', 'feat.txt'], { cwd: wt });
+  execFileSync('git', ['commit', '-m', 'Feature work'], { cwd: wt });
+  const featSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: wt,
+    encoding: 'utf8',
+  }).trim();
+
+  const reg = loadRegistry();
+  reg.coordinators[repoRoot] = {
+    key: repoRoot,
+    conversationId: 'coord-040',
+    repoRoot,
+    defaultBranch: 'feature-v2',
+  };
+  reg.threads['thr-040'] = {
+    threadId: 'thr-040',
+    conversationId: 'conv-feat-040',
+    coordinatorId: 'coord-040',
+    workspaceKey: repoRoot,
+    repoRoot,
+    worktreePath: wt,
+    branch: 'thread/thr-040-feat',
+    baseRef: 'HEAD',
+    archived: false,
+    git: null,
+  };
+  saveRegistry(reg);
+
+  const unmergedGit = await inspectWorktreeGit(wt, {
+    baseRef: 'HEAD',
+    defaultBranch: 'feature-v2',
+    repoRoot,
+  });
+  assert.equal(unmergedGit.aheadCount, 1);
+  assert.equal(unmergedGit.merged, false);
+
+  const skipRes = await cleanupThreadWorktree('thr-040');
+  assert.equal(skipRes.worktreeRemoved, false);
+  assert.equal(skipRes.skippedReason, 'unmerged_commits');
+
+  execFileSync('git', ['cherry-pick', featSha], { cwd: repoRoot });
+  const mergedGit = await inspectWorktreeGit(wt, {
+    baseRef: 'HEAD',
+    defaultBranch: 'feature-v2',
+    repoRoot,
+  });
+  assert.equal(mergedGit.merged, true);
+  assert.equal(mergedGit.mergeMethod, 'cherry-pick');
+
+  const okRes = await archiveThread('thr-040');
+  assert.equal(okRes.worktreeRemoved, true);
+  assert.equal(okRes.branchDeleted, true);
+  assert.equal(existsSync(wt), false);
+});
+
+test('ensureProjectMemoryFile() injects default merge conventions idempotently without overwriting custom rules', (t) => {
+  const { tempRoot } = createTempGitAndStateEnv(t, 'pt-mem-');
+
+  const dirNew = join(tempRoot, 'proj-new');
+  const memNew = ensureProjectMemoryFile(dirNew, 'DemoNew');
+  const contentNew = readFileSync(memNew, 'utf8');
+  assert.match(contentNew, /## Worktree Merge & Archive Conventions/);
+  assert.match(contentNew, /project-threads:merge-conventions/);
+  assert.match(contentNew, /git cherry-pick/);
+
+  const dirExisting = join(tempRoot, 'proj-existing');
+  mkdirSync(join(dirExisting, '.agents', 'rules'), { recursive: true });
+  const existingPath = join(dirExisting, '.agents', 'rules', 'project-memory.md');
+  const legacyBody = '# Legacy\n\n## Active Decisions & Constraints\n- Keep custom note.\n';
+  writeFileSync(existingPath, legacyBody, 'utf8');
+
+  ensureProjectMemoryFile(dirExisting, 'DemoExisting');
+  const upgraded = readFileSync(existingPath, 'utf8');
+  assert.match(upgraded, /- Keep custom note\./);
+  assert.match(upgraded, /## Worktree Merge & Archive Conventions/);
+
+  // Idempotent second call must not duplicate
+  ensureProjectMemoryFile(dirExisting, 'DemoExisting');
+  const upgradedTwice = readFileSync(existingPath, 'utf8');
+  assert.equal(upgradedTwice, upgraded);
+
+  // Custom Chinese merge conventions section must never be overwritten or duplicated
+  const dirCustom = join(tempRoot, 'proj-custom');
+  mkdirSync(join(dirCustom, '.agents', 'rules'), { recursive: true });
+  const customPath = join(dirCustom, '.agents', 'rules', 'project-memory.md');
+  const customBody = '# Custom\n\n## 合并规范\n- 一律使用 cherry-pick 合入主仓。\n';
+  writeFileSync(customPath, customBody, 'utf8');
+  ensureProjectMemoryFile(dirCustom, 'DemoCustom');
+  assert.equal(readFileSync(customPath, 'utf8'), customBody);
+});
+
 test('static checks: sidecar UI uses zero native dialogs and wires in-DOM modal, cleanup route, and LF line endings', () => {
   const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
   const indexHtml = readFileSync(new URL('../sidecars/threads/index.html', import.meta.url), 'utf8');
   const mainMjs = readFileSync(new URL('../sidecars/threads/main.mjs', import.meta.url), 'utf8');
   const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
+  const storeMjs = readFileSync(new URL('../lib/store.mjs', import.meta.url), 'utf8');
 
   assert.equal(/\b(?:window\.)?(?:confirm|alert|prompt)\s*\(/.test(appJs), false, 'app.js must not call native confirm/alert/prompt');
   assert.match(indexHtml, /id="pt-modal-backdrop"/);
@@ -524,6 +725,7 @@ test('static checks: sidecar UI uses zero native dialogs and wires in-DOM modal,
   assert.match(appJs, /data-action="clean-wt"/);
   assert.match(appJs, /res\.skippedReason/);
   assert.match(appJs, /res\.worktreeError/);
+  assert.match(appJs, /thread\.git\?\.merged/);
 
   assert.match(mainMjs, /registerDualApi\('\/api\/cleanup_worktree'/);
   assert.match(mainMjs, /parseBool\(data\.removeWorktree,\s*true\)/);
@@ -531,6 +733,10 @@ test('static checks: sidecar UI uses zero native dialogs and wires in-DOM modal,
   assert.match(serverMjs, /forceWorktree/);
   assert.match(serverMjs, /deleteBranch/);
   assert.match(serverMjs, /removeWorktree !== undefined \? Boolean\(args\.removeWorktree\) : true/);
+  assert.match(serverMjs, /worktreePath/);
+
+  assert.match(storeMjs, /WORKTREE_ADD_TIMEOUT_MS\s*=\s*120_000/);
+  assert.match(storeMjs, /cleanupThreadWorktree\(tid/);
 
   for (const rel of [
     '../lib/store.mjs',
