@@ -35,10 +35,8 @@
 ## 核心工作流
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/workflow-zh-TW-dark.svg" />
-    <img src="./assets/workflow-zh-TW-light.svg" width="100%" alt="Antigravity Project Threads 核心工作流" />
-  </picture>
+  <img src="./assets/workflow-zh-TW-light.svg#gh-light-mode-only" width="100%" alt="Antigravity Project Threads 核心工作流" />
+  <img src="./assets/workflow-zh-TW-dark.svg#gh-dark-mode-only" width="100%" alt="Antigravity Project Threads 核心工作流" />
 </p>
 <p align="center"><sub>你只管拍板，總控拆解派發，背景執行緒並行執行，結果自動回流看板一鍵處理。</sub></p>
 

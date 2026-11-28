@@ -35,10 +35,8 @@
 ## Core Workflow
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/workflow-en-dark.svg" />
-    <img src="./assets/workflow-en-light.svg" width="100%" alt="Antigravity Project Threads Core Workflow" />
-  </picture>
+  <img src="./assets/workflow-en-light.svg#gh-light-mode-only" width="100%" alt="Antigravity Project Threads Core Workflow" />
+  <img src="./assets/workflow-en-dark.svg#gh-dark-mode-only" width="100%" alt="Antigravity Project Threads Core Workflow" />
 </p>
 <p align="center"><sub>You decide, the Coordinator dispatches, background threads run in parallel, and results flow back to the board for one-click action.</sub></p>
 
