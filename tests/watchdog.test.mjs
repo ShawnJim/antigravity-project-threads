@@ -955,7 +955,7 @@ test('Issue #6: Sidecar API rev 8, watchdog_patrol + topic_memory + unified_loca
   const hookMjs = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
 
   // 1. Backend routes, rev 8, capabilities union, lifecycle cleanup, and DIRECTIVE_VERSION=18 preserved
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
   assert.match(mainMjs, /['"]watchdog_patrol['"]/);
   assert.match(mainMjs, /['"]unified_local_thread_id['"]/);
@@ -970,8 +970,8 @@ test('Issue #6: Sidecar API rev 8, watchdog_patrol + topic_memory + unified_loca
   assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
   assert.match(hookMjs, /consumePendingWatchdogAlertsForPreInvocation/);
 
-  // 2. Frontend rev 8, capability gating, write-API safety (timeoutMs: 0, allowGetFallback: false, res.action verification)
-  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
+  // 2. Frontend rev 9, capability gating, write-API safety (timeoutMs: 0, allowGetFallback: false, res.action verification)
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.match(appJs, /function\s+supportsWatchdogPatrol\s*\(/);
   assert.match(appJs, /serverCapabilities\.has\(['"]watchdog_patrol['"]\)/);
   assert.match(

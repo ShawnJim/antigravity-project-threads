@@ -254,6 +254,17 @@
       </div>
     </header>
 
+    <div id="thread-toast-bar" class="thread-toast-bar" hidden>
+      <span id="thread-toast" class="toast" role="status" aria-live="polite"></span>
+      <div id="thread-toast-detail" class="toast-detail" role="alert" hidden>
+        <div id="thread-toast-detail-msg" class="toast-detail-msg"></div>
+        <div class="toast-detail-actions">
+          <button type="button" id="thread-toast-detail-copy" class="toast-detail-btn">Copy</button>
+          <button type="button" id="thread-toast-detail-close" class="toast-detail-btn toast-detail-close" aria-label="Close">×</button>
+        </div>
+      </div>
+    </div>
+
     <div id="chat-stream" class="chat-stream"></div>
 
     <div class="composer-wrap">

@@ -849,6 +849,22 @@ button.row-act.away:hover:not(:disabled) {
   line-height: 1;
 }
 
+.thread-toast-bar {
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--pt-line);
+  background: color-mix(in srgb, var(--pt-surface-1) 88%, var(--pt-bg));
+  flex-shrink: 0;
+}
+.thread-toast-bar[hidden] {
+  display: none;
+}
+#thread-toast {
+  max-width: 100%;
+}
+#thread-toast-detail {
+  margin-top: 6px;
+}
+
 /* ==================== SCROLLABLE OVERVIEW CONTAINER ==================== */
 .board-body,
 .main {
@@ -3762,6 +3778,11 @@ button.send-circle.running-stop:hover:not(:disabled) {
   background: #dc2626;
   border-color: transparent;
   color: #ffffff;
+}
+button.send-circle.running-stop.is-canceling,
+button.send-circle.running-stop.is-canceling:disabled {
+  opacity: 0.72;
+  cursor: wait;
 }
 .stop-sq {
   width: 9px;

@@ -793,7 +793,7 @@ test('static checks: protocol v17, API rev 7, topic_memory gating, dec-022 wordi
 
   // 1. Version & capability alignment
   assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
   assert.match(mainMjs, /['"]watchdog_patrol['"]/);
   assert.match(mainMjs, /['"]unified_local_thread_id['"]/);
@@ -801,7 +801,7 @@ test('static checks: protocol v17, API rev 7, topic_memory gating, dec-022 wordi
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/memory_migrate['"]/);
   assert.match(mainMjs, /handleSaveMemory[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
   assert.match(mainMjs, /handleMigrateMemory[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
-  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.match(appJs, /function\s+supportsTopicMemory\s*\(/);
   assert.match(appJs, /serverCapabilities\.has\(['"]topic_memory['"]\)/);
 

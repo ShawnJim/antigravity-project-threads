@@ -4,7 +4,7 @@
   const BOARD_POLL_MS = 2200;
   const BOARD_POLL_WHILE_THREAD_OPEN_MS = 10_000;
   const CHAT_POLL_MS = 1200;
-  const EXPECTED_SERVER_API_REVISION = 8;
+  const EXPECTED_SERVER_API_REVISION = 9;
   const MAX_DECISION_CUSTOM_MESSAGE_LEN = 2000;
   const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
   const API_READ_TIMEOUT_MS = 10_000;
@@ -251,6 +251,14 @@
       popoutTip: 'Open native conversation tab',
       sendTip: 'Send message (Enter)',
       runningStateTip: 'Thread is running — type a message to send follow-up',
+      stopThreadTip: 'Stop running thread',
+      stoppingThreadTip: 'Stopping thread…',
+      stopThreadUnsupportedTip: 'Reload plugin or Antigravity window to enable stopping threads',
+      stopThreadOk: 'Stop signal sent — thread stopped',
+      stopThreadAlreadyIdleOk: 'Thread is already idle',
+      stopThreadErr: 'Failed to stop thread',
+      stopThreadUnsupportedErr:
+        'Sidecar backend is outdated (missing thread cancel route). Toggle "project-threads" off and back on, or reload the Antigravity window.',
       briefTitle: 'Task Brief',
       briefExpand: 'Show all',
       briefCollapse: 'Show less',
@@ -774,6 +782,14 @@
       popoutTip: '打开原生侧边会话标签页',
       sendTip: '发送追问 (Enter)',
       runningStateTip: '线程正在后台执行（输入内容可继续追问）',
+      stopThreadTip: '停止当前运行中的线程',
+      stoppingThreadTip: '正在停止线程…',
+      stopThreadUnsupportedTip: '停止线程需要重载插件或窗口（点击查看说明）',
+      stopThreadOk: '已发送停止指令，线程已停止',
+      stopThreadAlreadyIdleOk: '线程已处于空闲状态',
+      stopThreadErr: '停止线程失败',
+      stopThreadUnsupportedErr:
+        '当前常驻 Sidecar 后端版本滞后（缺少停止线程路由）。请在插件管理器中关闭再开启 project-threads，或重载 Antigravity 窗口生效。',
       briefTitle: '初始任务书',
       briefExpand: '展开全部',
       briefCollapse: '收起',
@@ -1300,6 +1316,14 @@
       popoutTip: '開啟原生側邊會話分頁',
       sendTip: '傳送追問 (Enter)',
       runningStateTip: '執行緒正在背景執行（輸入內容可繼續追問）',
+      stopThreadTip: '停止目前執行中的執行緒',
+      stoppingThreadTip: '正在停止執行緒…',
+      stopThreadUnsupportedTip: '停止執行緒需要重新載入外掛或視窗（點擊查看說明）',
+      stopThreadOk: '已傳送停止指令，執行緒已停止',
+      stopThreadAlreadyIdleOk: '執行緒已處於閒置狀態',
+      stopThreadErr: '停止執行緒失敗',
+      stopThreadUnsupportedErr:
+        '目前常駐 Sidecar 後端版本滯後（缺少停止執行緒路由）。請在外掛管理器中關閉再開啟 project-threads，或重新載入 Antigravity 視窗生效。',
       briefTitle: '初始任務書',
       briefExpand: '展開全部',
       briefCollapse: '收起',
@@ -1703,6 +1727,15 @@
     hoverPaused: false,
     detailOpen: false,
   };
+  const threadToastState = {
+    text: '',
+    tone: 'ok',
+    timer: null,
+    expiresAt: 0,
+    remainingMs: 0,
+    hoverPaused: false,
+    detailOpen: false,
+  };
   const settingsToastState = {
     text: '',
     tone: 'ok',
@@ -1710,6 +1743,9 @@
     expiresAt: 0,
   };
   let toastCopyResetTimer = null;
+  let threadToastCopyResetTimer = null;
+  const cancelingThreadIds = new Set();
+  let sendFollowUpInFlight = false;
   let activeModalCtx = null;
   let selectableModels = [];
   let selectableModelsLoadedAt = 0;
@@ -1810,6 +1846,12 @@
   const elToastDetailMsg = document.getElementById('toast-detail-msg');
   const elToastDetailCopy = document.getElementById('toast-detail-copy');
   const elToastDetailClose = document.getElementById('toast-detail-close');
+  const elThreadToastBar = document.getElementById('thread-toast-bar');
+  const elThreadToast = document.getElementById('thread-toast');
+  const elThreadToastDetail = document.getElementById('thread-toast-detail');
+  const elThreadToastDetailMsg = document.getElementById('thread-toast-detail-msg');
+  const elThreadToastDetailCopy = document.getElementById('thread-toast-detail-copy');
+  const elThreadToastDetailClose = document.getElementById('thread-toast-detail-close');
   const elGoalCard = document.getElementById('goal-card');
   const elDecisionsPanel = document.getElementById('decisions-panel');
   const elBtnOpenCoord = document.getElementById('btn-open-coord');
@@ -2034,6 +2076,7 @@
     decisionImeComposingIds.clear();
     deferredDecisionsList = null;
     lastDecisionsRenderKey = '';
+    if (typeof cancelingThreadIds !== 'undefined') cancelingThreadIds.clear();
     if (openThreadId) {
       closeThreadDrawer({ refresh: false });
     }
@@ -2065,13 +2108,14 @@
               lastSnap.threads.some((th) => th && th.conversationId === cleanNext))),
       );
       if (!belongsToCurrentBoard) {
+        if (typeof cancelingThreadIds !== 'undefined') cancelingThreadIds.clear();
         if (openThreadId) {
           closeThreadDrawer({ refresh: false });
         }
         if (activeModalCtx && activeModalCtx.mode !== 'plugin_update') {
           closePtModal(true);
         }
-        clearToast({ target: 'board', onlyTone: 'err' });
+        clearToast({ onlyTone: 'err' });
       } else if (openThreadId && lastRenderedItems === null && !threadRefreshInFlight) {
         Promise.resolve().then(() => {
           if (openThreadId && lastRenderedItems === null && !threadRefreshInFlight) {
@@ -2292,23 +2336,43 @@
   function syncSendButtonState() {
     const hasText = elChatInput.value.trim().length > 0;
     const isRunning = Boolean(
-      openThreadObj && !openThreadObj.archived && openThreadObj.runState === 'RUN_STATE_RUNNING',
+      openThreadObj &&
+        !openThreadObj.archived &&
+        (openThreadObj.runState === 'RUN_STATE_RUNNING' || openThreadObj.hasPendingBgTask === true),
     );
     const t = L();
     if (isRunning && !hasText) {
+      const isCanceling = Boolean(
+        typeof cancelingThreadIds !== 'undefined' &&
+          openThreadObj?.threadId &&
+          cancelingThreadIds.has(openThreadObj.threadId),
+      );
+      const canCancel = typeof supportsThreadCancel === 'function' ? supportsThreadCancel() : true;
+      const stopTip = isCanceling
+        ? t.stoppingThreadTip
+        : canCancel
+          ? t.stopThreadTip
+          : t.stopThreadUnsupportedTip;
       elSendBtn.classList.remove('ready');
       elSendBtn.classList.add('running-stop');
-      if (!elSendBtn.querySelector('.stop-sq')) {
+      elSendBtn.classList.toggle?.('is-canceling', isCanceling);
+      elSendBtn.disabled = isCanceling;
+      if (elSendBtn.dataset) elSendBtn.dataset.mode = 'stop';
+      if (!elSendBtn.querySelector?.('.stop-sq')) {
         elSendBtn.innerHTML = '<span class="stop-sq" aria-hidden="true"></span>';
       }
-      elSendBtn.title = t.runningStateTip;
+      elSendBtn.title = stopTip;
+      elSendBtn.setAttribute?.('aria-label', stopTip);
     } else {
-      elSendBtn.classList.remove('running-stop');
+      elSendBtn.classList.remove('running-stop', 'is-canceling');
       elSendBtn.classList.toggle('ready', hasText);
-      if (elSendBtn.querySelector('.stop-sq') || !elSendBtn.querySelector('svg')) {
+      elSendBtn.disabled = Boolean(typeof sendFollowUpInFlight !== 'undefined' && sendFollowUpInFlight);
+      if (elSendBtn.dataset) elSendBtn.dataset.mode = 'send';
+      if (elSendBtn.querySelector?.('.stop-sq') || !elSendBtn.querySelector?.('svg')) {
         elSendBtn.innerHTML = ICONS.arrowUp;
       }
       elSendBtn.title = t.sendTip;
+      elSendBtn.setAttribute?.('aria-label', t.sendTip);
     }
   }
 
@@ -2412,122 +2476,180 @@
       if (openThreadId && Array.isArray(lastRenderedItems)) {
         renderThreadItems(lastRenderedItems, false);
       }
-      if (boardToastState.text) renderBoardToast();
+      if (boardToastState.text) renderBoardToast('board');
+      if (typeof threadToastState !== 'undefined' && threadToastState.text) {
+        renderBoardToast('thread');
+      }
     }
     return changed;
   }
 
-  function renderBoardToast() {
-    if (!elToast) return;
-    const text = boardToastState.text;
-    const tone = boardToastState.tone;
+  function renderBoardToast(target = 'board') {
+    const isThread =
+      target === 'thread' &&
+      typeof threadToastState !== 'undefined' &&
+      typeof elThreadToast !== 'undefined';
+    const state = isThread ? threadToastState : boardToastState;
+    const toastEl = isThread ? elThreadToast : elToast;
+    if (!toastEl || !state) return;
+    const toastBarEl =
+      isThread && typeof elThreadToastBar !== 'undefined' ? elThreadToastBar : null;
+    const detailEl = isThread
+      ? typeof elThreadToastDetail !== 'undefined'
+        ? elThreadToastDetail
+        : null
+      : elToastDetail;
+    const detailMsgEl = isThread
+      ? typeof elThreadToastDetailMsg !== 'undefined'
+        ? elThreadToastDetailMsg
+        : null
+      : elToastDetailMsg;
+    const detailCopyEl = isThread
+      ? typeof elThreadToastDetailCopy !== 'undefined'
+        ? elThreadToastDetailCopy
+        : null
+      : elToastDetailCopy;
+    const detailCloseEl = isThread
+      ? typeof elThreadToastDetailClose !== 'undefined'
+        ? elThreadToastDetailClose
+        : null
+      : elToastDetailClose;
+    const copyTimer = isThread
+      ? typeof threadToastCopyResetTimer !== 'undefined'
+        ? threadToastCopyResetTimer
+        : null
+      : toastCopyResetTimer;
+
+    const text = state.text;
+    const tone = state.tone;
     if (!text) {
-      elToast.className = 'toast';
-      elToast.textContent = '';
-      elToast.title = '';
-      elToast.removeAttribute?.('data-tone');
-      elToast.removeAttribute?.('aria-expanded');
-      if (elToastDetail) {
-        elToastDetail.hidden = true;
-        elToastDetail.className = 'toast-detail';
+      toastEl.className = 'toast';
+      toastEl.textContent = '';
+      toastEl.title = '';
+      toastEl.removeAttribute?.('data-tone');
+      toastEl.removeAttribute?.('aria-expanded');
+      if (detailEl) {
+        detailEl.hidden = true;
+        detailEl.className = 'toast-detail';
       }
-      if (elToastDetailMsg) elToastDetailMsg.textContent = '';
+      if (detailMsgEl) detailMsgEl.textContent = '';
+      if (toastBarEl) toastBarEl.hidden = true;
       return;
     }
+    if (toastBarEl) toastBarEl.hidden = false;
     const t = L();
     const interactive = tone === 'err' || tone === 'warn' || text.length > 28;
     const cls = tone === 'err' ? 'toast err' : tone === 'warn' ? 'toast warn' : 'toast';
-    elToast.className = interactive ? `${cls} is-interactive` : cls;
-    elToast.setAttribute?.('data-tone', tone);
-    elToast.title = interactive ? `${text}\n(${t.toastExpandTip})` : text;
+    toastEl.className = interactive ? `${cls} is-interactive` : cls;
+    toastEl.setAttribute?.('data-tone', tone);
+    toastEl.title = interactive ? `${text}\n(${t.toastExpandTip})` : text;
     if (interactive) {
-      elToast.setAttribute?.('aria-expanded', boardToastState.detailOpen ? 'true' : 'false');
-      elToast.innerHTML =
-        `<button type="button" class="toast-msg-btn" data-toast-action="toggle" aria-expanded="${boardToastState.detailOpen ? 'true' : 'false'}" title="${esc(t.toastExpandTip)}">${esc(text)}</button>` +
+      toastEl.setAttribute?.('aria-expanded', state.detailOpen ? 'true' : 'false');
+      toastEl.innerHTML =
+        `<button type="button" class="toast-msg-btn" data-toast-action="toggle" aria-expanded="${state.detailOpen ? 'true' : 'false'}" title="${esc(t.toastExpandTip)}">${esc(text)}</button>` +
         `<button type="button" class="toast-close-btn" data-toast-action="close" aria-label="${esc(t.toastCloseTip)}" title="${esc(t.toastCloseTip)}">×</button>`;
     } else {
-      elToast.removeAttribute?.('aria-expanded');
-      elToast.textContent = text;
+      toastEl.removeAttribute?.('aria-expanded');
+      toastEl.textContent = text;
     }
-    if (elToastDetail) {
-      elToastDetail.hidden = !boardToastState.detailOpen;
-      elToastDetail.className =
+    if (detailEl) {
+      detailEl.hidden = !state.detailOpen;
+      detailEl.className =
         tone === 'err' ? 'toast-detail err' : tone === 'warn' ? 'toast-detail warn' : 'toast-detail';
     }
-    if (elToastDetailMsg) elToastDetailMsg.textContent = text;
-    if (elToastDetailCopy && !toastCopyResetTimer) {
-      elToastDetailCopy.textContent = t.toastCopyBtn;
+    if (detailMsgEl) detailMsgEl.textContent = text;
+    if (detailCopyEl && !copyTimer) {
+      detailCopyEl.textContent = t.toastCopyBtn;
     }
-    if (elToastDetailClose) {
-      elToastDetailClose.title = t.toastCloseTip;
-      elToastDetailClose.setAttribute?.('aria-label', t.toastCloseTip);
+    if (detailCloseEl) {
+      detailCloseEl.title = t.toastCloseTip;
+      detailCloseEl.setAttribute?.('aria-label', t.toastCloseTip);
     }
   }
 
-  function scheduleBoardToastTimer(durationMs) {
-    if (boardToastState.timer) {
-      clearTimeout(boardToastState.timer);
-      boardToastState.timer = null;
+  function scheduleBoardToastTimer(durationMs, target = 'board') {
+    const isThread = target === 'thread' && typeof threadToastState !== 'undefined';
+    const state = isThread ? threadToastState : boardToastState;
+    const clearTarget = isThread ? 'thread' : 'board';
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = null;
     }
-    if (!boardToastState.text || boardToastState.hoverPaused || boardToastState.detailOpen) {
+    if (!state.text || state.hoverPaused || state.detailOpen) {
       return;
     }
     const ms = Math.max(800, Number(durationMs) || 2400);
-    boardToastState.remainingMs = ms;
-    boardToastState.expiresAt = Date.now() + ms;
-    boardToastState.timer = setTimeout(() => {
-      boardToastState.timer = null;
-      if (boardToastState.hoverPaused || boardToastState.detailOpen) return;
-      clearToast({ target: 'board' });
+    state.remainingMs = ms;
+    state.expiresAt = Date.now() + ms;
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      if (state.hoverPaused || state.detailOpen) return;
+      clearToast({ target: clearTarget });
     }, ms);
   }
 
-  function pauseBoardToastTimer() {
-    if (!boardToastState.text || boardToastState.hoverPaused) return;
-    boardToastState.hoverPaused = true;
-    if (boardToastState.expiresAt > 0) {
-      boardToastState.remainingMs = Math.max(800, boardToastState.expiresAt - Date.now());
+  function pauseBoardToastTimer(target = 'board') {
+    const isThread = target === 'thread' && typeof threadToastState !== 'undefined';
+    const state = isThread ? threadToastState : boardToastState;
+    if (!state.text || state.hoverPaused) return;
+    state.hoverPaused = true;
+    if (state.expiresAt > 0) {
+      state.remainingMs = Math.max(800, state.expiresAt - Date.now());
     }
-    if (boardToastState.timer) {
-      clearTimeout(boardToastState.timer);
-      boardToastState.timer = null;
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = null;
     }
   }
 
-  function resumeBoardToastTimer() {
-    if (!boardToastState.hoverPaused) return;
-    boardToastState.hoverPaused = false;
-    if (!boardToastState.text || boardToastState.detailOpen) return;
-    scheduleBoardToastTimer(Math.max(800, boardToastState.remainingMs || 2400));
+  function resumeBoardToastTimer(target = 'board') {
+    const isThread = target === 'thread' && typeof threadToastState !== 'undefined';
+    const state = isThread ? threadToastState : boardToastState;
+    const channel = isThread ? 'thread' : 'board';
+    if (!state.hoverPaused) return;
+    state.hoverPaused = false;
+    if (!state.text || state.detailOpen) return;
+    scheduleBoardToastTimer(Math.max(800, state.remainingMs || 2400), channel);
   }
 
-  function toggleToastDetail(forceOpen = null) {
-    if (!boardToastState.text) return;
+  function toggleToastDetail(forceOpen = null, target = 'board') {
+    const isThread = target === 'thread' && typeof threadToastState !== 'undefined';
+    const state = isThread ? threadToastState : boardToastState;
+    const channel = isThread ? 'thread' : 'board';
+    if (!state.text) return;
     const nextOpen =
-      typeof forceOpen === 'boolean' ? forceOpen : !boardToastState.detailOpen;
-    boardToastState.detailOpen = nextOpen;
+      typeof forceOpen === 'boolean' ? forceOpen : !state.detailOpen;
+    state.detailOpen = nextOpen;
     if (nextOpen) {
-      if (boardToastState.expiresAt > 0) {
-        boardToastState.remainingMs = Math.max(1200, boardToastState.expiresAt - Date.now());
+      if (state.expiresAt > 0) {
+        state.remainingMs = Math.max(1200, state.expiresAt - Date.now());
       }
-      if (boardToastState.timer) {
-        clearTimeout(boardToastState.timer);
-        boardToastState.timer = null;
+      if (state.timer) {
+        clearTimeout(state.timer);
+        state.timer = null;
       }
-    } else if (!boardToastState.hoverPaused) {
-      scheduleBoardToastTimer(Math.max(1200, boardToastState.remainingMs || 2400));
+    } else if (!state.hoverPaused) {
+      scheduleBoardToastTimer(Math.max(1200, state.remainingMs || 2400), channel);
     }
-    renderBoardToast();
+    renderBoardToast(channel);
   }
 
   function clearToast({ onlyTone = '', target = 'all' } = {}) {
     const normOnlyTone = String(onlyTone || '').trim();
+    const baseTargets = [elToast, elSettingsToast];
+    const threadEl = typeof elThreadToast !== 'undefined' ? elThreadToast : null;
     const clearTargets =
       target === 'board'
         ? [elToast]
         : target === 'settings'
           ? [elSettingsToast]
-          : [elToast, elSettingsToast];
+          : target === 'thread'
+            ? threadEl
+              ? [threadEl]
+              : []
+            : threadEl
+              ? [...baseTargets, threadEl]
+              : baseTargets;
 
     if (clearTargets.includes(elToast)) {
       if (!normOnlyTone || boardToastState.tone === normOnlyTone) {
@@ -2545,7 +2667,27 @@
         boardToastState.remainingMs = 0;
         boardToastState.hoverPaused = false;
         boardToastState.detailOpen = false;
-        renderBoardToast();
+        renderBoardToast('board');
+      }
+    }
+
+    if (threadEl && clearTargets.includes(threadEl) && typeof threadToastState !== 'undefined') {
+      if (!normOnlyTone || threadToastState.tone === normOnlyTone) {
+        if (threadToastState.timer) {
+          clearTimeout(threadToastState.timer);
+          threadToastState.timer = null;
+        }
+        if (typeof threadToastCopyResetTimer !== 'undefined' && threadToastCopyResetTimer) {
+          clearTimeout(threadToastCopyResetTimer);
+          threadToastCopyResetTimer = null;
+        }
+        threadToastState.text = '';
+        threadToastState.tone = 'ok';
+        threadToastState.expiresAt = 0;
+        threadToastState.remainingMs = 0;
+        threadToastState.hoverPaused = false;
+        threadToastState.detailOpen = false;
+        renderBoardToast('thread');
       }
     }
 
@@ -2568,18 +2710,23 @@
   }
 
   function clearExpiredToastOnRecovery({ prevLiveOk = true } = {}) {
-    if (!boardToastState.text || boardToastState.hoverPaused || boardToastState.detailOpen) {
-      return false;
+    let cleared = false;
+    const now = Date.now();
+    const channels = [['board', boardToastState]];
+    if (typeof threadToastState !== 'undefined' && typeof elThreadToast !== 'undefined') {
+      channels.push(['thread', threadToastState]);
     }
-    if (!prevLiveOk && boardToastState.tone === 'err') {
-      clearToast({ target: 'board', onlyTone: 'err' });
-      return true;
+    for (const [channel, state] of channels) {
+      if (!state.text || state.hoverPaused || state.detailOpen) continue;
+      if (!prevLiveOk && state.tone === 'err') {
+        clearToast({ target: channel, onlyTone: 'err' });
+        cleared = true;
+      } else if (state.expiresAt > 0 && now >= state.expiresAt) {
+        clearToast({ target: channel });
+        cleared = true;
+      }
     }
-    if (boardToastState.expiresAt > 0 && Date.now() >= boardToastState.expiresAt) {
-      clearToast({ target: 'board' });
-      return true;
-    }
-    return false;
+    return cleared;
   }
 
   function flashToast(msg, tone = 'ok', durationMs = 2400) {
@@ -2587,8 +2734,18 @@
     const normTone = tone === 'err' ? 'err' : tone === 'warn' ? 'warn' : 'ok';
     const effectiveDuration = Math.max(800, Number(durationMs) || 2400);
     const useSettingsTarget = Boolean(settingsScreenOpen && elSettingsToast);
+    const useThreadTarget = Boolean(
+      !useSettingsTarget &&
+        typeof openThreadId !== 'undefined' &&
+        openThreadId &&
+        typeof elThreadToast !== 'undefined' &&
+        elThreadToast &&
+        typeof threadToastState !== 'undefined' &&
+        threadToastState &&
+        (typeof elThreadScreen === 'undefined' || !elThreadScreen || !elThreadScreen.hidden),
+    );
     if (!text) {
-      clearToast({ target: useSettingsTarget ? 'settings' : 'board' });
+      clearToast({ target: useSettingsTarget ? 'settings' : useThreadTarget ? 'thread' : 'board' });
       return;
     }
 
@@ -2611,6 +2768,26 @@
       return;
     }
 
+    if (useThreadTarget) {
+      if (threadToastState.timer) {
+        clearTimeout(threadToastState.timer);
+        threadToastState.timer = null;
+      }
+      if (typeof threadToastCopyResetTimer !== 'undefined' && threadToastCopyResetTimer) {
+        clearTimeout(threadToastCopyResetTimer);
+        threadToastCopyResetTimer = null;
+      }
+      threadToastState.text = text;
+      threadToastState.tone = normTone;
+      threadToastState.hoverPaused = false;
+      threadToastState.detailOpen = false;
+      threadToastState.remainingMs = effectiveDuration;
+      threadToastState.expiresAt = Date.now() + effectiveDuration;
+      renderBoardToast('thread');
+      scheduleBoardToastTimer(effectiveDuration, 'thread');
+      return;
+    }
+
     if (boardToastState.timer) {
       clearTimeout(boardToastState.timer);
       boardToastState.timer = null;
@@ -2625,8 +2802,8 @@
     boardToastState.detailOpen = false;
     boardToastState.remainingMs = effectiveDuration;
     boardToastState.expiresAt = Date.now() + effectiveDuration;
-    renderBoardToast();
-    scheduleBoardToastTimer(effectiveDuration);
+    renderBoardToast('board');
+    scheduleBoardToastTimer(effectiveDuration, 'board');
   }
 
   function showArchiveResultToast(res) {
@@ -4157,6 +4334,10 @@
     return typeof serverCapabilities !== 'undefined' && serverCapabilities.has('watchdog_patrol');
   }
 
+  function supportsThreadCancel() {
+    return typeof serverCapabilities !== 'undefined' && serverCapabilities.has('thread_cancel');
+  }
+
   function inspectServerInfo(data, { fromState = false, expectServerInfo = false } = {}) {
     if (!data || typeof data !== 'object') return;
     const info = data.serverInfo && typeof data.serverInfo === 'object' ? data.serverInfo : null;
@@ -4166,6 +4347,7 @@
     const prevCustomCap = supportsDecisionCustomReply();
     const prevTopicCap = supportsTopicMemory();
     const prevWatchdogCap = supportsWatchdogPatrol();
+    const prevCancelCap = supportsThreadCancel();
 
     if (info) {
       const caps = Array.isArray(info.capabilities) ? info.capabilities : [];
@@ -4228,6 +4410,15 @@
       }
       if (typeof lastSnap !== 'undefined' && lastSnap && typeof renderBoardWatchdogChip === 'function') {
         renderBoardWatchdogChip(lastSnap);
+      }
+    }
+    if (supportsThreadCancel() !== prevCancelCap) {
+      if (
+        typeof openThreadObj !== 'undefined' &&
+        openThreadObj &&
+        typeof syncSendButtonState === 'function'
+      ) {
+        syncSendButtonState();
       }
     }
   }
@@ -7695,7 +7886,8 @@
     titleEl.textContent = th.title || '';
     titleEl.title = displayId ? `[${displayId}] ${th.title || ''}` : th.title || '';
 
-    const isRunning = !th.archived && th.runState === 'RUN_STATE_RUNNING';
+    const isRunning =
+      !th.archived && (th.runState === 'RUN_STATE_RUNNING' || Boolean(th.hasPendingBgTask));
     const isWaiting = !th.archived && th.bucket === 'waiting';
     document.getElementById('chat-status-dot').className = `sdot ${
       th.archived ? '' : isRunning ? 'run' : isWaiting ? 'warn' : 'ok'
@@ -7764,7 +7956,9 @@
     }
 
     const isThreadRunning = Boolean(
-      openThreadObj && !openThreadObj.archived && openThreadObj.runState === 'RUN_STATE_RUNNING',
+      openThreadObj &&
+        !openThreadObj.archived &&
+        (openThreadObj.runState === 'RUN_STATE_RUNNING' || Boolean(openThreadObj.hasPendingBgTask)),
     );
 
     elChatStream.innerHTML = items
@@ -7988,6 +8182,7 @@
     abortOpenThreadRequest();
     closeModelMenu({ restoreHeader: false });
     clearToast({ target: 'board', onlyTone: 'err' });
+    clearToast({ target: 'thread' });
     settingsScreenOpen = false;
     if (elSettingsScreen) elSettingsScreen.hidden = true;
     boardScrollTop = elBoardBody.scrollTop;
@@ -8031,6 +8226,7 @@
     abortOpenThreadRequest();
     closeModelMenu({ restoreHeader: false });
     clearToast({ target: 'board', onlyTone: 'err' });
+    clearToast({ target: 'thread' });
     openThreadId = '';
     openThreadObj = null;
     openThreadEpochRetryCount = 0;
@@ -8096,6 +8292,9 @@
         return;
       }
       openThreadEpochRetryCount = 0;
+      if (typeof clearExpiredToastOnRecovery === 'function') {
+        clearExpiredToastOnRecovery({ prevLiveOk: true });
+      }
       if (data.thread) renderThreadHeader(data.thread);
       if (!data.unchanged && Array.isArray(data.items)) {
         lastThreadStamp = data.stamp || '';
@@ -8165,6 +8364,7 @@
     const chosenModel = pendingModelByThread.get(targetThreadId) || null;
     closeModelMenu();
 
+    sendFollowUpInFlight = true;
     elSendBtn.disabled = true;
     elChatInput.value = '';
     autoResizeInput();
@@ -8203,10 +8403,103 @@
     } catch (e) {
       tempWrap.innerHTML = `<div class="msg-user">${esc(text)}</div><div class="err">${esc(e.message)}</div>`;
     } finally {
+      sendFollowUpInFlight = false;
       elSendBtn.disabled = false;
       autoResizeInput();
       elChatInput.focus();
     }
+  }
+
+  function isSendButtonStopMode() {
+    const hasText = Boolean(elChatInput?.value?.trim().length);
+    const isRunning = Boolean(
+      openThreadObj &&
+        !openThreadObj.archived &&
+        (openThreadObj.runState === 'RUN_STATE_RUNNING' || openThreadObj.hasPendingBgTask === true),
+    );
+    return isRunning && !hasText;
+  }
+
+  async function cancelRunningThread() {
+    if (!openThreadId || !openThreadObj || openThreadObj.archived) return;
+    const targetThreadId = openThreadId;
+    const reqEpoch = scopeEpoch;
+    const t = L();
+
+    if (!supportsThreadCancel()) {
+      flashToast(t.stopThreadUnsupportedErr, 'warn', 4200);
+      return;
+    }
+    if (cancelingThreadIds.has(targetThreadId)) return;
+
+    cancelingThreadIds.add(targetThreadId);
+    syncSendButtonState();
+
+    try {
+      const payload = buildScopePayload({
+        threadId: targetThreadId,
+        killBackgroundTasks: true,
+      });
+      const res = await postApi('/api/thread_cancel', '/api/thread_cancel_get', payload, {
+        timeoutMs: 0,
+        allowGetFallback: false,
+        expectServerInfo: true,
+      });
+      if (!res?.ok || res.action !== 'cancel') {
+        throw new Error(res?.error || L().stopThreadErr);
+      }
+      if (reqEpoch !== scopeEpoch) return;
+
+      cancelingThreadIds.delete(targetThreadId);
+      if (openThreadId === targetThreadId) {
+        if (res.thread && typeof res.thread === 'object') {
+          renderThreadHeader(res.thread);
+        } else if (openThreadObj && openThreadObj.threadId === targetThreadId) {
+          openThreadObj = {
+            ...openThreadObj,
+            runState: 'RUN_STATE_IDLE',
+            hasPendingBgTask: false,
+            activeTool: '',
+            activeToolObj: null,
+            bucket: 'idle',
+            waitingReason: '',
+          };
+          renderThreadHeader(openThreadObj);
+        }
+        lastThreadStamp = '';
+      }
+
+      const lt = L();
+      if (res.alreadyIdle) {
+        flashToast(lt.stopThreadAlreadyIdleOk, 'ok', 2400);
+      } else {
+        flashToast(lt.stopThreadOk, 'ok', 2600);
+      }
+
+      if (openThreadId === targetThreadId) {
+        await refreshOpenThread(false, false);
+      }
+    } catch (err) {
+      if (reqEpoch !== scopeEpoch) return;
+      const lt = L();
+      let msg = err?.message || lt.stopThreadErr;
+      if (err?.isBackendMismatch || err?.status === 404 || err?.status === 405) {
+        msg = lt.stopThreadUnsupportedErr;
+      }
+      flashToast(msg, 'err', 4200);
+    } finally {
+      cancelingThreadIds.delete(targetThreadId);
+      if (reqEpoch === scopeEpoch && openThreadId === targetThreadId) {
+        syncSendButtonState();
+      }
+    }
+  }
+
+  function handleComposerPrimaryAction() {
+    if (isSendButtonStopMode()) {
+      return cancelRunningThread();
+    }
+    return sendChatFollowUp();
   }
 
   function isMemoryInputFocused() {
@@ -9144,12 +9437,12 @@
         toggleToastDetail();
       }
     });
-    elToast.addEventListener('mouseenter', pauseBoardToastTimer);
-    elToast.addEventListener('mouseleave', resumeBoardToastTimer);
+    elToast.addEventListener('mouseenter', () => pauseBoardToastTimer('board'));
+    elToast.addEventListener('mouseleave', () => resumeBoardToastTimer('board'));
   }
   if (elToastDetail) {
-    elToastDetail.addEventListener('mouseenter', pauseBoardToastTimer);
-    elToastDetail.addEventListener('mouseleave', resumeBoardToastTimer);
+    elToastDetail.addEventListener('mouseenter', () => pauseBoardToastTimer('board'));
+    elToastDetail.addEventListener('mouseleave', () => resumeBoardToastTimer('board'));
   }
   if (elToastDetailClose) {
     elToastDetailClose.addEventListener('click', () => {
@@ -9165,6 +9458,42 @@
       toastCopyResetTimer = setTimeout(() => {
         toastCopyResetTimer = null;
         if (elToastDetailCopy) elToastDetailCopy.textContent = L().toastCopyBtn;
+      }, 1400);
+    });
+  }
+  if (elThreadToast) {
+    elThreadToast.addEventListener('click', (e) => {
+      if (e.target.closest?.('[data-toast-action="close"]')) {
+        e.stopPropagation();
+        clearToast({ target: 'thread' });
+        return;
+      }
+      if (e.target.closest?.('[data-toast-action="toggle"]')) {
+        e.stopPropagation();
+        toggleToastDetail(null, 'thread');
+      }
+    });
+    elThreadToast.addEventListener('mouseenter', () => pauseBoardToastTimer('thread'));
+    elThreadToast.addEventListener('mouseleave', () => resumeBoardToastTimer('thread'));
+  }
+  if (elThreadToastDetail) {
+    elThreadToastDetail.addEventListener('mouseenter', () => pauseBoardToastTimer('thread'));
+    elThreadToastDetail.addEventListener('mouseleave', () => resumeBoardToastTimer('thread'));
+  }
+  if (elThreadToastDetailClose) {
+    elThreadToastDetailClose.addEventListener('click', () => {
+      clearToast({ target: 'thread' });
+    });
+  }
+  if (elThreadToastDetailCopy) {
+    elThreadToastDetailCopy.addEventListener('click', async () => {
+      if (!threadToastState.text) return;
+      await copyText(threadToastState.text, '');
+      elThreadToastDetailCopy.textContent = L().toastCopiedBtn;
+      if (threadToastCopyResetTimer) clearTimeout(threadToastCopyResetTimer);
+      threadToastCopyResetTimer = setTimeout(() => {
+        threadToastCopyResetTimer = null;
+        if (elThreadToastDetailCopy) elThreadToastDetailCopy.textContent = L().toastCopyBtn;
       }, 1400);
     });
   }
@@ -9192,7 +9521,11 @@
         return;
       }
       if (boardToastState.detailOpen) {
-        toggleToastDetail(false);
+        toggleToastDetail(false, 'board');
+        return;
+      }
+      if (typeof threadToastState !== 'undefined' && threadToastState.detailOpen) {
+        toggleToastDetail(false, 'thread');
         return;
       }
       if (settingsScreenOpen) {
@@ -9469,7 +9802,7 @@
   elChatInput.addEventListener('compositionend', () => {
     isImeComposing = false;
   });
-  elSendBtn.addEventListener('click', sendChatFollowUp);
+  elSendBtn.addEventListener('click', handleComposerPrimaryAction);
   elChatInput.addEventListener('keydown', (e) => {
     if (
       e.key === 'Enter' &&

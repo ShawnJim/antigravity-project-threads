@@ -17,6 +17,7 @@ import {
 } from '../../lib/watchdog.mjs';
 import {
   archiveThread,
+  cancelThread,
   cleanupThreadWorktree,
   dispatchThread,
   executeDecisionAction,
@@ -43,7 +44,7 @@ import {
 const THIS_FILE = fileURLToPath(import.meta.url);
 const HERE = dirname(THIS_FILE);
 const PLUGIN_ROOT = join(HERE, '..', '..');
-const SERVER_API_REVISION = 8;
+const SERVER_API_REVISION = 9;
 const SERVER_CAPABILITIES = [
   'settings',
   'settings_save_fast',
@@ -58,6 +59,7 @@ const SERVER_CAPABILITIES = [
   'topic_memory',
   'watchdog_patrol',
   'unified_local_thread_id',
+  'thread_cancel',
 ];
 const app = new SidecarApp();
 const watchdogScheduler = createWatchdogScheduler();
@@ -292,6 +294,44 @@ async function handleThreadSend(data = {}) {
   }
 }
 registerDualApi('/api/thread_send', handleThreadSend);
+
+async function handleThreadCancel(data = {}) {
+  try {
+    const hasKillBg =
+      data.killBackgroundTasks !== undefined &&
+      data.killBackgroundTasks !== null &&
+      data.killBackgroundTasks !== '';
+    const hasNotifyParent =
+      data.notifyParent !== undefined &&
+      data.notifyParent !== null &&
+      data.notifyParent !== '';
+    const res = await cancelThread({
+      threadId: data.threadId || '',
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      projectId: data.projectId || '',
+      ...(hasKillBg ? { killBackgroundTasks: parseBool(data.killBackgroundTasks, true) } : {}),
+      ...(hasNotifyParent ? { notifyParent: parseBool(data.notifyParent, false) } : {}),
+    });
+    return {
+      ...res,
+      action: res?.action || 'cancel',
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      action: 'cancel',
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
+  }
+}
+registerDualApi('/api/thread_cancel', handleThreadCancel);
 
 async function handleThreadSyncCoord(data = {}) {
   try {

@@ -792,8 +792,8 @@ test('v1.2.0 polish: trilingual READMEs align on thr-NNN and v18 while preservin
   const storeMjs = readFileSync(join(REPO_ROOT, 'lib', 'store.mjs'), 'utf8');
 
   assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
-  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*9\s*;/);
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.equal(/\b(?:window\.)?(?:confirm|alert|prompt)\s*\(/.test(appJs), false);
   assert.match(
     storeMjs,

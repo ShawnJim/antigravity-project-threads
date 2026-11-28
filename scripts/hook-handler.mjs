@@ -133,8 +133,26 @@ async function main() {
   if (event === 'Stop') {
     const thread = Object.values(reg.threads).find((t) => t.conversationId === convId && !t.archived);
     if (thread) {
-      const reason = input.terminationReason || 'NO_TOOL_CALL';
-      if (reason !== 'USER_CANCELED') {
+      const reason = String(input.terminationReason || 'NO_TOOL_CALL');
+      const isUserCanceled =
+        reason === 'USER_CANCELED' || /cancel|abort|interrupt/i.test(reason);
+      if (isUserCanceled || thread.canceledAt) {
+        const canceledAt = thread.canceledAt || new Date().toISOString();
+        mutateRegistry((freshReg) => {
+          const freshT =
+            freshReg.threads[thread.threadId] ||
+            Object.values(freshReg.threads || {}).find((x) => x.conversationId === convId);
+          if (!freshT || freshT.archived) return;
+          freshT.runState = 'RUN_STATE_IDLE';
+          freshT.hasPendingBgTask = false;
+          freshT.activeTool = '';
+          freshT.activeToolObj = null;
+          freshT.bucket = 'idle';
+          freshT.waitingReason = '';
+          if (!freshT.canceledAt) freshT.canceledAt = canceledAt;
+          if (!freshT.updatedAt || canceledAt > freshT.updatedAt) freshT.updatedAt = canceledAt;
+        });
+      } else {
         try {
           await syncCompletionToCoordinator({
             threadId: thread.threadId,
@@ -165,7 +183,7 @@ async function main() {
               const freshT =
                 freshReg.threads[thread.threadId] ||
                 Object.values(freshReg.threads || {}).find((x) => x.conversationId === convId);
-              if (!freshT) return;
+              if (!freshT || freshT.canceledAt) return;
               if (comp.cardSummary) freshT.lastSummary = comp.cardSummary;
               freshT.runState = 'RUN_STATE_IDLE';
               freshT.hasPendingBgTask = false;
@@ -307,6 +325,7 @@ async function main() {
     const newlyFinished = Object.values(reg.threads).filter((t) => {
       if (t.archived || t.coordinatorId !== convId || !t.lastCompletedAt) return false;
       if (t.pushedToCoordinatorAt || t.notifiedCoordinatorAt) return false;
+      if (t.canceledAt) return false;
       if (t.runState === 'RUN_STATE_IDLE' || t.runState !== 'RUN_STATE_RUNNING') {
         const comp = extractThreadCompletion(t.conversationId);
         if (comp.waitingOnBackgroundTask) return false;

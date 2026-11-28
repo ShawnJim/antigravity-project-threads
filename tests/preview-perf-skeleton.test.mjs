@@ -1358,10 +1358,10 @@ test('Issue #14 static hygiene: main.mjs single-flight, rev 8 / directive v18 pr
   const appJs = readFileSync(join(REPO_ROOT, 'sidecars', 'threads', 'app.js'), 'utf8');
   const hookMjs = readFileSync(join(REPO_ROOT, 'scripts', 'hook-handler.mjs'), 'utf8');
 
-  assert.match(mainMjs, /SERVER_API_REVISION\s*=\s*8\b/);
+  assert.match(mainMjs, /SERVER_API_REVISION\s*=\s*9\b/);
   assert.match(mainMjs, /stateApiInFlight\s*=\s*new Map\(\)/);
   assert.match(mainMjs, /completionSyncInFlight/);
-  assert.match(appJs, /EXPECTED_SERVER_API_REVISION\s*=\s*8\b/);
+  assert.match(appJs, /EXPECTED_SERVER_API_REVISION\s*=\s*9\b/);
   assert.match(hookMjs, /DIRECTIVE_VERSION\s*=\s*18\b/);
   assert.equal(
     /\b(?:window\.)?(?:confirm|alert|prompt)\s*\(/.test(appJs),

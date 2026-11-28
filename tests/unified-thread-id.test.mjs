@@ -966,11 +966,11 @@ test('Issue #12: Sidecar UI unified thr-NNN rendering, zero U+00B7 middle dots a
 
   // 1. Version & capability alignment
   assert.match(hookSource, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
-  assert.match(mainSource, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(mainSource, /const\s+SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.match(mainSource, /['"]unified_local_thread_id['"]/);
   assert.match(mainSource, /['"]topic_memory['"]/);
   assert.match(mainSource, /['"]watchdog_patrol['"]/);
-  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*9\s*;/);
 
   // 2. Global ZERO U+00B7 middle-dot guard across all runtime source & protocol files
   const scanDirs = ['lib', 'mcp', 'scripts', 'sidecars/threads', 'skills', 'rules'];

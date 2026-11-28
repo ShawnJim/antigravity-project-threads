@@ -1389,8 +1389,8 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
     renderO2ThreadCard,
   } = loadUiDecisionHelpers();
 
-  // Backend dual API registration, SERVER_API_REVISION=8, and capabilities union
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
+  // Backend dual API registration, SERVER_API_REVISION=9, and capabilities union
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.match(mainMjs, /['"]review_model['"]/);
   assert.match(mainMjs, /['"]decision_custom_reply['"]/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
@@ -1401,8 +1401,8 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
   assert.match(mainMjs, /customMessage:\s*data\.customMessage/);
   assert.match(mainMjs, /handleDecisionAction[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
 
-  // Frontend API revision 8, capability gating, maxlength 2000, strict res.action check, no GET fallback & no short timeout
-  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
+  // Frontend API revision 9, capability gating, maxlength 2000, strict res.action check, no GET fallback & no short timeout
+  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.match(appSource, /const\s+MAX_DECISION_CUSTOM_MESSAGE_LEN\s*=\s*2000\s*;/);
   assert.match(appSource, /function\s+supportsDecisionCustomReply\s*\(/);
   assert.match(appSource, /serverCapabilities\.has\(['"]decision_custom_reply['"]\)/);

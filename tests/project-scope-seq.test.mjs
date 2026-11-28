@@ -1678,8 +1678,8 @@ test('Bug #11: URI-safe normalizeKey/uriToPath, deleted worktree fallback, unrel
   const mainSource = readFileSync(new URL('../sidecars/threads/main.mjs', import.meta.url), 'utf8');
   const hookSource = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const appSource = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
-  assert.match(mainSource, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
-  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(mainSource, /const\s+SERVER_API_REVISION\s*=\s*9\s*;/);
+  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*9\s*;/);
   assert.match(hookSource, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
   assert.match(mainSource, /\/api\/thread_messages[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
   assert.match(mainSource, /handleThreadSend[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
