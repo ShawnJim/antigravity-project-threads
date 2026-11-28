@@ -60,14 +60,14 @@
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null
-git clone https://github.com/ShawnJim/antigravity-project-threads.git "$HOME\.gemini\config\plugins\project-threads"
+git clone https://github.com/agy-plugins/project-threads.git "$HOME\.gemini\config\plugins\project-threads"
 ```
 
 #### macOS / Linux
 
 ```bash
 mkdir -p ~/.gemini/config/plugins
-git clone https://github.com/ShawnJim/antigravity-project-threads.git ~/.gemini/config/plugins/project-threads
+git clone https://github.com/agy-plugins/project-threads.git ~/.gemini/config/plugins/project-threads
 ```
 
 ### 開發版 / 先行版安裝（`dev` 分支 / `rc` 標籤）
@@ -76,7 +76,7 @@ git clone https://github.com/ShawnJim/antigravity-project-threads.git ~/.gemini/
 
 ```bash
 # 直接複製 dev 分支
-git clone -b dev https://github.com/ShawnJim/antigravity-project-threads.git ~/.gemini/config/plugins/project-threads
+git clone -b dev https://github.com/agy-plugins/project-threads.git ~/.gemini/config/plugins/project-threads
 
 # 或將既有安裝切換至 dev 分支
 cd ~/.gemini/config/plugins/project-threads

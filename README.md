@@ -61,14 +61,14 @@ The `main` branch always tracks the latest stable release (`vX.Y.Z` / `stable` t
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null
-git clone https://github.com/ShawnJim/antigravity-project-threads.git "$HOME\.gemini\config\plugins\project-threads"
+git clone https://github.com/agy-plugins/project-threads.git "$HOME\.gemini\config\plugins\project-threads"
 ```
 
 #### macOS / Linux
 
 ```bash
 mkdir -p ~/.gemini/config/plugins
-git clone https://github.com/ShawnJim/antigravity-project-threads.git ~/.gemini/config/plugins/project-threads
+git clone https://github.com/agy-plugins/project-threads.git ~/.gemini/config/plugins/project-threads
 ```
 
 ### Development & Pre-Release (`dev` branch / `rc` tags)
@@ -77,7 +77,7 @@ Active development and pre-release builds (`vX.Y.Z-rc.N`) live on the `dev` bran
 
 ```bash
 # Clone the dev branch directly
-git clone -b dev https://github.com/ShawnJim/antigravity-project-threads.git ~/.gemini/config/plugins/project-threads
+git clone -b dev https://github.com/agy-plugins/project-threads.git ~/.gemini/config/plugins/project-threads
 
 # Or switch an existing installation to dev
 cd ~/.gemini/config/plugins/project-threads

@@ -9,9 +9,11 @@ import vm from 'node:vm';
 import { loadSettings, saveSettings } from '../lib/store.mjs';
 import {
   applyPluginUpdate,
+  canonicalizeGithubRepoSlug,
   checkPluginUpdate,
   compareSemver,
   getPluginUpdateStatus,
+  parseGithubRepoSlug,
   resetUpdateCache,
 } from '../lib/updater.mjs';
 
@@ -57,7 +59,7 @@ function writeManifest(dir, version, extra = {}) {
         name: 'project-threads',
         displayName: 'Project Threads',
         version,
-        repository: 'https://github.com/ShawnJim/antigravity-project-threads',
+        repository: 'https://github.com/agy-plugins/project-threads',
         ...extra,
       },
       null,
@@ -344,7 +346,7 @@ test('Non-Git install: queries GitHub Releases API for stable/dev, handles offli
       draft: true,
       prerelease: true,
       body: 'Should be ignored',
-      html_url: 'https://github.com/ShawnJim/antigravity-project-threads/releases/tag/v1.4.0-draft',
+      html_url: 'https://github.com/agy-plugins/project-threads/releases/tag/v1.4.0-draft',
       published_at: '2026-11-28T10:00:00Z',
     },
     {
@@ -353,7 +355,7 @@ test('Non-Git install: queries GitHub Releases API for stable/dev, handles offli
       draft: false,
       prerelease: true,
       body: '## Highlights\n- One-click updater preview\n',
-      html_url: 'https://github.com/ShawnJim/antigravity-project-threads/releases/tag/v1.3.0-rc.1',
+      html_url: 'https://github.com/agy-plugins/project-threads/releases/tag/v1.3.0-rc.1',
       published_at: '2026-11-27T10:00:00Z',
     },
     {
@@ -362,16 +364,20 @@ test('Non-Git install: queries GitHub Releases API for stable/dev, handles offli
       draft: false,
       prerelease: false,
       body: '## What is new\n- Stable updater release\n',
-      html_url: 'https://github.com/ShawnJim/antigravity-project-threads/releases/tag/v1.2.0',
+      html_url: 'https://github.com/agy-plugins/project-threads/releases/tag/v1.2.0',
       published_at: '2026-11-26T10:00:00Z',
     },
   ];
 
-  const mockFetch = async () => ({
-    ok: true,
-    status: 200,
-    json: async () => sampleReleases,
-  });
+  const requestedUrls = [];
+  const mockFetch = async (url) => {
+    requestedUrls.push(String(url));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => sampleReleases,
+    };
+  };
 
   // Stable channel selects v1.2.0 (ignores draft & prerelease)
   const stableRes = await checkPluginUpdate({
@@ -381,6 +387,10 @@ test('Non-Git install: queries GitHub Releases API for stable/dev, handles offli
     force: true,
     fetchFn: mockFetch,
   });
+  assert.equal(
+    requestedUrls[0],
+    'https://api.github.com/repos/agy-plugins/project-threads/releases?per_page=20',
+  );
   assert.equal(stableRes.ok, true);
   assert.equal(stableRes.isGitInstall, false);
   assert.equal(stableRes.targetVersion, '1.2.0');
@@ -389,7 +399,7 @@ test('Non-Git install: queries GitHub Releases API for stable/dev, handles offli
   assert.equal(stableRes.canApplyUpdate, false);
   assert.equal(
     stableRes.releaseUrl,
-    'https://github.com/ShawnJim/antigravity-project-threads/releases/tag/v1.2.0',
+    'https://github.com/agy-plugins/project-threads/releases/tag/v1.2.0',
   );
   assert.ok(stableRes.summary.length > 0);
 
@@ -421,7 +431,7 @@ test('Non-Git install: queries GitHub Releases API for stable/dev, handles offli
   assert.equal(offlineRes.errorCode, 'github_fetch_failed');
   assert.equal(
     offlineRes.releaseUrl,
-    'https://github.com/ShawnJim/antigravity-project-threads/releases',
+    'https://github.com/agy-plugins/project-threads/releases',
   );
 
   // applyPluginUpdate refuses non-Git installation without touching files
@@ -435,6 +445,93 @@ test('Non-Git install: queries GitHub Releases API for stable/dev, handles offli
   assert.equal(
     JSON.parse(readFileSync(join(plainPluginDir, 'plugin.json'), 'utf8')).version,
     '1.1.0',
+  );
+});
+
+test('GitHub repo slug resolution supports agy-plugins/project-threads, legacy remote redirects, and custom forks', async (t) => {
+  const { tempRoot, stateDir } = createTempEnv(t, 'pt-upd-slug-');
+
+  assert.equal(
+    parseGithubRepoSlug('https://github.com/agy-plugins/project-threads.git'),
+    'agy-plugins/project-threads',
+  );
+  assert.equal(
+    parseGithubRepoSlug('git@github.com:agy-plugins/project-threads.git'),
+    'agy-plugins/project-threads',
+  );
+  assert.equal(
+    parseGithubRepoSlug('ssh://git@github.com:443/agy-plugins/project-threads.git'),
+    'agy-plugins/project-threads',
+  );
+  assert.equal(
+    parseGithubRepoSlug('https://github.com/ShawnJim/antigravity-project-threads.git'),
+    'ShawnJim/antigravity-project-threads',
+  );
+  assert.equal(parseGithubRepoSlug('C:\\local\\origin.git'), '');
+
+  assert.equal(
+    canonicalizeGithubRepoSlug('ShawnJim/antigravity-project-threads'),
+    'agy-plugins/project-threads',
+  );
+  assert.equal(
+    canonicalizeGithubRepoSlug('agy-plugins/project-threads'),
+    'agy-plugins/project-threads',
+  );
+  assert.equal(canonicalizeGithubRepoSlug('my-fork/project-threads'), 'my-fork/project-threads');
+
+  // Legacy manifest repository redirects cleanly to agy-plugins/project-threads
+  const legacyDir = join(tempRoot, 'legacy-plain');
+  mkdirSync(legacyDir, { recursive: true });
+  writeManifest(legacyDir, '1.1.0', {
+    repository: 'https://github.com/ShawnJim/antigravity-project-threads',
+  });
+  const seenApiUrls = [];
+  const legacyRes = await checkPluginUpdate({
+    pluginDir: legacyDir,
+    stateDir,
+    channel: 'stable',
+    force: true,
+    fetchFn: async (url) => {
+      seenApiUrls.push(String(url));
+      return { ok: true, status: 200, json: async () => [] };
+    },
+  });
+  assert.equal(legacyRes.ok, true);
+  assert.equal(
+    seenApiUrls[0],
+    'https://api.github.com/repos/agy-plugins/project-threads/releases?per_page=20',
+  );
+  assert.equal(legacyRes.releaseUrl, 'https://github.com/agy-plugins/project-threads/releases');
+
+  // Git install dynamically derives owner/repo from origin remote URL (legacy redirect & fork)
+  const { pluginClone } = createGitFixture(tempRoot);
+  git(
+    ['remote', 'set-url', 'origin', 'https://github.com/ShawnJim/antigravity-project-threads.git'],
+    pluginClone,
+  );
+  const legacyRemoteStatus = await getPluginUpdateStatus({
+    pluginDir: pluginClone,
+    stateDir,
+    backgroundRefresh: false,
+  });
+  assert.equal(
+    legacyRemoteStatus.releaseUrl,
+    'https://github.com/agy-plugins/project-threads/releases',
+  );
+
+  git(
+    ['remote', 'set-url', 'origin', 'git@github.com:custom-org/project-threads-fork.git'],
+    pluginClone,
+  );
+  resetUpdateCache();
+  const forkRemoteStatus = await getPluginUpdateStatus({
+    pluginDir: pluginClone,
+    stateDir,
+    backgroundRefresh: false,
+  });
+  assert.equal(
+    forkRemoteStatus.releaseUrl,
+    'https://github.com/custom-org/project-threads-fork/releases',
   );
 });
 
@@ -464,7 +561,13 @@ test('Static & UI checks: updater card, red dot, routes, 3-locale I18N, zero mid
   assert.match(indexHtml, /id="btn-update-check"/);
   assert.match(indexHtml, /id="btn-update-apply"/);
   assert.match(indexHtml, /id="btn-update-release"/);
+  assert.match(indexHtml, /href="https:\/\/github\.com\/agy-plugins\/project-threads\/releases"/);
   assert.match(indexHtml, /id="update-reload-banner"/);
+
+  // Manifest repository / homepage point to agy-plugins/project-threads
+  const pluginManifest = JSON.parse(readFileSync(new URL('../plugin.json', import.meta.url), 'utf8'));
+  assert.equal(pluginManifest.homepage, 'https://github.com/agy-plugins/project-threads');
+  assert.equal(pluginManifest.repository, 'https://github.com/agy-plugins/project-threads');
 
   // CSS rules for dot and update card
   assert.match(themeCss, /\.settings-update-dot\s*\{/);
