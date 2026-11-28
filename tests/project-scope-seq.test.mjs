@@ -267,34 +267,39 @@ test('Plan A: per-project independent continuous projectSeq/localId keeps global
     model: 'pro',
   });
 
-  // Verify global primary keys & Git worktree/branch naming remain 100% backward compatible
-  assert.equal(a1.threadId, 'thr-001');
+  // Verify globally unique internal primary keys + unified per-project thr-NNN across all 4 surfaces
+  assert.match(a1.threadId, /^pt-[a-f0-9]{8}-thr-001$/);
   assert.equal(a1.projectSeq, 1);
-  assert.equal(a1.localId, '#1');
+  assert.equal(a1.localId, 'thr-001');
+  assert.equal(a1.displayTitle, '[thr-001] Alpha task 1');
   assert.match(a1.branch, /^thread\/thr-001-/);
 
-  assert.equal(a2.threadId, 'thr-002');
+  assert.match(a2.threadId, /^pt-[a-f0-9]{8}-thr-002$/);
   assert.equal(a2.projectSeq, 2);
-  assert.equal(a2.localId, '#2');
+  assert.equal(a2.localId, 'thr-002');
+  assert.equal(a2.displayTitle, '[thr-002] Alpha task 2');
 
-  assert.equal(b1.threadId, 'thr-003');
+  assert.match(b1.threadId, /^pt-[a-f0-9]{8}-thr-001$/);
+  assert.notEqual(b1.threadId, a1.threadId, 'Project A thr-001 and Project B thr-001 must have distinct internal keys');
   assert.equal(b1.projectSeq, 1);
-  assert.equal(b1.localId, '#1');
+  assert.equal(b1.localId, 'thr-001');
+  assert.equal(b1.displayTitle, '[thr-001] Beta task 1');
 
-  assert.equal(b2.threadId, 'thr-004');
+  assert.match(b2.threadId, /^pt-[a-f0-9]{8}-thr-002$/);
   assert.equal(b2.projectSeq, 2);
-  assert.equal(b2.localId, '#2');
+  assert.equal(b2.localId, 'thr-002');
 
-  assert.equal(b3.threadId, 'thr-005');
+  assert.match(b3.threadId, /^pt-[a-f0-9]{8}-thr-003$/);
   assert.equal(b3.projectSeq, 3);
-  assert.equal(b3.localId, '#3');
+  assert.equal(b3.localId, 'thr-003');
 
-  assert.equal(a3.threadId, 'thr-006');
+  assert.match(a3.threadId, /^pt-[a-f0-9]{8}-thr-003$/);
   assert.equal(a3.projectSeq, 3);
-  assert.equal(a3.localId, '#3');
-  assert.match(a3.branch, /^thread\/thr-006-/);
+  assert.equal(a3.localId, 'thr-003');
+  assert.equal(a3.displayTitle, '[thr-003] Alpha task 3');
+  assert.match(a3.branch, /^thread\/thr-003-/);
 
-  // Archiving #1 in Project A must NOT cause next Project A thread to reuse #1
+  // Archiving thr-001 in Project A must NOT cause next Project A thread to reuse thr-001
   await archiveThread(a1.threadId, { workspacePath: repoA, removeWorktree: true, forceWorktree: true });
   const a4 = await dispatchThread({
     workspacePath: repoA,
@@ -304,23 +309,24 @@ test('Plan A: per-project independent continuous projectSeq/localId keeps global
     createWorktree: false,
     model: 'pro',
   });
-  assert.equal(a4.threadId, 'thr-007');
+  assert.match(a4.threadId, /^pt-[a-f0-9]{8}-thr-004$/);
   assert.equal(a4.projectSeq, 4);
-  assert.equal(a4.localId, '#4');
+  assert.equal(a4.localId, 'thr-004');
 
   // Stale concurrent saveRegistry() must preserve max projectSeqs and existing thread projectSeq/localId
-  delete staleSnapshot.threads['thr-001'].projectSeq;
-  delete staleSnapshot.threads['thr-001'].localId;
+  delete staleSnapshot.threads[a1.threadId].projectSeq;
+  delete staleSnapshot.threads[a1.threadId].localId;
   saveRegistry(staleSnapshot);
 
   const afterMerge = loadRegistry();
   assert.equal(afterMerge.projectSeqs[keyA], 4);
   assert.equal(afterMerge.projectSeqs[keyB], 3);
-  assert.equal(afterMerge.threads['thr-001'].projectSeq, 1);
-  assert.equal(afterMerge.threads['thr-001'].localId, '#1');
-  assert.equal(afterMerge.threads['thr-006'].projectSeq, 3);
-  assert.equal(afterMerge.threads['thr-006'].localId, '#3');
-  assert.equal(formatLocalThreadId(4), '#4');
+  assert.equal(afterMerge.threads[a1.threadId].projectSeq, 1);
+  assert.equal(afterMerge.threads[a1.threadId].localId, 'thr-001');
+  assert.equal(afterMerge.threads[a3.threadId].projectSeq, 3);
+  assert.equal(afterMerge.threads[a3.threadId].localId, 'thr-003');
+  assert.equal(formatLocalThreadId(4), 'thr-004');
+  assert.equal(formatLocalThreadId(1000), 'thr-1000');
   // P1-3: strictly require leading "#" for project-local sequence; bare numbers are NEVER parsed as local seq
   assert.equal(parseLocalThreadSeqRef('#1'), 1);
   assert.equal(parseLocalThreadSeqRef('#03'), 3);
@@ -406,27 +412,27 @@ test('Legacy registry without projectSeq/projectSeqs computes stable per-project
     'utf8',
   );
 
-  // syncThreads decorates legacy threads cleanly without breaking them
+  // syncThreads decorates legacy threads cleanly without breaking them (preserves historical thr-NNN display alignment)
   const snapA = await syncThreads({ workspacePath: repoA, includeArchived: true });
   const legA1 = snapA.threads.find((x) => x.threadId === 'thr-005');
   const legA2 = snapA.threads.find((x) => x.threadId === 'thr-012');
   assert.equal(legA1?.projectSeq, 1);
-  assert.equal(legA1?.localId, '#1');
+  assert.equal(legA1?.localId, 'thr-005');
   assert.equal(legA2?.projectSeq, 2);
-  assert.equal(legA2?.localId, '#2');
+  assert.equal(legA2?.localId, 'thr-012');
 
   const snapB = await syncThreads({ workspacePath: repoB, includeArchived: true });
   const legB1 = snapB.threads.find((x) => x.threadId === 'thr-009');
   assert.equal(legB1?.projectSeq, 1);
-  assert.equal(legB1?.localId, '#1');
+  assert.equal(legB1?.localId, 'thr-009');
 
-  // Local sequence lookup resolves legacy thread cleanly within project scope
+  // Legacy #N local sequence lookup resolves legacy thread cleanly within project scope
   const detailA2 = await getThreadDetail({ threadId: '#2', workspacePath: repoA });
   assert.equal(detailA2.threadId, 'thr-012');
   assert.equal(detailA2.projectSeq, 2);
-  assert.equal(detailA2.localId, '#2');
+  assert.equal(detailA2.localId, 'thr-012');
 
-  // Dispatching a new thread in LegacyAlpha continues at #3 (does NOT collide with legacy #1/#2)
+  // Dispatching a new thread in LegacyAlpha continues after max historical thr-NNN (12 -> 13) to prevent collisions
   const nextA = await dispatchThread({
     workspacePath: repoA,
     coordinatorId: 'coord-legacy-a',
@@ -435,15 +441,16 @@ test('Legacy registry without projectSeq/projectSeqs computes stable per-project
     createWorktree: false,
     model: 'pro',
   });
-  assert.equal(nextA.threadId, 'thr-013');
-  assert.equal(nextA.projectSeq, 3);
-  assert.equal(nextA.localId, '#3');
+  assert.match(nextA.threadId, /^pt-[a-f0-9]{8}-thr-013$/);
+  assert.equal(nextA.projectSeq, 13);
+  assert.equal(nextA.localId, 'thr-013');
+  assert.equal(nextA.displayTitle, '[thr-013] New A third');
 
-  // Legacy #1 and #2 stay completely stable after #3 is created
+  // Legacy thr-005 and thr-012 stay completely stable after thr-013 is created
   const afterA = await syncThreads({ workspacePath: repoA, includeArchived: true });
-  assert.equal(afterA.threads.find((x) => x.threadId === 'thr-005')?.localId, '#1');
-  assert.equal(afterA.threads.find((x) => x.threadId === 'thr-012')?.localId, '#2');
-  assert.equal(afterA.threads.find((x) => x.threadId === 'thr-013')?.localId, '#3');
+  assert.equal(afterA.threads.find((x) => x.threadId === 'thr-005')?.localId, 'thr-005');
+  assert.equal(afterA.threads.find((x) => x.threadId === 'thr-012')?.localId, 'thr-012');
+  assert.equal(afterA.threads.find((x) => x.threadId === nextA.threadId)?.localId, 'thr-013');
 });
 
 test('Phase 1: getThreadDetail refreshes ONLY the target thread and never triggers machine-wide syncThreads scan', async (t) => {
@@ -589,7 +596,7 @@ test('Phase 1: getThreadDetail refreshes ONLY the target thread and never trigge
   const detail = await getThreadDetail({ threadId: 'thr-001', workspacePath: repoA });
   assert.equal(detail.threadId, 'thr-001');
   assert.equal(detail.projectSeq, 1);
-  assert.equal(detail.localId, '#1');
+  assert.equal(detail.localId, 'thr-001');
   assert.equal(detail.runState, 'RUN_STATE_IDLE');
   assert.equal(detail.lastSummary, 'Target thread finished cleanly');
   assert.equal(detail.modelDisplayName, 'Gemini 4 Neon (High)');
@@ -779,10 +786,10 @@ test('Phase 1 & Plan A: single-thread store APIs enforce fail-closed cross-proje
   });
   assert.equal(decA1.threadId, 'thr-001');
   const decList = listDecisions({ workspacePath: repoA });
-  assert.equal(decList[0]?.threadLocalId, '#1');
+  assert.equal(decList[0]?.threadLocalId, 'thr-001');
   assert.equal(decList[0]?.threadProjectSeq, 1);
   const boardDecs = buildBoardDecisions({ workspacePath: repoA });
-  assert.equal(boardDecs[0]?.threadLocalId, '#1');
+  assert.equal(boardDecs[0]?.threadLocalId, 'thr-001');
 
   // Executing Alpha decision from Beta scope (or direct archive_thread action for Alpha thread from Beta scope) must fail closed
   await assert.rejects(
@@ -815,19 +822,19 @@ test('Phase 1 & Plan A: single-thread store APIs enforce fail-closed cross-proje
   });
   assert.equal(sendOk.ok, true);
   assert.equal(sendOk.thread.threadId, 'thr-002');
-  assert.equal(sendOk.thread.localId, '#2');
+  assert.equal(sendOk.thread.localId, 'thr-002');
   assert.equal(mockLs.sendCalls.length, 1);
 
   const archOk = await archiveThread('#1', { coordinatorId: 'coord-guard-b' });
   assert.equal(archOk.ok, true);
   assert.equal(archOk.threadId, 'thr-003');
-  assert.equal(archOk.localId, '#1');
+  assert.equal(archOk.localId, 'thr-003');
   assert.equal(loadRegistry().threads['thr-003'].archived, true);
 
   // Direct store API without requireScope stays backward compatible for global threadId
   const unscopedDetail = await getThreadDetail('thr-001');
   assert.equal(unscopedDetail.threadId, 'thr-001');
-  assert.equal(unscopedDetail.localId, '#1');
+  assert.equal(unscopedDetail.localId, 'thr-001');
 });
 
 function runMcpStdio(repoRoot, env, requests) {
@@ -1102,7 +1109,7 @@ test('MCP stdio server: schema scope params, fail-closed cross-project rejection
   assert.equal(detailRes?.isError, undefined);
   assert.equal(detailRes?.structuredContent?.threadId, 'thr-004');
   assert.equal(detailRes?.structuredContent?.projectSeq, 1);
-  assert.equal(detailRes?.structuredContent?.localId, '#1');
+  assert.equal(detailRes?.structuredContent?.localId, 'thr-004');
 
   // Verify conv-mcp-a1 WAS refreshed locally; conv-mcp-b1 is only refreshed once (by explicit scope="*" in #13)
   assert.equal(
@@ -1118,16 +1125,19 @@ test('MCP stdio server: schema scope params, fail-closed cross-project rejection
 
   const listRes = msgs.find((m) => m.id === 7)?.result;
   const listText = listRes?.content?.[0]?.text || '';
-  assert.match(listText, /`#1` \(`thr-004`\)/);
+  assert.match(listText, /\| `thr-004` \|/);
+  assert.doesNotMatch(listText, /`#1` \(`thr-004`\)/, 'must not expose dual-track #N (thr-xxx)');
   assert.equal(listText.includes('·'), false, 'MCP thread list output must not use middle dot');
 
   const sendRes = msgs.find((m) => m.id === 8)?.result;
   assert.equal(sendRes?.isError, undefined);
-  assert.match(sendRes?.content?.[0]?.text || '', /`#1`.*`thr-004`/);
+  assert.match(sendRes?.content?.[0]?.text || '', /\*\*`thr-004`\*\*/);
+  assert.doesNotMatch(sendRes?.content?.[0]?.text || '', /`#1`/);
 
   const archRes = msgs.find((m) => m.id === 9)?.result;
   assert.equal(archRes?.isError, undefined);
-  assert.match(archRes?.content?.[0]?.text || '', /`#1` \(`thr-004`\)/);
+  assert.match(archRes?.content?.[0]?.text || '', /Archived thread `thr-004`/);
+  assert.doesNotMatch(archRes?.content?.[0]?.text || '', /`#1` \(`thr-004`\)/);
   assert.equal(loadRegistry().threads['thr-004'].archived, true);
   assert.equal(loadRegistry().threads['thr-005'].archived, false);
 
@@ -1154,12 +1164,12 @@ test('MCP stdio server: schema scope params, fail-closed cross-project rejection
   assert.match(bareNumRes?.content?.[0]?.text || '', /Thread not found: 1/);
 });
 
-test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=17 enforces scope params, syncThreads reads fresh registry for decisions (no flicker), and single-thread writes avoid stale full-table overwrites', async (t) => {
-  // 1. P1-1: DIRECTIVE_VERSION=17 + SKILL.md + rules/AGENTS.md enforce passing coordinatorId & workspacePath
+test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=18 enforces scope params, syncThreads reads fresh registry for decisions (no flicker), and single-thread writes avoid stale full-table overwrites', async (t) => {
+  // 1. P1-1: DIRECTIVE_VERSION=18 + SKILL.md + rules/AGENTS.md enforce passing coordinatorId & workspacePath
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
   assert.match(skillMd, /get_thread_detail.*send_thread_message.*archive_thread/i);
   assert.match(skillMd, /coordinatorId.*workspacePath/i);
   assert.match(rulesMd, /Single-Thread Scope Isolation/i);
@@ -1232,7 +1242,7 @@ test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=17 enforces scope param
   const hookOut = JSON.parse(hookProc.stdout.trim());
   const injected = hookOut?.injectSteps?.[0]?.systemMessage?.systemMessage || '';
   assert.match(injected, /`get_thread_detail`, `send_thread_message`, or `archive_thread`.*ALWAYS pass `coordinatorId:/);
-  assert.equal(loadRegistry().coordinators[keyA].directiveVersion, 17);
+  assert.equal(loadRegistry().coordinators[keyA].directiveVersion, 18);
 
   // 2. P1-4: Decision dismissed mid-syncThreads (when dirty===false) must NOT flicker back in snapshot
   const dec = addDecision({ workspacePath: repoA, threadId: 'thr-001', title: 'Flicker test decision' });
@@ -1302,7 +1312,7 @@ test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=17 enforces scope param
   // 3. P1-5: markThreadRead and archiveThread use mutateRegistry and never revert concurrent updates to sibling threads
   const markRes = await markThreadRead({ threadId: 'thr-001', workspacePath: repoA });
   assert.equal(markRes.ok, true);
-  assert.equal(markRes.thread.localId, '#1');
+  assert.equal(markRes.thread.localId, 'thr-001');
   assert.equal(
     loadRegistry().threads['thr-002'].title,
     'Concurrently Updated Sibling',
@@ -1312,7 +1322,7 @@ test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=17 enforces scope param
   const archRes = await archiveThread('thr-001', { workspacePath: repoA, removeWorktree: false });
   assert.equal(archRes.ok, true);
   assert.equal(archRes.thread.archived, true);
-  assert.equal(archRes.thread.localId, '#1');
+  assert.equal(archRes.thread.localId, 'thr-001');
   assert.equal(
     loadRegistry().threads['thr-002'].title,
     'Concurrently Updated Sibling',
@@ -1430,67 +1440,70 @@ test('Sidecar UI & backend static assertions: project-local #N display with thr-
   );
 
   const sampleThread = {
-    threadId: 'thr-037',
+    threadId: 'pt-deadbeef-thr-003',
     projectSeq: 3,
-    localId: '#3',
+    localId: 'thr-003',
     conversationId: 'conv-ui-37',
     title: '实现按项目独立序号',
     bucket: 'idle',
     runState: 'RUN_STATE_IDLE',
-    branch: 'thread/thr-037-seq',
-    worktreePath: 'C:/worktrees/demo/thr-037-seq',
+    branch: 'thread/thr-003-seq',
+    worktreePath: 'C:/worktrees/demo/thr-003-seq',
     updatedAt: '2026-11-28T09:00:00.000Z',
   };
 
-  // 1. Swarm row shows #3 visually, preserves data-tid="thr-037" and tooltip "#3 (thr-037)"
+  // 1. Swarm row shows unified thr-003 visually while preserving internal data-tid="pt-deadbeef-thr-003"
   const rowHtml = ctx.renderSwarmRow(sampleThread);
-  assert.match(rowHtml, /data-tid="thr-037"/);
-  assert.match(rowHtml, /<span class="tid-pill" title="#3 \(thr-037\)" data-thread-id="thr-037">#3<\/span>/);
+  assert.match(rowHtml, /data-tid="pt-deadbeef-thr-003"/);
+  assert.match(rowHtml, /<span class="tid-pill" title="thr-003" data-thread-id="pt-deadbeef-thr-003">thr-003<\/span>/);
 
-  // 2. O2 thread card shows #3 without middle dot separator, even with or without stepsProgress
+  // 2. O2 thread card shows thr-003 without middle dot separator or dual-track parenthesis
   const cardNoSteps = ctx.renderO2ThreadCard(sampleThread);
-  assert.match(cardNoSteps, /data-th-card="thr-037"/);
-  assert.match(cardNoSteps, /<span class="o2-tid" title="#3 \(thr-037\)" data-thread-id="thr-037">#3<\/span>/);
+  assert.match(cardNoSteps, /data-th-card="pt-deadbeef-thr-003"/);
+  assert.match(cardNoSteps, /<span class="o2-tid" title="thr-003" data-thread-id="pt-deadbeef-thr-003">thr-003<\/span>/);
   assert.equal(cardNoSteps.includes('·'), false, 'O2 thread card must not use middle dot separator');
 
   const cardWithSteps = ctx.renderO2ThreadCard({
     ...sampleThread,
     stepsProgress: { done: 2, total: 5 },
   });
-  assert.match(cardWithSteps, /<span class="o2-tid" title="#3 \(thr-037\)" data-thread-id="thr-037">#3<\/span>/);
+  assert.match(cardWithSteps, /<span class="o2-tid" title="thr-003" data-thread-id="pt-deadbeef-thr-003">thr-003<\/span>/);
 
-  // 3. Legacy thread without localId falls back cleanly to thr-037
+  // 3. Legacy thread without unified localId falls back cleanly to thr-037
   const legacyCard = ctx.renderO2ThreadCard({
     threadId: 'thr-037',
+    projectSeq: 3,
+    localId: '#3',
     title: 'Legacy Card',
     bucket: 'idle',
   });
   assert.match(legacyCard, /<span class="o2-tid" title="thr-037" data-thread-id="thr-037">thr-037<\/span>/);
 
-  // 4. Decision panel badge shows #3 while data-dec-thread stays internal thr-037
+  // 4. Decision panel badge shows unified thr-003 while data-dec-thread stays internal pt-deadbeef-thr-003
   const decHtml = ctx.renderDecisionsPanelHtml([
     {
       id: 'dec-001',
       source: 'explicit',
-      threadId: 'thr-037',
+      threadId: 'pt-deadbeef-thr-003',
       threadProjectSeq: 3,
-      threadLocalId: '#3',
+      threadLocalId: 'thr-003',
       title: '确认合入？',
       options: [{ id: 'ok', label: '确认', action: 'send_coordinator', style: 'primary' }],
     },
   ]);
-  assert.match(decHtml, /data-dec-thread="thr-037"/);
-  assert.match(decHtml, />#3<\/button>/);
-  assert.match(decHtml, /\(thr-037\)/);
+  assert.match(decHtml, /data-dec-thread="pt-deadbeef-thr-003"/);
+  assert.match(decHtml, />thr-003<\/button>/);
+  assert.doesNotMatch(decHtml, /\(pt-deadbeef-thr-003\)/);
 
-  // 5. Worktree card displays #3 badge
+  // 5. Worktree card displays unified thr-003 badge
   const wtHtml = ctx.renderWorktreeCard(sampleThread);
-  assert.match(wtHtml, /<span class="tid-pill" title="#3 \(thr-037\)" data-thread-id="thr-037">#3<\/span>/);
+  assert.match(wtHtml, /<span class="tid-pill" title="thr-003" data-thread-id="pt-deadbeef-thr-003">thr-003<\/span>/);
 
-  // 6. Thread detail header displays "#3 (thr-037)"
+  // 6. Thread detail header displays unified "thr-003" (no dual-track "#3 (thr-037)")
   ctx.renderThreadHeader(sampleThread);
-  assert.equal(headerEls['chat-tid'].textContent, '#3 (thr-037)');
-  assert.equal(headerEls['chat-tid'].dataset.threadId, 'thr-037');
+  assert.equal(headerEls['chat-tid'].textContent, 'thr-003');
+  assert.equal(headerEls['chat-tid'].title, 'thr-003');
+  assert.equal(headerEls['chat-tid'].dataset.threadId, 'pt-deadbeef-thr-003');
 
   // 7. LF line endings check on all modified/added .mjs files
   for (const rel of [
@@ -1665,9 +1678,9 @@ test('Bug #11: URI-safe normalizeKey/uriToPath, deleted worktree fallback, unrel
   const mainSource = readFileSync(new URL('../sidecars/threads/main.mjs', import.meta.url), 'utf8');
   const hookSource = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const appSource = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
-  assert.match(mainSource, /const\s+SERVER_API_REVISION\s*=\s*7\s*;/);
-  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*7\s*;/);
-  assert.match(hookSource, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
+  assert.match(mainSource, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
+  assert.match(hookSource, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
   assert.match(mainSource, /\/api\/thread_messages[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
   assert.match(mainSource, /handleThreadSend[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
   assert.match(mainSource, /handleThreadMarkRead[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);

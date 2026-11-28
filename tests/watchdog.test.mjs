@@ -947,17 +947,18 @@ test('Issue #6: Per-project re-entrancy mutex prevents stacking while keeping si
   assert.deepEqual(scheduler.getActiveScopeKeys(), []);
 });
 
-test('Issue #6: Sidecar API rev 7, watchdog_patrol + topic_memory capabilities, write-API discipline, 3-locale I18N (zero middle dots), zero native dialogs, and LF line endings', () => {
+test('Issue #6: Sidecar API rev 8, watchdog_patrol + topic_memory + unified_local_thread_id capabilities, write-API discipline, 3-locale I18N (zero middle dots), zero native dialogs, and LF line endings', () => {
   const mainMjs = readFileSync(new URL('../sidecars/threads/main.mjs', import.meta.url), 'utf8');
   const indexHtml = readFileSync(new URL('../sidecars/threads/index.html', import.meta.url), 'utf8');
   const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
   const themeCss = readFileSync(new URL('../sidecars/threads/theme.css', import.meta.url), 'utf8');
   const hookMjs = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
 
-  // 1. Backend routes, rev 7, capabilities union, lifecycle cleanup, and DIRECTIVE_VERSION=17 preserved
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*7\s*;/);
+  // 1. Backend routes, rev 8, capabilities union, lifecycle cleanup, and DIRECTIVE_VERSION=18 preserved
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
   assert.match(mainMjs, /['"]watchdog_patrol['"]/);
+  assert.match(mainMjs, /['"]unified_local_thread_id['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/watchdog_status['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/watchdog_patrol['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/watchdog_snooze['"]/);
@@ -966,11 +967,11 @@ test('Issue #6: Sidecar API rev 7, watchdog_patrol + topic_memory capabilities, 
   assert.match(mainMjs, /handleWatchdogSnooze[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
   assert.match(mainMjs, /watchdogScheduler\.start\(\)/);
   assert.match(mainMjs, /watchdogScheduler\.stop\(\)/);
-  assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
+  assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
   assert.match(hookMjs, /consumePendingWatchdogAlertsForPreInvocation/);
 
-  // 2. Frontend rev 7, capability gating, write-API safety (timeoutMs: 0, allowGetFallback: false, res.action verification)
-  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*7\s*;/);
+  // 2. Frontend rev 8, capability gating, write-API safety (timeoutMs: 0, allowGetFallback: false, res.action verification)
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
   assert.match(appJs, /function\s+supportsWatchdogPatrol\s*\(/);
   assert.match(appJs, /serverCapabilities\.has\(['"]watchdog_patrol['"]\)/);
   assert.match(

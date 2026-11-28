@@ -792,15 +792,16 @@ test('static checks: protocol v17, API rev 7, topic_memory gating, dec-022 wordi
   const themeCss = readFileSync(new URL('../sidecars/threads/theme.css', import.meta.url), 'utf8');
 
   // 1. Version & capability alignment
-  assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*7\s*;/);
+  assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*8\s*;/);
   assert.match(mainMjs, /['"]topic_memory['"]/);
   assert.match(mainMjs, /['"]watchdog_patrol['"]/);
+  assert.match(mainMjs, /['"]unified_local_thread_id['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/memory_save['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/memory_migrate['"]/);
   assert.match(mainMjs, /handleSaveMemory[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
   assert.match(mainMjs, /handleMigrateMemory[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
-  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*7\s*;/);
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*8\s*;/);
   assert.match(appJs, /function\s+supportsTopicMemory\s*\(/);
   assert.match(appJs, /serverCapabilities\.has\(['"]topic_memory['"]\)/);
 
@@ -935,7 +936,7 @@ test('static checks: protocol v17, API rev 7, topic_memory gating, dec-022 wordi
   assert.equal(hookOut.status, 0);
   const parsedHook = JSON.parse(hookOut.stdout.trim());
   assert.match(parsedHook.injectSteps[0].systemMessage.systemMessage, /project-memory\.md/);
-  assert.equal(loadRegistry().coordinators['__v17_check__'].directiveVersion, 17);
+  assert.equal(loadRegistry().coordinators['__v17_check__'].directiveVersion, 18);
 });
 
 test('Sidecar UI behavior: topic_memory capability gating, migration banner, topic list rendering, and draft/IME preservation across refreshes', async () => {
