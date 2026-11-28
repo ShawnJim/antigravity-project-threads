@@ -25,12 +25,22 @@
 
 | Feature | What You Get |
 | --- | --- |
-| **Calm Coordinator** | Keep your main window focused on scoping and decisions, free of log noise. |
-| **Isolated Parallelism** | Run code changes in isolated Git Worktrees and research zero-copy without conflicts. |
-| **Pending Decisions** | Completed threads report back automatically; handle choices, merges, and archive in one click. |
-| **Inline Preview** | Inspect progress, follow up, or switch models right beside your main window. |
-| **Scoped Memory** | Strict per-project boundaries, clean `#N` numbering, and shared memory synced across threads. |
-| **Rebind & Updates** | Switch Coordinators in one click and update safely across stable or dev channels. |
+| 🧭 **Calm Coordinator** | Keep your main window focused on scoping and decisions, free of log noise. |
+| 🌿 **Isolated Parallelism** | Run code changes in isolated Git Worktrees and research zero-copy without conflicts. |
+| 📥 **Pending Decisions** | Completed threads report back automatically; handle choices, merges, and archive in one click. |
+| 👀 **Inline Preview** | Inspect progress, follow up, or switch models right beside your main window. |
+| 🧠 **Scoped Memory** | Strict per-project boundaries, clean `#N` numbering, and shared memory synced across threads. |
+| 🔄 **Rebind & Updates** | Switch Coordinators in one click and update safely across stable or dev channels. |
+
+## Core Workflow
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/workflow-en-dark.svg" />
+    <img src="./assets/workflow-en-light.svg" width="100%" alt="Antigravity Project Threads Core Workflow" />
+  </picture>
+</p>
+<p align="center"><sub>You decide, the Coordinator dispatches, background threads run in parallel, and results flow back to the board for one-click action.</sub></p>
 
 ## Quick Start
 
@@ -46,9 +56,9 @@ mkdir -p ~/.gemini/config/plugins && git clone https://github.com/agy-plugins/pr
 New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null; git clone https://github.com/agy-plugins/project-threads.git "$HOME\.gemini\config\plugins\project-threads"
 ```
 
-1. Open Antigravity 2.0 and enable **Project Threads** under **Customizations → Plugins**.
-2. Type `/coord` in your main chat to pin it as the always-on Project Coordinator.
-3. Click **`+`** in the top-right sidebar to open **Project Threads** for live status, inline preview, and one-click decisions.
+| 1️⃣ Enable Plugin | 2️⃣ Pin Coordinator | 3️⃣ Open the Board |
+| :---: | :---: | :---: |
+| Enable **Project Threads** under **Customizations → Plugins**. | Type `/coord` in your main chat to pin it as the always-on Coordinator. | Click **`+`** in the top-right sidebar for live status, preview, and decisions. |
 
 <details>
 <summary><strong>MCP Tools & Technical Details</strong></summary>

@@ -25,12 +25,22 @@
 
 | 亮点 | 带来的体验 |
 | --- | --- |
-| **主控专注决策** | 主窗常驻总控专攻拆解与拍板，远离检索日志刷屏。 |
-| **隔离并行执行** | 写代码自动隔离 Worktree，查代码零拷贝互不冲突。 |
-| **待决策一键收口** | 完工自动汇总，选择、合并与归档置顶一键响应。 |
-| **右侧内联预览** | 侧栏直接 1:1 追问、看进度与切模型，无需切离主窗。 |
-| **隔离与共享记忆** | 多工程独立 `#N` 编号防串线，项目规范自动同步。 |
-| **换绑与安全更新** | 一键换绑总控，内置稳定版与开发版双渠道安全升级。 |
+| 🧭 **主控专注决策** | 主窗常驻总控专攻拆解与拍板，远离检索日志刷屏。 |
+| 🌿 **隔离并行执行** | 写代码自动隔离 Worktree，查代码零拷贝互不冲突。 |
+| 📥 **待决策一键收口** | 完工自动汇总，选择、合并与归档置顶一键响应。 |
+| 👀 **右侧内联预览** | 侧栏直接 1:1 追问、看进度与切模型，无需切离主窗。 |
+| 🧠 **隔离与共享记忆** | 多工程独立 `#N` 编号防串线，项目规范自动同步。 |
+| 🔄 **换绑与安全更新** | 一键换绑总控，内置稳定版与开发版双渠道安全升级。 |
+
+## 核心工作流
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/workflow-zh-CN-dark.svg" />
+    <img src="./assets/workflow-zh-CN-light.svg" width="100%" alt="Antigravity Project Threads 核心工作流" />
+  </picture>
+</p>
+<p align="center"><sub>你只管拍板，总控拆解派发，后台线程并行执行，结果自动回流看板一键处理。</sub></p>
 
 ## 快速开始
 
@@ -46,9 +56,9 @@ mkdir -p ~/.gemini/config/plugins && git clone https://github.com/agy-plugins/pr
 New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null; git clone https://github.com/agy-plugins/project-threads.git "$HOME\.gemini\config\plugins\project-threads"
 ```
 
-1. 打开 Antigravity 2.0，进入 **Customizations → Plugins** 确认已启用 **Project Threads**。
-2. 在主对话输入 `/coord`，将当前窗口固定为常驻项目总控。
-3. 点击右上角边栏 **`+`** 打开 **Project Threads** 看板，在侧栏查看进度、内联对话并一键处理待决策。
+| 1️⃣ 启用插件 | 2️⃣ 固定总控 | 3️⃣ 打开看板 |
+| :---: | :---: | :---: |
+| 在 **Customizations → Plugins** 中启用 **Project Threads**。 | 在主对话输入 `/coord`，固定为常驻项目总控。 | 点击右上角边栏 **`+`**，查看进度、内联预览并处理待决策。 |
 
 <details>
 <summary><strong>MCP 工具与底层机制（开发者参考）</strong></summary>
