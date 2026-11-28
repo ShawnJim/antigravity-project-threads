@@ -513,6 +513,15 @@ test('cleanupThreadWorktree() supports forceWorktree, deleteBranch=false, alread
   }
 });
 
+function gitDateEnv(offsetSec) {
+  const iso = new Date(1700000000000 + offsetSec * 1000).toISOString();
+  return {
+    ...process.env,
+    GIT_AUTHOR_DATE: iso,
+    GIT_COMMITTER_DATE: iso,
+  };
+}
+
 test('archiveThread() and inspectWorktreeGit() recognize cherry-picked commits and delete source branch via -D', async (t) => {
   const { repoRoot, worktreesBase } = createTempGitAndStateEnv(t, 'pt-arch-cherry-');
 
@@ -524,7 +533,10 @@ test('archiveThread() and inspectWorktreeGit() recognize cherry-picked commits a
   });
   writeFileSync(join(wtCherry, 'cherry.txt'), 'cherry picked change\n', 'utf8');
   execFileSync('git', ['add', 'cherry.txt'], { cwd: wtCherry });
-  execFileSync('git', ['commit', '-m', 'Cherry feature'], { cwd: wtCherry });
+  execFileSync('git', ['commit', '-m', 'Cherry feature'], {
+    cwd: wtCherry,
+    env: gitDateEnv(10),
+  });
   const cherrySha = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: wtCherry,
     encoding: 'utf8',
@@ -534,7 +546,10 @@ test('archiveThread() and inspectWorktreeGit() recognize cherry-picked commits a
   assert.equal(beforeGit.aheadCount, 1);
   assert.equal(beforeGit.merged, false);
 
-  execFileSync('git', ['cherry-pick', cherrySha], { cwd: repoRoot });
+  execFileSync('git', ['cherry-pick', cherrySha], {
+    cwd: repoRoot,
+    env: gitDateEnv(20),
+  });
 
   const afterPickGit = await inspectWorktreeGit(wtCherry, { baseRef: 'main', repoRoot });
   assert.equal(afterPickGit.aheadCount, 1);
@@ -550,15 +565,24 @@ test('archiveThread() and inspectWorktreeGit() recognize cherry-picked commits a
   });
   writeFileSync(join(wtPartial, 'part1.txt'), 'picked part\n', 'utf8');
   execFileSync('git', ['add', 'part1.txt'], { cwd: wtPartial });
-  execFileSync('git', ['commit', '-m', 'Part 1'], { cwd: wtPartial });
+  execFileSync('git', ['commit', '-m', 'Part 1'], {
+    cwd: wtPartial,
+    env: gitDateEnv(30),
+  });
   const part1Sha = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: wtPartial,
     encoding: 'utf8',
   }).trim();
   writeFileSync(join(wtPartial, 'part2.txt'), 'unpicked part\n', 'utf8');
   execFileSync('git', ['add', 'part2.txt'], { cwd: wtPartial });
-  execFileSync('git', ['commit', '-m', 'Part 2'], { cwd: wtPartial });
-  execFileSync('git', ['cherry-pick', part1Sha], { cwd: repoRoot });
+  execFileSync('git', ['commit', '-m', 'Part 2'], {
+    cwd: wtPartial,
+    env: gitDateEnv(40),
+  });
+  execFileSync('git', ['cherry-pick', part1Sha], {
+    cwd: repoRoot,
+    env: gitDateEnv(50),
+  });
 
   const partialGit = await inspectWorktreeGit(wtPartial, { baseRef: 'main', repoRoot });
   assert.equal(partialGit.aheadCount, 2);
@@ -621,7 +645,10 @@ test('inspectWorktreeGit() and cleanupThreadWorktree() unify baseRef fallback th
   });
   writeFileSync(join(wt, 'feat.txt'), 'feat work\n', 'utf8');
   execFileSync('git', ['add', 'feat.txt'], { cwd: wt });
-  execFileSync('git', ['commit', '-m', 'Feature work'], { cwd: wt });
+  execFileSync('git', ['commit', '-m', 'Feature work'], {
+    cwd: wt,
+    env: gitDateEnv(60),
+  });
   const featSha = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: wt,
     encoding: 'utf8',
@@ -660,7 +687,10 @@ test('inspectWorktreeGit() and cleanupThreadWorktree() unify baseRef fallback th
   assert.equal(skipRes.worktreeRemoved, false);
   assert.equal(skipRes.skippedReason, 'unmerged_commits');
 
-  execFileSync('git', ['cherry-pick', featSha], { cwd: repoRoot });
+  execFileSync('git', ['cherry-pick', featSha], {
+    cwd: repoRoot,
+    env: gitDateEnv(70),
+  });
   const mergedGit = await inspectWorktreeGit(wt, {
     baseRef: 'HEAD',
     defaultBranch: 'feature-v2',

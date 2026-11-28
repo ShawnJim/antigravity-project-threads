@@ -5,7 +5,7 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 
 import { resetModelConfigCache } from '../lib/ls-client.mjs';
@@ -18,6 +18,7 @@ import {
   dispatchThread,
   executeDecisionAction,
   formatLocalThreadId,
+  getEffectiveSettings,
   getThreadDetail,
   getThreadMessages,
   listDecisions,
@@ -25,10 +26,13 @@ import {
   markThreadRead,
   normalizeKey,
   parseLocalThreadSeqRef,
+  resolveProjectScope,
   resolveScopedThreadTarget,
   saveRegistry,
+  saveSettings,
   sendThreadMessage,
   syncThreads,
+  uriToPath,
 } from '../lib/store.mjs';
 
 function createTempEnv(t, prefix = 'pt-scope-seq-') {
@@ -1331,7 +1335,7 @@ test('Sidecar UI & backend static assertions: project-local #N display with thr-
   assert.match(appSource, /postApi\(\s*['"]\/api\/archive['"],[\s\S]{0,60}buildScopePayload\(/);
   assert.match(appSource, /postApi\(\s*['"]\/api\/cleanup_worktree['"],[\s\S]{0,80}buildScopePayload\(/);
   assert.match(appSource, /postApi\(\s*['"]\/api\/thread_mark_read['"],[\s\S]{0,80}buildScopePayload\(/);
-  assert.match(appSource, /buildScopePayload\(\{\s*threadId:\s*openThreadId/);
+  assert.match(appSource, /buildScopePayload\(\{\s*threadId:\s*(?:openThreadId|reqThreadId)/);
   assert.match(appSource, /const sendPayload = buildScopePayload\(\{\s*threadId:\s*targetThreadId/);
   // Sidecar main.mjs forwards scope parameters on single-thread routes
   assert.match(mainSource, /\/api\/thread_messages[\s\S]*workspacePath:/);
@@ -1502,4 +1506,477 @@ test('Sidecar UI & backend static assertions: project-local #N display with thr-
     const raw = readFileSync(new URL(rel, import.meta.url));
     assert.ok(!raw.includes(Buffer.from('\r')), `${rel} must use LF line endings`);
   }
+});
+
+test('Bug #11: URI-safe normalizeKey/uriToPath, deleted worktree fallback, unrelated convMeta.projectId non-override, and main.mjs workspaceKey forwarding', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-bug11-backend-');
+  const repoA = join(tempRoot, 'alpha repo');
+  const deletedWt = join(tempRoot, '.worktrees', 'alpha repo', 'thr-099-deleted');
+  mkdirSync(repoA, { recursive: true });
+  execFileSync('git', ['init', '-b', 'main'], { cwd: repoA });
+
+  const keyA = normalizeKey(repoA);
+  const fileUriA = pathToFileURL(repoA).href;
+  const encodedColonUriA = fileUriA.replace(
+    /^file:\/\/\/([A-Za-z]):/,
+    (_, d) => `file:///${d.toLowerCase()}%3A`,
+  );
+  const localhostUriA = encodedColonUriA.replace(/^file:\/\/\//, 'file://localhost/');
+  const upperSchemeUriA = encodedColonUriA.replace(/^file:/, 'FILE:');
+
+  // 1. normalizeKey() decodes all file:// URI forms equivalently to plain filesystem path
+  assert.equal(normalizeKey(fileUriA), keyA);
+  assert.equal(normalizeKey(encodedColonUriA), keyA);
+  assert.equal(normalizeKey(localhostUriA), keyA);
+  assert.equal(normalizeKey(upperSchemeUriA), keyA);
+  assert.equal(normalizeKey('file://'), '__global__');
+
+  // Malformed percent encoding never throws in uriToPath() or normalizeKey()
+  const malformedUri = 'file:///c%3A/Users/100%ZZ/demo';
+  assert.doesNotThrow(() => uriToPath(malformedUri));
+  assert.doesNotThrow(() => normalizeKey(malformedUri));
+  assert.match(uriToPath(malformedUri), /100%ZZ/);
+
+  // 2. Settings lookup matches project settings via file:// URI
+  saveSettings({
+    scope: 'project',
+    workspaceKey: keyA,
+    worktreeModel: 'gemini-4-neon-xhigh',
+  });
+  const effFromUri = await getEffectiveSettings({ workspacePath: encodedColonUriA });
+  assert.equal(effFromUri.scopeKey, keyA);
+  assert.equal(effFromUri.worktreeModel, 'gemini-4-neon-xhigh');
+
+  // 3. Deleted worktree path falls back via registry to main repo scopeKey
+  const reg = loadRegistry();
+  reg.coordinators[keyA] = {
+    key: keyA,
+    conversationId: 'coord-bug11-alpha',
+    workspacePath: repoA,
+    repoRoot: repoA,
+    projectId: 'proj-alpha-001',
+    environmentId: 'env-alpha-001',
+    title: '[Coordinator] Alpha',
+  };
+  reg.threads['thr-099'] = {
+    threadId: 'thr-099',
+    conversationId: 'conv-bug11-099',
+    coordinatorId: 'coord-bug11-alpha',
+    workspaceKey: keyA,
+    repoRoot: repoA,
+    worktreePath: deletedWt,
+    projectId: 'proj-alpha-001',
+    title: 'Deleted WT thread',
+    archived: false,
+    runState: 'RUN_STATE_IDLE',
+  };
+  saveRegistry(reg);
+  assert.equal(existsSync(deletedWt), false);
+
+  const deletedWtScope = await resolveProjectScope({ workspacePath: deletedWt });
+  assert.equal(deletedWtScope.scopeKey, keyA);
+  assert.equal(deletedWtScope.projectId, 'proj-alpha-001');
+
+  const deletedWtUriScope = await resolveProjectScope({
+    workspacePath: pathToFileURL(deletedWt).href,
+  });
+  assert.equal(deletedWtUriScope.scopeKey, keyA);
+
+  // 4. Unrelated session convMeta.projectId must NOT override registered existingCoord.projectId,
+  //    while explicit conflicting projectId STILL fails closed in resolveScopedThreadTarget()
+  const mockLs = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => {
+      body += c;
+    });
+    req.on('end', () => {
+      const payload = body ? JSON.parse(body) : {};
+      res.setHeader('Content-Type', 'application/json');
+      if (req.url === '/product.v1.ConversationService/GetConversation') {
+        if (payload.conversationId === 'conv-unrelated-beta') {
+          res.end(
+            JSON.stringify({
+              conversation: {
+                id: 'conv-unrelated-beta',
+                metadata: { projectId: 'proj-beta-999', environmentId: 'env-beta-999' },
+                state: { runState: 'RUN_STATE_IDLE' },
+              },
+            }),
+          );
+          return;
+        }
+        res.end(
+          JSON.stringify({
+            conversation: {
+              id: payload.conversationId,
+              metadata: { projectId: 'proj-alpha-001' },
+              state: { runState: 'RUN_STATE_IDLE' },
+            },
+          }),
+        );
+        return;
+      }
+      if (req.url === '/exa.language_server_pb.LanguageServerService/ReadProject') {
+        res.end(JSON.stringify({ project: { name: 'Alpha Project' } }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end('{}');
+    });
+  });
+  await new Promise((r) => mockLs.listen(0, '127.0.0.1', r));
+  t.after(() => new Promise((r) => mockLs.close(r)));
+  process.env.ANTIGRAVITY_LS_ADDRESS = `127.0.0.1:${mockLs.address().port}`;
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'csrf-bug11-test';
+
+  const resolvedWithForeignConv = await resolveProjectScope({
+    workspacePath: encodedColonUriA,
+    conversationId: 'conv-unrelated-beta',
+  });
+  assert.equal(resolvedWithForeignConv.scopeKey, keyA);
+  assert.equal(
+    resolvedWithForeignConv.projectId,
+    'proj-alpha-001',
+    'Unrelated session convMeta.projectId must not override registered workspace existingCoord.projectId',
+  );
+  assert.equal(resolvedWithForeignConv.environmentId, 'env-alpha-001');
+
+  // Same-project lookup with foreign conversationId (no explicit conflicting projectId) succeeds
+  const allowedTarget = await resolveScopedThreadTarget({
+    threadId: 'thr-099',
+    workspacePath: encodedColonUriA,
+    conversationId: 'conv-unrelated-beta',
+  });
+  assert.equal(allowedTarget.thread.threadId, 'thr-099');
+
+  // Explicit conflicting projectId STILL fails closed
+  await assert.rejects(
+    () =>
+      resolveScopedThreadTarget({
+        threadId: 'thr-099',
+        workspacePath: encodedColonUriA,
+        projectId: 'proj-beta-999',
+      }),
+    /Cross-project access denied/,
+  );
+
+  // 5. main.mjs forwards workspaceKey on all single-thread routes and /api/decision_action,
+  //    and version constants remain untouched (no collision with parallel branches)
+  const mainSource = readFileSync(new URL('../sidecars/threads/main.mjs', import.meta.url), 'utf8');
+  const hookSource = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
+  const appSource = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
+  assert.match(mainSource, /const\s+SERVER_API_REVISION\s*=\s*7\s*;/);
+  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*7\s*;/);
+  assert.match(hookSource, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
+  assert.match(mainSource, /\/api\/thread_messages[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleThreadSend[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleThreadMarkRead[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleArchive[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleCleanupWorktree[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleDecisionAction[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleSaveMemory[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleMigrateMemory[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleWatchdogStatus[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleWatchdogPatrol[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+  assert.match(mainSource, /handleWatchdogSnooze[\s\S]*?workspaceKey:\s*data\.workspaceKey \|\| ''/);
+});
+
+test('Bug #11 Frontend: scope anti-mixing, scopeEpoch cancellation, interactive #toast lifecycle, screen isolation, and zero middle dots', () => {
+  const appSource = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
+  const htmlSource = readFileSync(new URL('../sidecars/threads/index.html', import.meta.url), 'utf8');
+  const cssSource = readFileSync(new URL('../sidecars/threads/theme.css', import.meta.url), 'utf8');
+
+  // Zero middle dots across all Sidecar assets & zero native dialogs
+  assert.equal(appSource.includes('·'), false, 'sidecars/threads/app.js must contain zero middle dots');
+  assert.equal(htmlSource.includes('·'), false, 'sidecars/threads/index.html must contain zero middle dots');
+  assert.equal(cssSource.includes('·'), false, 'sidecars/threads/theme.css must contain zero middle dots');
+  assert.equal(/\b(?:window\.)?(?:confirm|alert|prompt)\s*\(/.test(appSource), false);
+
+  // Toast detail DOM & CSS hooks exist
+  assert.match(htmlSource, /id="toast-detail"/);
+  assert.match(htmlSource, /id="toast-detail-copy"/);
+  assert.match(htmlSource, /id="toast-detail-close"/);
+  assert.match(cssSource, /\.toast-close-btn\s*\{/);
+  assert.match(cssSource, /\.toast-detail\s*\{/);
+
+  const i18nStart = appSource.indexOf('const I18N = {');
+  let depth = 0;
+  let inBrace = false;
+  let i18nEnd = -1;
+  for (let i = i18nStart; i < appSource.length; i++) {
+    if (appSource[i] === '{') {
+      depth++;
+      inBrace = true;
+    } else if (appSource[i] === '}') {
+      depth--;
+      if (inBrace && depth === 0) {
+        i18nEnd = i + 1;
+        break;
+      }
+    }
+  }
+  const i18nCode = appSource.slice(i18nStart, i18nEnd);
+
+  const fnNames = [
+    'getEffectiveScopeProjectId',
+    'buildScopePayload',
+    'resetScopeOnWorkspaceChange',
+    'resetScopeOnConversationChange',
+    'renderBoardToast',
+    'scheduleBoardToastTimer',
+    'pauseBoardToastTimer',
+    'resumeBoardToastTimer',
+    'toggleToastDetail',
+    'clearToast',
+    'clearExpiredToastOnRecovery',
+    'flashToast',
+    'computeInlineSubtitle',
+  ];
+  const extractedCode = fnNames.map((fn) => extractFunctionSource(appSource, fn)).join('\n');
+
+  const makeMockEl = () => ({
+    className: '',
+    textContent: '',
+    innerHTML: '',
+    title: '',
+    hidden: false,
+    attrs: {},
+    setAttribute(k, v) {
+      this.attrs[k] = String(v);
+    },
+    removeAttribute(k) {
+      delete this.attrs[k];
+    },
+  });
+
+  const elToast = makeMockEl();
+  const elSettingsToast = makeMockEl();
+  const elToastDetail = makeMockEl();
+  elToastDetail.hidden = true;
+  const elToastDetailMsg = makeMockEl();
+  const elToastDetailCopy = makeMockEl();
+  const elToastDetailClose = makeMockEl();
+
+  let fakeNow = 1_700_000_000_000;
+  let nextTimerId = 1;
+  const activeTimers = new Map();
+  const fakeSetTimeout = (fn, ms) => {
+    const id = nextTimerId++;
+    activeTimers.set(id, { fn, ms });
+    return id;
+  };
+  const fakeClearTimeout = (id) => {
+    activeTimers.delete(id);
+  };
+
+  const ctx = {
+    elToast,
+    elSettingsToast,
+    elToastDetail,
+    elToastDetailMsg,
+    elToastDetailCopy,
+    elToastDetailClose,
+    Date: { now: () => fakeNow },
+    setTimeout: fakeSetTimeout,
+    clearTimeout: fakeClearTimeout,
+    closedDrawers: [],
+    closedModals: [],
+  };
+
+  vm.runInNewContext(
+    `
+    ${i18nCode};
+    let curLocale = 'zh-CN';
+    const L = () => I18N[curLocale] || I18N.en;
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    let workspace = 'file:///c%3A/repo-b';
+    let hostConvIdVal = 'conv-proj-a';
+    let lastHostConvId = 'conv-proj-a';
+    let eventHostConvId = '';
+    let lastSdkConvId = '';
+    let hostProjectId = 'proj-a';
+    let manualPopoutConvId = 'conv-pop';
+    let scopeEpoch = 2;
+    let lastSnapScopeEpoch = 2;
+    let lastBoardKey = 'k-old';
+    let lastHasGitRepo = true;
+    let openThreadId = 'thr-083';
+    let activeModalCtx = { mode: 'archive', thread: { threadId: 'thr-083' }, busy: false };
+    let settingsScreenOpen = false;
+    let lastSnap = {
+      scopeKey: 'c:\\\\repo-b',
+      projectId: 'proj-b',
+      coordinator: { conversationId: 'coord-b', projectId: 'proj-b' },
+      threads: [{ threadId: 'thr-083', conversationId: 'conv-worker-b' }],
+    };
+    const threadOpenState = new Map([['thr-083', true]]);
+    const expandedCustomDecisionIds = new Set(['dec-1']);
+    const decisionCustomDrafts = new Map([['dec-1', 'draft']]);
+    const decisionImeComposingIds = new Set(['dec-1']);
+    let deferredDecisionsList = ['d1'];
+    let lastDecisionsRenderKey = 'dk';
+    const boardToastState = {
+      text: '',
+      tone: 'ok',
+      timer: null,
+      expiresAt: 0,
+      remainingMs: 0,
+      hoverPaused: false,
+      detailOpen: false,
+    };
+    const settingsToastState = { text: '', tone: 'ok', timer: null, expiresAt: 0 };
+    let toastCopyResetTimer = null;
+    const getHostConvId = () => hostConvIdVal;
+    const readRawSidecarConvId = () => '';
+    const closeThreadDrawer = (opts) => { closedDrawers.push(opts); openThreadId = ''; };
+    const closePtModal = (force) => { closedModals.push({ force, mode: activeModalCtx?.mode }); activeModalCtx = null; };
+    const formatToolLabel = () => '';
+    const normalizeActivityText = (s) => s;
+    ${extractedCode}
+    this.api = {
+      buildScopePayload,
+      resetScopeOnWorkspaceChange,
+      resetScopeOnConversationChange,
+      flashToast,
+      clearToast,
+      toggleToastDetail,
+      pauseBoardToastTimer,
+      resumeBoardToastTimer,
+      clearExpiredToastOnRecovery,
+      computeInlineSubtitle,
+      setState: (patch) => {
+        if ('workspace' in patch) workspace = patch.workspace;
+        if ('hostConvIdVal' in patch) hostConvIdVal = patch.hostConvIdVal;
+        if ('hostProjectId' in patch) hostProjectId = patch.hostProjectId;
+        if ('settingsScreenOpen' in patch) settingsScreenOpen = patch.settingsScreenOpen;
+        if ('activeModalCtx' in patch) activeModalCtx = patch.activeModalCtx;
+        if ('openThreadId' in patch) openThreadId = patch.openThreadId;
+        if ('lastSnap' in patch) lastSnap = patch.lastSnap;
+        if ('lastSnapScopeEpoch' in patch) lastSnapScopeEpoch = patch.lastSnapScopeEpoch;
+      },
+      getState: () => ({
+        workspace,
+        hostProjectId,
+        scopeEpoch,
+        lastSnapScopeEpoch,
+        openThreadId,
+        activeModalCtx,
+        boardToastState: { ...boardToastState },
+        settingsToastState: { ...settingsToastState },
+        draftsSize: decisionCustomDrafts.size,
+      }),
+    };
+    `,
+    ctx,
+  );
+
+  // 1. workspace non-empty with foreign hostProjectId='proj-a': buildScopePayload must NOT mix proj-a
+  const payloadWs = ctx.api.buildScopePayload({ threadId: 'thr-083' });
+  assert.equal(payloadWs.workspace, 'file:///c%3A/repo-b');
+  assert.equal(payloadWs.projectId, 'proj-b');
+  assert.equal(payloadWs.workspaceKey, 'c:\\repo-b');
+
+  // 2. Flash error toast on board screen -> interactive with close button, NEVER touches #settings-toast
+  const longErr = 'Cross-project access denied: thread "thr-083" belongs to a different project scope';
+  ctx.api.flashToast(longErr, 'err', 3600);
+  assert.match(elToast.className, /toast err is-interactive/);
+  assert.match(elToast.innerHTML, /data-toast-action="toggle"/);
+  assert.match(elToast.innerHTML, /data-toast-action="close"/);
+  assert.equal(elSettingsToast.textContent, '', 'Board toast must not leak into #settings-toast');
+  assert.equal(activeTimers.size, 1);
+
+  // 3. Hover pause cancels timer & preserves remaining time; resume restarts timer
+  fakeNow += 1000;
+  ctx.api.pauseBoardToastTimer();
+  assert.equal(activeTimers.size, 0);
+  assert.equal(ctx.api.getState().boardToastState.hoverPaused, true);
+  assert.equal(ctx.api.getState().boardToastState.remainingMs, 2600);
+  ctx.api.resumeBoardToastTimer();
+  assert.equal(activeTimers.size, 1);
+  assert.equal(ctx.api.getState().boardToastState.hoverPaused, false);
+
+  // 4. Click to expand full error detail banner & pause timer
+  ctx.api.toggleToastDetail();
+  assert.equal(elToastDetail.hidden, false);
+  assert.equal(elToastDetailMsg.textContent, longErr);
+  assert.equal(activeTimers.size, 0, 'Expanding detail banner must pause auto-dismiss timer');
+
+  // 5. Collapse detail & simulate throttled timer expiry -> clearExpiredToastOnRecovery clears stale toast
+  ctx.api.toggleToastDetail(false);
+  assert.equal(elToastDetail.hidden, true);
+  fakeNow += 5000;
+  assert.equal(ctx.api.clearExpiredToastOnRecovery({ prevLiveOk: true }), true);
+  assert.equal(elToast.textContent, '');
+  assert.equal(ctx.api.getState().boardToastState.text, '');
+
+  // 6. Recovery from stale (!prevLiveOk) clears active error toast immediately
+  ctx.api.flashToast(longErr, 'err', 4200);
+  assert.equal(ctx.api.clearExpiredToastOnRecovery({ prevLiveOk: false }), true);
+  assert.equal(ctx.api.getState().boardToastState.text, '');
+
+  // 7. Settings screen toast writes ONLY to #settings-toast and never pollutes board #toast
+  ctx.api.setState({ settingsScreenOpen: true });
+  ctx.api.flashToast('设置已保存', 'ok', 2400);
+  assert.equal(elSettingsToast.textContent, '设置已保存');
+  assert.equal(elToast.textContent, '', 'Settings toast must not leak into board #toast');
+  ctx.api.setState({ settingsScreenOpen: false });
+
+  // 8. onWorkspaceChange resets hostProjectId, increments scopeEpoch, closes drawer & archive modal, clears toast
+  ctx.api.flashToast(longErr, 'err', 4200);
+  const changed = ctx.api.resetScopeOnWorkspaceChange('file:///c%3A/repo-c');
+  assert.equal(changed, true);
+  const stAfterWs = ctx.api.getState();
+  assert.equal(stAfterWs.workspace, 'file:///c%3A/repo-c');
+  assert.equal(stAfterWs.hostProjectId, '');
+  assert.equal(stAfterWs.scopeEpoch, 3);
+  assert.equal(stAfterWs.lastSnapScopeEpoch, -1);
+  assert.equal(stAfterWs.openThreadId, '');
+  assert.equal(stAfterWs.activeModalCtx, null);
+  assert.equal(stAfterWs.draftsSize, 0);
+  assert.equal(stAfterWs.boardToastState.text, '');
+  assert.equal(stAfterWs.settingsToastState.text, '');
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.closedDrawers)), [{ refresh: false }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.closedModals)), [{ force: true, mode: 'archive' }]);
+
+  // Verify refreshBoard() & refreshOpenThread() check scopeEpoch to discard stale in-flight responses
+  const refreshBoardSrc = extractFunctionSource(appSource, 'refreshBoard');
+  const refreshOpenThreadSrc = extractFunctionSource(appSource, 'refreshOpenThread');
+  assert.match(refreshBoardSrc, /const\s+reqEpoch\s*=\s*scopeEpoch\s*;/);
+  assert.match(refreshBoardSrc, /if\s*\(\s*reqEpoch\s*!==\s*scopeEpoch\s*\)\s*return\s*;/);
+  assert.match(refreshOpenThreadSrc, /const\s+reqEpoch\s*=\s*scopeEpoch\s*;/);
+  assert.match(
+    refreshOpenThreadSrc,
+    /if\s*\(\s*reqEpoch\s*!==\s*scopeEpoch\s*\|\|\s*openThreadId\s*!==\s*reqThreadId\s*\)\s*return\s*;/,
+  );
+
+  // Right after workspace switch (before new /api/state arrives), buildScopePayload sends empty projectId & no stale workspaceKey
+  const payloadRightAfterSwitch = ctx.api.buildScopePayload();
+  assert.equal(payloadRightAfterSwitch.workspace, 'file:///c%3A/repo-c');
+  assert.equal(payloadRightAfterSwitch.projectId, '');
+  assert.equal('workspaceKey' in payloadRightAfterSwitch, false);
+
+  // 9. Empty workspace pure-project view uses hostProjectId and avoids foreign hostConvId priority inversion
+  ctx.api.setState({
+    workspace: '',
+    hostProjectId: 'proj-p1',
+    hostConvIdVal: 'conv-other-project',
+    lastSnapScopeEpoch: 3,
+    lastSnap: {
+      scopeKey: 'project:proj-p2',
+      projectId: 'proj-p2',
+      coordinator: { conversationId: 'coord-p2', projectId: 'proj-p2' },
+      threads: [],
+    },
+  });
+  const pureProjPayload = ctx.api.buildScopePayload({ coordinatorId: 'coord-p2' });
+  assert.equal(pureProjPayload.conversationId, '', 'Must not send conflicting hostConvId when explicit coordinatorId targets another scope');
+
+  // 10. computeInlineSubtitle produces clean separator without middle dots
+  const subCommitBranch = ctx.api.computeInlineSubtitle({
+    bucket: 'idle',
+    branch: 'thread/thr-083-fix',
+    git: { aheadCount: 2, dirtyCount: 0, merged: false },
+  });
+  assert.equal(subCommitBranch, '+2 次提交 | thread/thr-083-fix');
+  assert.equal(subCommitBranch.includes('·'), false);
 });

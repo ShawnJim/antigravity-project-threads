@@ -150,7 +150,10 @@ test('detectPromptLanguage and buildWorkerPrompt localize Chinese tasks and pres
   assert.match(zhWorktreePrompt, /## 任务指令\n请更新提示模板并补充单元测试。/);
   assert.match(zhWorktreePrompt, /## 完成与汇报规范/);
   assert.match(zhWorktreePrompt, /与上方任务指令相同的语言/);
-  assert.match(zhWorktreePrompt, /3 个及以上独立阶段.*`update_steps`.*3–6 步简明实时步骤清单.*简单 1–2 步任务可跳过/);
+  assert.match(
+    zhWorktreePrompt,
+    /除纯单步简单问答外.*多阶段排查、审查、开发或验证.*务必在首轮工具调用时并行调用内置 `update_steps` 工具列出 3–5 个清晰阶段.*阶段推进与最终收尾时同步更新状态/,
+  );
   assert.match(zhWorktreePrompt, /### 线程总结/);
 
   const zhReadOnlyPrompt = buildWorkerPrompt({
@@ -166,7 +169,7 @@ test('detectPromptLanguage and buildWorkerPrompt localize Chinese tasks and pres
   assert.match(zhReadOnlyPrompt, /^# 子线程任务分配: \[thr-021\] 排查定时任务阻塞/);
   assert.match(zhReadOnlyPrompt, /## 工作区上下文（只读 \/ 共享检出）/);
   assert.doesNotMatch(zhReadOnlyPrompt, /## 隔离工作区与 Git 分支/);
-  assert.match(zhReadOnlyPrompt, /`update_steps`.*3–6 步简明实时步骤清单/);
+  assert.match(zhReadOnlyPrompt, /务必在首轮工具调用时并行调用内置 `update_steps` 工具列出 3–5 个清晰阶段/);
 
   const enWorktreePrompt = buildWorkerPrompt({
     threadId: 'thr-022',
@@ -186,7 +189,7 @@ test('detectPromptLanguage and buildWorkerPrompt localize Chinese tasks and pres
   assert.match(enWorktreePrompt, /same language as the Task Instructions above/);
   assert.match(
     enWorktreePrompt,
-    /3 or more distinct stages, use the built-in `update_steps` tool.*3–6 steps.*skip it for trivial 1–2 step tasks/,
+    /Except for trivial single-step Q&A.*multi-stage investigation, review, implementation, or verification.*call the built-in `update_steps` tool in parallel during your first tool-call turn to list 3–5 clear stages.*update step statuses as each stage advances and finishes/,
   );
   assert.match(enWorktreePrompt, /### Thread Summary/);
 
@@ -202,7 +205,10 @@ test('detectPromptLanguage and buildWorkerPrompt localize Chinese tasks and pres
   });
   assert.match(enReadOnlyPrompt, /^# Worker Thread Assignment: \[thr-023\] Inspect scheduler stall/);
   assert.match(enReadOnlyPrompt, /## Workspace Context \(Read-Only \/ Shared Checkout\)/);
-  assert.match(enReadOnlyPrompt, /use the built-in `update_steps` tool/);
+  assert.match(
+    enReadOnlyPrompt,
+    /call the built-in `update_steps` tool in parallel during your first tool-call turn to list 3–5 clear stages/,
+  );
 });
 
 test('transcript parser splits Chinese & English worker briefs and extracts summaries without breaking clearOnFinalSummary', (t) => {

@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
 
 import { resolveAgentApiShimTargetFile } from '../lib/ls-client.mjs';
@@ -1753,4 +1753,211 @@ test('Sidecar handleDecisionCustomSubmit enforces capability gate, 2000-char lim
   assert.equal(out.postCalls[2].payload.customMessage, '先改版本号再合并');
   assert.equal(out.postCalls[2].payload.title, '是否合入 dev？');
   assert.equal(out.postCalls[2].payload.summary, '测试全通过。');
+});
+
+test('Bug #11: executeDecisionAction accepts file:// URIs (encoded drive & localhost), Worktrees, and repo subdirs while staying fail-closed on cross-project URI or conflicting projectId', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-dec-bug11-');
+  const repoA = join(tempRoot, 'proj-alpha');
+  const repoASubdir = join(repoA, 'packages', 'core');
+  const repoAWorktree = join(tempRoot, '.worktrees', 'proj-alpha', 'thr-083-fix');
+  const repoB = join(tempRoot, 'proj-beta');
+  mkdirSync(repoASubdir, { recursive: true });
+  mkdirSync(repoAWorktree, { recursive: true });
+  mkdirSync(repoB, { recursive: true });
+
+  const keyA = normalizeKey(repoA);
+  const keyB = normalizeKey(repoB);
+  const fakeApi = createFakeAgentApi(tempRoot);
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = fakeApi.exePath;
+
+  const reg = loadRegistry();
+  reg.coordinators[keyA] = {
+    key: keyA,
+    conversationId: 'coord-bug11-a',
+    workspacePath: repoA,
+    repoRoot: repoA,
+    projectId: 'proj-bug11-a',
+    title: '[Coordinator] Alpha',
+  };
+  reg.coordinators[keyB] = {
+    key: keyB,
+    conversationId: 'coord-bug11-b',
+    workspacePath: repoB,
+    repoRoot: repoB,
+    projectId: 'proj-bug11-b',
+    title: '[Coordinator] Beta',
+  };
+  reg.threads['thr-083'] = {
+    threadId: 'thr-083',
+    conversationId: 'conv-bug11-083',
+    coordinatorId: 'coord-bug11-a',
+    workspaceKey: keyA,
+    repoRoot: repoA,
+    worktreePath: repoAWorktree,
+    branch: 'thread/thr-083-fix',
+    projectId: 'proj-bug11-a',
+    title: 'Thread 083',
+    archived: false,
+    runState: 'RUN_STATE_IDLE',
+    git: { exists: true, dirtyCount: 0, aheadCount: 1, merged: false, lastCommit: 'abc0831' },
+  };
+  reg.threads['thr-084'] = {
+    threadId: 'thr-084',
+    conversationId: 'conv-bug11-084',
+    coordinatorId: 'coord-bug11-a',
+    workspaceKey: keyA,
+    repoRoot: repoA,
+    worktreePath: '',
+    branch: '',
+    projectId: 'proj-bug11-a',
+    title: 'Thread 084',
+    archived: false,
+    runState: 'RUN_STATE_IDLE',
+  };
+  saveRegistry(reg);
+
+  const toEncodedFileUri = (fsPath) => {
+    const base = pathToFileURL(fsPath).href;
+    // Simulate Antigravity / VS Code encoded Windows drive colon (file:///c%3A/...)
+    return base.replace(/^file:\/\/\/([A-Za-z]):/, (_, d) => `file:///${d.toLowerCase()}%3A`);
+  };
+  const toLocalhostFileUri = (fsPath) =>
+    toEncodedFileUri(fsPath).replace(/^file:\/\/\//, 'file://localhost/');
+
+  const repoAEncodedUri = toEncodedFileUri(repoA);
+  const repoALocalhostUri = toLocalhostFileUri(repoA);
+  const repoAWorktreeUri = toEncodedFileUri(repoAWorktree);
+  const repoASubdirUri = toEncodedFileUri(repoASubdir);
+  const repoBEncodedUri = toEncodedFileUri(repoB);
+
+  // 1. Auto worktree_merge_ready decision via encoded file:/// URI -> send_coordinator succeeds
+  const autoSendRes = await executeDecisionAction({
+    decisionId: 'auto:worktree_merge_ready:thr-083',
+    optionId: 'merge',
+    action: 'send_coordinator',
+    threadId: 'thr-083',
+    autoKind: 'worktree_merge_ready',
+    lastCommit: 'abc0831',
+    label: '合入目标分支',
+    workspacePath: repoAEncodedUri,
+    coordinatorId: 'coord-bug11-a',
+  });
+  assert.equal(autoSendRes.ok, true);
+  assert.equal(autoSendRes.action, 'send_coordinator');
+  assert.equal(autoSendRes.coordinatorId, 'coord-bug11-a');
+
+  // 2. Auto worktree_merge_ready decision via file://localhost/ URI -> dismiss succeeds
+  const autoDismissRes = await executeDecisionAction({
+    decisionId: 'auto:worktree_merge_ready:thr-083',
+    action: 'dismiss',
+    threadId: 'thr-083',
+    autoKind: 'worktree_merge_ready',
+    lastCommit: 'abc0832',
+    workspacePath: repoALocalhostUri,
+  });
+  assert.equal(autoDismissRes.ok, true);
+  assert.equal(autoDismissRes.dismissed, true);
+
+  // 3. Explicit decision with threadId via Worktree URI -> custom_reply succeeds
+  const decCustom = addDecision({
+    workspacePath: repoAEncodedUri,
+    threadId: 'thr-083',
+    projectId: 'proj-bug11-a',
+    title: 'Worktree URI custom reply test',
+    options: [{ id: 'go', label: 'Proceed', action: 'send_coordinator', style: 'primary' }],
+  });
+  const customWtRes = await executeDecisionAction({
+    decisionId: decCustom.id,
+    action: 'custom_reply',
+    customMessage: '先跑测试再合入',
+    threadId: 'thr-083',
+    workspacePath: repoAWorktreeUri,
+  });
+  assert.equal(customWtRes.ok, true);
+  assert.equal(customWtRes.action, 'custom_reply');
+  assert.equal(customWtRes.decision.status, 'resolved');
+
+  // 4. Explicit decision with threadId via nested repo subdirectory URI & plain path -> dismiss + archive_thread succeed
+  const decSubdir = addDecision({
+    workspacePath: repoASubdir,
+    threadId: 'thr-084',
+    projectId: 'proj-bug11-a',
+    title: 'Subdir dismiss test',
+    options: [{ id: 'ok', label: 'OK', action: 'send_coordinator', style: 'primary' }],
+  });
+  const subdirDismissRes = await executeDecisionAction({
+    decisionId: decSubdir.id,
+    action: 'dismiss',
+    threadId: 'thr-084',
+    workspacePath: repoASubdirUri,
+  });
+  assert.equal(subdirDismissRes.ok, true);
+  assert.equal(subdirDismissRes.dismissed, true);
+
+  const decArch = addDecision({
+    workspacePath: repoA,
+    threadId: 'thr-084',
+    projectId: 'proj-bug11-a',
+    title: 'Subdir archive test',
+    options: [{ id: 'arch', label: 'Archive', action: 'archive_thread', style: 'primary' }],
+  });
+  const archRes = await executeDecisionAction({
+    decisionId: decArch.id,
+    optionId: 'arch',
+    action: 'archive_thread',
+    threadId: 'thr-084',
+    workspacePath: repoASubdir,
+  });
+  assert.equal(archRes.ok, true);
+  assert.equal(archRes.action, 'archive_thread');
+  assert.equal(loadRegistry().threads['thr-084'].archived, true);
+
+  // 5. Cross-project fail-closed: foreign project file:// URI is strictly rejected
+  const decProtected = addDecision({
+    workspacePath: repoA,
+    threadId: 'thr-083',
+    projectId: 'proj-bug11-a',
+    title: 'Protected cross-project decision',
+    options: [{ id: 'ok', label: 'OK', action: 'send_coordinator', style: 'primary' }],
+  });
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decProtected.id,
+        action: 'dismiss',
+        threadId: 'thr-083',
+        workspacePath: repoBEncodedUri,
+      }),
+    /Cross-project access denied/,
+  );
+
+  // 6. Cross-project fail-closed: matching workspacePath URI + explicit conflicting projectId is strictly rejected
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decProtected.id,
+        action: 'dismiss',
+        threadId: 'thr-083',
+        workspacePath: repoAEncodedUri,
+        projectId: 'proj-bug11-b',
+      }),
+    /Cross-project access denied/,
+  );
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decProtected.id,
+        action: 'custom_reply',
+        customMessage: 'spoofed project',
+        threadId: 'thr-083',
+        workspacePath: repoAEncodedUri,
+        projectId: 'proj-bug11-b',
+      }),
+    /Cross-project access denied/,
+  );
+  assert.equal(
+    listDecisions({ workspacePath: repoA }).some((d) => d.id === decProtected.id),
+    true,
+    'Blocked cross-project attempts must leave decision pending',
+  );
 });

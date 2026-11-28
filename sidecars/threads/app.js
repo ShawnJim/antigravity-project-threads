@@ -93,7 +93,7 @@
         if (w > 0) parts.push(`${w} waiting on you`);
         if (r > 0) parts.push(`${r} running`);
         if (i > 0) parts.push(`${i} ready`);
-        return parts.length ? parts.join(' · ') : 'No active threads yet';
+        return parts.length ? parts.join(' | ') : 'No active threads yet';
       },
       sortPriority: 'Status',
       sortRecent: 'Recent',
@@ -110,12 +110,12 @@
       tasksHdrHtml: (done, total) =>
         `<b>${done} of ${total}</b> ${total === 1 ? 'thread' : 'threads'} ready`,
       waitingChip: (n) => `${n} waiting`,
-      subheadWaiting: (n) => `WAITING ON YOU · ${n}`,
-      subheadCompleted: (n) => `COMPLETED · ${n}`,
-      subheadRecent: (n) => `RECENT · ${n}`,
-      subheadArchived: (n) => `ARCHIVED · ${n}`,
+      subheadWaiting: (n) => `WAITING ON YOU ${n}`,
+      subheadCompleted: (n) => `COMPLETED ${n}`,
+      subheadRecent: (n) => `RECENT ${n}`,
+      subheadArchived: (n) => `ARCHIVED ${n}`,
       subWaitingConfirm: 'Needs your confirmation',
-      subWaitingReview: 'Completed · ready for your review',
+      subWaitingReview: 'Completed | ready for your review',
       subWorkingDefault: 'Working on task…',
       subSyncedCoord: 'Synced to coordinator',
       subIdleReady: 'Ready',
@@ -163,13 +163,18 @@
       copiedCode: 'Copied',
       copyBtn: 'Copy',
       archivedToast: 'Archived',
-      archivedWtAndBranchToast: 'Archived · worktree & branch removed',
-      archivedWtToast: 'Archived · worktree removed',
-      archivedPrunedToast: 'Archived · stale worktree pruned',
-      archivedKeptDirtyToast: 'Archived · kept worktree (uncommitted changes)',
-      archivedKeptUnmergedToast: 'Archived · kept worktree (unmerged commits)',
-      archivedWtErrToast: (e) => `Archived · worktree kept (${e})`,
+      archivedWtAndBranchToast: 'Archived | worktree & branch removed',
+      archivedWtToast: 'Archived | worktree removed',
+      archivedPrunedToast: 'Archived | stale worktree pruned',
+      archivedKeptDirtyToast: 'Archived | kept worktree (uncommitted changes)',
+      archivedKeptUnmergedToast: 'Archived | kept worktree (unmerged commits)',
+      archivedWtErrToast: (e) => `Archived | worktree kept (${e})`,
       archiveErrToast: 'Archive failed',
+      toastCloseTip: 'Dismiss notification',
+      toastExpandTip: 'Click to view full message',
+      toastCollapseTip: 'Hide details',
+      toastCopyBtn: 'Copy',
+      toastCopiedBtn: 'Copied',
       cleanedWtAndBranchToast: 'Worktree & branch removed',
       cleanedWtToast: 'Worktree removed',
       cleanedPrunedToast: 'Stale worktree entry pruned',
@@ -188,7 +193,7 @@
       modalForceWtOpt:
         'Force remove dirty/unmerged worktree (discards uncommitted changes & unmerged branch)',
       modalStatusClean: 'Clean & merged',
-      modalStatusCherryPicked: 'Clean · cherry-picked',
+      modalStatusCherryPicked: 'Clean | cherry-picked',
       modalStatusMissing: 'Directory missing (will prune stale entry)',
       modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
         const parts = [];
@@ -257,7 +262,7 @@
       thinkingOnly: 'Thinking',
       thinkingLive: 'Thinking…',
       traceSummary: (total, parts) =>
-        `${total} step${total === 1 ? '' : 's'} (${parts.join(' · ')})`,
+        `${total} step${total === 1 ? '' : 's'} (${parts.join(' / ')})`,
       traceCat: {
         read: 'read',
         search: 'search',
@@ -596,7 +601,7 @@
         if (w > 0) parts.push(`${w} 个待你确认`);
         if (r > 0) parts.push(`${r} 个执行中`);
         if (i > 0) parts.push(`${i} 个已就绪`);
-        return parts.length ? parts.join(' · ') : '当前暂无活跃线程';
+        return parts.length ? parts.join(' | ') : '当前暂无活跃线程';
       },
       sortPriority: '按状态',
       sortRecent: '按最新',
@@ -612,12 +617,12 @@
       foldTip: '展开或收起步骤详情',
       tasksHdrHtml: (done, total) => `<b>${done} / ${total}</b> 个线程已就绪`,
       waitingChip: (n) => `${n} 待确认`,
-      subheadWaiting: (n) => `待你确认 · ${n}`,
-      subheadCompleted: (n) => `已完成 / 空闲 · ${n}`,
-      subheadRecent: (n) => `最近活跃 · ${n}`,
-      subheadArchived: (n) => `已归档 · ${n}`,
+      subheadWaiting: (n) => `待你确认 ${n}`,
+      subheadCompleted: (n) => `已完成 / 空闲 ${n}`,
+      subheadRecent: (n) => `最近活跃 ${n}`,
+      subheadArchived: (n) => `已归档 ${n}`,
       subWaitingConfirm: '等待你确认方案或结果',
-      subWaitingReview: '已完成 · 待你审阅',
+      subWaitingReview: '已完成 | 待你审阅',
       subWorkingDefault: '正在分析与处理…',
       subSyncedCoord: '已同步至总控',
       subIdleReady: '已就绪',
@@ -665,13 +670,18 @@
       copiedCode: '已复制',
       copyBtn: '复制',
       archivedToast: '已归档',
-      archivedWtAndBranchToast: '已归档 · 已清理 Worktree 及分支',
-      archivedWtToast: '已归档 · 已清理 Worktree',
-      archivedPrunedToast: '已归档 · 已清理失效 Worktree 记录',
-      archivedKeptDirtyToast: '已归档 · 保留 Worktree（存在未提交修改）',
-      archivedKeptUnmergedToast: '已归档 · 保留 Worktree（存在未合并提交）',
-      archivedWtErrToast: (e) => `已归档 · Worktree 未移除（${e}）`,
+      archivedWtAndBranchToast: '已归档 | 已清理 Worktree 及分支',
+      archivedWtToast: '已归档 | 已清理 Worktree',
+      archivedPrunedToast: '已归档 | 已清理失效 Worktree 记录',
+      archivedKeptDirtyToast: '已归档 | 保留 Worktree（存在未提交修改）',
+      archivedKeptUnmergedToast: '已归档 | 保留 Worktree（存在未合并提交）',
+      archivedWtErrToast: (e) => `已归档 | Worktree 未移除（${e}）`,
       archiveErrToast: '归档失败',
+      toastCloseTip: '关闭提示',
+      toastExpandTip: '点击查看完整信息',
+      toastCollapseTip: '收起详情',
+      toastCopyBtn: '复制',
+      toastCopiedBtn: '已复制',
       cleanedWtAndBranchToast: '已清理 Worktree 及分支',
       cleanedWtToast: '已清理 Worktree',
       cleanedPrunedToast: '已清理失效 Worktree 记录',
@@ -689,7 +699,7 @@
       modalDelBranchOpt: '同时删除关联的线程 Git 分支',
       modalForceWtOpt: '强制删除未提交或未合并的 Worktree（将丢弃未提交改动与未合并分支）',
       modalStatusClean: '干净且已合并',
-      modalStatusCherryPicked: '干净 · 已 cherry-pick 合入',
+      modalStatusCherryPicked: '干净 | 已 cherry-pick 合入',
       modalStatusMissing: '目录已不存在（将自动清理残留记录）',
       modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
         const parts = [];
@@ -753,7 +763,7 @@
       waking: '正在唤醒后台线程…',
       thinkingOnly: '思考过程',
       thinkingLive: '正在思考…',
-      traceSummary: (total, parts) => `已执行 ${total} 步（${parts.join(' · ')}）`,
+      traceSummary: (total, parts) => `已执行 ${total} 步（${parts.join(' / ')}）`,
       traceCat: {
         read: '读取',
         search: '搜索',
@@ -1095,7 +1105,7 @@
         if (w > 0) parts.push(`${w} 個待你確認`);
         if (r > 0) parts.push(`${r} 個執行中`);
         if (i > 0) parts.push(`${i} 個已就緒`);
-        return parts.length ? parts.join(' · ') : '目前尚無活躍執行緒';
+        return parts.length ? parts.join(' | ') : '目前尚無活躍執行緒';
       },
       sortPriority: '依狀態',
       sortRecent: '依最新',
@@ -1111,12 +1121,12 @@
       foldTip: '展開或收起步驟詳情',
       tasksHdrHtml: (done, total) => `<b>${done} / ${total}</b> 個執行緒已就緒`,
       waitingChip: (n) => `${n} 待確認`,
-      subheadWaiting: (n) => `待你確認 · ${n}`,
-      subheadCompleted: (n) => `已完成 / 閒置 · ${n}`,
-      subheadRecent: (n) => `最近活躍 · ${n}`,
-      subheadArchived: (n) => `已封存 · ${n}`,
+      subheadWaiting: (n) => `待你確認 ${n}`,
+      subheadCompleted: (n) => `已完成 / 閒置 ${n}`,
+      subheadRecent: (n) => `最近活躍 ${n}`,
+      subheadArchived: (n) => `已封存 ${n}`,
       subWaitingConfirm: '等待你確認方案或結果',
-      subWaitingReview: '已完成 · 待你審閱',
+      subWaitingReview: '已完成 | 待你審閱',
       subWorkingDefault: '正在分析與處理…',
       subSyncedCoord: '已同步至總控',
       subIdleReady: '已就緒',
@@ -1164,13 +1174,18 @@
       copiedCode: '已複製',
       copyBtn: '複製',
       archivedToast: '已封存',
-      archivedWtAndBranchToast: '已封存 · 已清理 Worktree 及分支',
-      archivedWtToast: '已封存 · 已清理 Worktree',
-      archivedPrunedToast: '已封存 · 已清理失效 Worktree 記錄',
-      archivedKeptDirtyToast: '已封存 · 保留 Worktree（存在未提交修改）',
-      archivedKeptUnmergedToast: '已封存 · 保留 Worktree（存在未合併提交）',
-      archivedWtErrToast: (e) => `已封存 · Worktree 未移除（${e}）`,
+      archivedWtAndBranchToast: '已封存 | 已清理 Worktree 及分支',
+      archivedWtToast: '已封存 | 已清理 Worktree',
+      archivedPrunedToast: '已封存 | 已清理失效 Worktree 記錄',
+      archivedKeptDirtyToast: '已封存 | 保留 Worktree（存在未提交修改）',
+      archivedKeptUnmergedToast: '已封存 | 保留 Worktree（存在未合併提交）',
+      archivedWtErrToast: (e) => `已封存 | Worktree 未移除（${e}）`,
       archiveErrToast: '封存失敗',
+      toastCloseTip: '關閉提示',
+      toastExpandTip: '點擊查看完整訊息',
+      toastCollapseTip: '收起詳情',
+      toastCopyBtn: '複製',
+      toastCopiedBtn: '已複製',
       cleanedWtAndBranchToast: '已清理 Worktree 及分支',
       cleanedWtToast: '已清理 Worktree',
       cleanedPrunedToast: '已清理失效 Worktree 記錄',
@@ -1188,7 +1203,7 @@
       modalDelBranchOpt: '同時刪除關聯的執行緒 Git 分支',
       modalForceWtOpt: '強制刪除未提交或未合併的 Worktree（將捨棄未提交改動與未合併分支）',
       modalStatusClean: '乾淨且已合併',
-      modalStatusCherryPicked: '乾淨 · 已 cherry-pick 合併',
+      modalStatusCherryPicked: '乾淨 | 已 cherry-pick 合併',
       modalStatusMissing: '目錄已不存在（將自動清理殘留記錄）',
       modalWarnDirtyUnmerged: (dirtyCount, aheadCount) => {
         const parts = [];
@@ -1252,7 +1267,7 @@
       waking: '正在喚醒背景執行緒…',
       thinkingOnly: '思考過程',
       thinkingLive: '正在思考…',
-      traceSummary: (total, parts) => `已執行 ${total} 步（${parts.join(' · ')}）`,
+      traceSummary: (total, parts) => `已執行 ${total} 步（${parts.join(' / ')}）`,
       traceCat: {
         read: '讀取',
         search: '搜尋',
@@ -1575,6 +1590,8 @@
   let manualPopoutConvId = '';
   let hostProjectId = '';
   let activeScopeKey = null;
+  let scopeEpoch = 0;
+  let lastSnapScopeEpoch = -1;
   let lastHasGitRepo = null;
   let isLiveOk = true;
   let currentTab = 'threads';
@@ -1604,7 +1621,22 @@
   const expandedUserMsgIds = new Set();
   let briefExpanded = false;
   let isImeComposing = false;
-  let toastTimer = null;
+  const boardToastState = {
+    text: '',
+    tone: 'ok',
+    timer: null,
+    expiresAt: 0,
+    remainingMs: 0,
+    hoverPaused: false,
+    detailOpen: false,
+  };
+  const settingsToastState = {
+    text: '',
+    tone: 'ok',
+    timer: null,
+    expiresAt: 0,
+  };
+  let toastCopyResetTimer = null;
   let activeModalCtx = null;
   let selectableModels = [];
   let selectableModelsLoadedAt = 0;
@@ -1701,6 +1733,10 @@
   const elDrawer = document.getElementById('dispatch-drawer');
   const elNewBtn = document.getElementById('btn-new');
   const elToast = document.getElementById('toast');
+  const elToastDetail = document.getElementById('toast-detail');
+  const elToastDetailMsg = document.getElementById('toast-detail-msg');
+  const elToastDetailCopy = document.getElementById('toast-detail-copy');
+  const elToastDetailClose = document.getElementById('toast-detail-close');
   const elGoalCard = document.getElementById('goal-card');
   const elDecisionsPanel = document.getElementById('decisions-panel');
   const elBtnOpenCoord = document.getElementById('btn-open-coord');
@@ -1802,6 +1838,7 @@
     document.hidden || window.innerWidth === 0 || window.innerHeight === 0;
 
   async function syncHostConversationScope() {
+    const startEpoch = scopeEpoch;
     const convId = getHostConvId();
     const boundCoordId = String(lastSnap?.coordinator?.conversationId || '').trim();
     if (convId && boundCoordId && convId === boundCoordId && manualPopoutConvId) {
@@ -1815,6 +1852,9 @@
     manualPopoutConvId = '';
     hostProjectId = '';
     lastBoardKey = '';
+    if (!String(workspace || '').trim()) {
+      lastSnapScopeEpoch = -1;
+    }
     if (convId && window.sidecar?.agent?.getConversationMetadata) {
       let metaTimer = null;
       try {
@@ -1831,7 +1871,7 @@
           meta?.metadata ||
           meta;
         const rawPid = nestedMeta?.projectId || nestedMeta?.project_id || '';
-        if (getHostConvId() === convId) {
+        if (getHostConvId() === convId && scopeEpoch === startEpoch) {
           hostProjectId =
             rawPid && rawPid !== 'outside-of-project' ? String(rawPid).trim() : '';
         }
@@ -1844,13 +1884,123 @@
     return true;
   }
 
+  function getEffectiveScopeProjectId() {
+    const hasWs = Boolean(String(workspace || '').trim());
+    if (hasWs) {
+      if (lastSnap && lastSnapScopeEpoch === scopeEpoch && lastSnap.scopeKey) {
+        const boardPid = String(
+          lastSnap.coordinator?.projectId || lastSnap.projectId || '',
+        ).trim();
+        if (boardPid && boardPid !== 'outside-of-project') {
+          return boardPid;
+        }
+      }
+      return '';
+    }
+    return hostProjectId && hostProjectId !== 'outside-of-project' ? hostProjectId : '';
+  }
+
   function buildScopePayload(extra = {}) {
-    return {
+    const hasWs = Boolean(String(workspace || '').trim());
+    const hostConvId = getHostConvId();
+    const boardSnapValid = Boolean(
+      lastSnap && lastSnapScopeEpoch === scopeEpoch && lastSnap.scopeKey,
+    );
+    const boardProjectId = boardSnapValid
+      ? String(lastSnap.coordinator?.projectId || lastSnap.projectId || '').trim()
+      : '';
+    let effectiveProjectId = getEffectiveScopeProjectId();
+    const explicitCoordId = String(extra?.coordinatorId || '').trim();
+    let effectiveConvId = hostConvId;
+    if (!hasWs && explicitCoordId && hostConvId && hostConvId !== explicitCoordId) {
+      const belongsToBoard = Boolean(
+        boardSnapValid &&
+          Array.isArray(lastSnap.threads) &&
+          lastSnap.threads.some((th) => th && th.conversationId === hostConvId),
+      );
+      const sameBoardProject = Boolean(
+        boardProjectId &&
+          boardProjectId !== 'outside-of-project' &&
+          hostProjectId &&
+          boardProjectId === hostProjectId,
+      );
+      if (!belongsToBoard && !sameBoardProject) {
+        effectiveConvId = '';
+        if (boardProjectId && boardProjectId !== 'outside-of-project') {
+          effectiveProjectId = boardProjectId;
+        }
+      }
+    }
+    const base = {
       workspace,
-      conversationId: getHostConvId(),
-      projectId: hostProjectId,
+      conversationId: effectiveConvId,
+      projectId: effectiveProjectId,
+    };
+    if (boardSnapValid && lastSnap.scopeKey && !('workspaceKey' in extra)) {
+      base.workspaceKey = lastSnap.scopeKey;
+    }
+    return {
+      ...base,
       ...extra,
     };
+  }
+
+  function resetScopeOnWorkspaceChange(nextWs) {
+    const cleanNext = String(nextWs || '');
+    if (cleanNext === workspace) return false;
+    workspace = cleanNext;
+    scopeEpoch += 1;
+    lastSnapScopeEpoch = -1;
+    hostProjectId = '';
+    manualPopoutConvId = '';
+    lastBoardKey = '';
+    lastHasGitRepo = null;
+    threadOpenState.clear();
+    expandedCustomDecisionIds.clear();
+    decisionCustomDrafts.clear();
+    decisionImeComposingIds.clear();
+    deferredDecisionsList = null;
+    lastDecisionsRenderKey = '';
+    if (openThreadId) {
+      closeThreadDrawer({ refresh: false });
+    }
+    if (activeModalCtx && activeModalCtx.mode !== 'plugin_update') {
+      closePtModal(true);
+    }
+    clearToast();
+    return true;
+  }
+
+  function resetScopeOnConversationChange(nextConvId) {
+    const cleanNext = String(nextConvId || '').trim();
+    const hasWs = Boolean(String(workspace || '').trim());
+    const prevHostId = lastHostConvId || getHostConvId();
+    if (cleanNext) {
+      eventHostConvId = cleanNext;
+      lastSdkConvId = readRawSidecarConvId() || lastSdkConvId;
+    }
+    manualPopoutConvId = '';
+    lastBoardKey = '';
+    if (!hasWs && cleanNext && cleanNext !== prevHostId) {
+      scopeEpoch += 1;
+      lastSnapScopeEpoch = -1;
+      hostProjectId = '';
+      const belongsToCurrentBoard = Boolean(
+        lastSnap &&
+          (lastSnap.coordinator?.conversationId === cleanNext ||
+            (Array.isArray(lastSnap.threads) &&
+              lastSnap.threads.some((th) => th && th.conversationId === cleanNext))),
+      );
+      if (!belongsToCurrentBoard) {
+        if (openThreadId) {
+          closeThreadDrawer({ refresh: false });
+        }
+        if (activeModalCtx && activeModalCtx.mode !== 'plugin_update') {
+          closePtModal(true);
+        }
+        clearToast({ target: 'board', onlyTone: 'err' });
+      }
+    }
   }
 
   // ---------- Host Theme Sync (Dark / Light, matching Swarm probe) ----------
@@ -1881,12 +2031,8 @@
       const nextId = String(
         e.data.conversationId || e.data.payload?.conversationId || readRawSidecarConvId() || '',
       ).trim();
-      if (nextId && nextId.length <= 200 && !/[\r\n\t\s]/.test(nextId)) {
-        eventHostConvId = nextId;
-        lastSdkConvId = readRawSidecarConvId() || lastSdkConvId;
-      }
-      manualPopoutConvId = '';
-      lastBoardKey = '';
+      const validId = nextId && nextId.length <= 200 && !/[\r\n\t\s]/.test(nextId) ? nextId : '';
+      resetScopeOnConversationChange(validId);
       refreshBoard(true);
     }
   });
@@ -2187,28 +2333,221 @@
       if (openThreadId && Array.isArray(lastRenderedItems)) {
         renderThreadItems(lastRenderedItems, false);
       }
+      if (boardToastState.text) renderBoardToast();
     }
     return changed;
   }
 
-  function flashToast(msg, tone = 'ok', durationMs = 2400) {
-    if (toastTimer) clearTimeout(toastTimer);
-    const text = String(msg || '');
-    const cls = tone === 'err' ? 'toast err' : tone === 'warn' ? 'toast warn' : 'toast';
-    for (const target of [elToast, elSettingsToast]) {
-      if (!target) continue;
-      target.className = cls;
-      target.textContent = text;
-      target.title = text;
-    }
-    toastTimer = setTimeout(() => {
-      for (const target of [elToast, elSettingsToast]) {
-        if (!target) continue;
-        target.textContent = '';
-        target.title = '';
-        target.className = 'toast';
+  function renderBoardToast() {
+    if (!elToast) return;
+    const text = boardToastState.text;
+    const tone = boardToastState.tone;
+    if (!text) {
+      elToast.className = 'toast';
+      elToast.textContent = '';
+      elToast.title = '';
+      elToast.removeAttribute?.('data-tone');
+      elToast.removeAttribute?.('aria-expanded');
+      if (elToastDetail) {
+        elToastDetail.hidden = true;
+        elToastDetail.className = 'toast-detail';
       }
-    }, durationMs);
+      if (elToastDetailMsg) elToastDetailMsg.textContent = '';
+      return;
+    }
+    const t = L();
+    const interactive = tone === 'err' || tone === 'warn' || text.length > 28;
+    const cls = tone === 'err' ? 'toast err' : tone === 'warn' ? 'toast warn' : 'toast';
+    elToast.className = interactive ? `${cls} is-interactive` : cls;
+    elToast.setAttribute?.('data-tone', tone);
+    elToast.title = interactive ? `${text}\n(${t.toastExpandTip})` : text;
+    if (interactive) {
+      elToast.setAttribute?.('aria-expanded', boardToastState.detailOpen ? 'true' : 'false');
+      elToast.innerHTML =
+        `<button type="button" class="toast-msg-btn" data-toast-action="toggle" aria-expanded="${boardToastState.detailOpen ? 'true' : 'false'}" title="${esc(t.toastExpandTip)}">${esc(text)}</button>` +
+        `<button type="button" class="toast-close-btn" data-toast-action="close" aria-label="${esc(t.toastCloseTip)}" title="${esc(t.toastCloseTip)}">×</button>`;
+    } else {
+      elToast.removeAttribute?.('aria-expanded');
+      elToast.textContent = text;
+    }
+    if (elToastDetail) {
+      elToastDetail.hidden = !boardToastState.detailOpen;
+      elToastDetail.className =
+        tone === 'err' ? 'toast-detail err' : tone === 'warn' ? 'toast-detail warn' : 'toast-detail';
+    }
+    if (elToastDetailMsg) elToastDetailMsg.textContent = text;
+    if (elToastDetailCopy && !toastCopyResetTimer) {
+      elToastDetailCopy.textContent = t.toastCopyBtn;
+    }
+    if (elToastDetailClose) {
+      elToastDetailClose.title = t.toastCloseTip;
+      elToastDetailClose.setAttribute?.('aria-label', t.toastCloseTip);
+    }
+  }
+
+  function scheduleBoardToastTimer(durationMs) {
+    if (boardToastState.timer) {
+      clearTimeout(boardToastState.timer);
+      boardToastState.timer = null;
+    }
+    if (!boardToastState.text || boardToastState.hoverPaused || boardToastState.detailOpen) {
+      return;
+    }
+    const ms = Math.max(800, Number(durationMs) || 2400);
+    boardToastState.remainingMs = ms;
+    boardToastState.expiresAt = Date.now() + ms;
+    boardToastState.timer = setTimeout(() => {
+      boardToastState.timer = null;
+      if (boardToastState.hoverPaused || boardToastState.detailOpen) return;
+      clearToast({ target: 'board' });
+    }, ms);
+  }
+
+  function pauseBoardToastTimer() {
+    if (!boardToastState.text || boardToastState.hoverPaused) return;
+    boardToastState.hoverPaused = true;
+    if (boardToastState.expiresAt > 0) {
+      boardToastState.remainingMs = Math.max(800, boardToastState.expiresAt - Date.now());
+    }
+    if (boardToastState.timer) {
+      clearTimeout(boardToastState.timer);
+      boardToastState.timer = null;
+    }
+  }
+
+  function resumeBoardToastTimer() {
+    if (!boardToastState.hoverPaused) return;
+    boardToastState.hoverPaused = false;
+    if (!boardToastState.text || boardToastState.detailOpen) return;
+    scheduleBoardToastTimer(Math.max(800, boardToastState.remainingMs || 2400));
+  }
+
+  function toggleToastDetail(forceOpen = null) {
+    if (!boardToastState.text) return;
+    const nextOpen =
+      typeof forceOpen === 'boolean' ? forceOpen : !boardToastState.detailOpen;
+    boardToastState.detailOpen = nextOpen;
+    if (nextOpen) {
+      if (boardToastState.expiresAt > 0) {
+        boardToastState.remainingMs = Math.max(1200, boardToastState.expiresAt - Date.now());
+      }
+      if (boardToastState.timer) {
+        clearTimeout(boardToastState.timer);
+        boardToastState.timer = null;
+      }
+    } else if (!boardToastState.hoverPaused) {
+      scheduleBoardToastTimer(Math.max(1200, boardToastState.remainingMs || 2400));
+    }
+    renderBoardToast();
+  }
+
+  function clearToast({ onlyTone = '', target = 'all' } = {}) {
+    const normOnlyTone = String(onlyTone || '').trim();
+    const clearTargets =
+      target === 'board'
+        ? [elToast]
+        : target === 'settings'
+          ? [elSettingsToast]
+          : [elToast, elSettingsToast];
+
+    if (clearTargets.includes(elToast)) {
+      if (!normOnlyTone || boardToastState.tone === normOnlyTone) {
+        if (boardToastState.timer) {
+          clearTimeout(boardToastState.timer);
+          boardToastState.timer = null;
+        }
+        if (toastCopyResetTimer) {
+          clearTimeout(toastCopyResetTimer);
+          toastCopyResetTimer = null;
+        }
+        boardToastState.text = '';
+        boardToastState.tone = 'ok';
+        boardToastState.expiresAt = 0;
+        boardToastState.remainingMs = 0;
+        boardToastState.hoverPaused = false;
+        boardToastState.detailOpen = false;
+        renderBoardToast();
+      }
+    }
+
+    if (clearTargets.includes(elSettingsToast)) {
+      if (!normOnlyTone || settingsToastState.tone === normOnlyTone) {
+        if (settingsToastState.timer) {
+          clearTimeout(settingsToastState.timer);
+          settingsToastState.timer = null;
+        }
+        settingsToastState.text = '';
+        settingsToastState.tone = 'ok';
+        settingsToastState.expiresAt = 0;
+        if (elSettingsToast) {
+          elSettingsToast.textContent = '';
+          elSettingsToast.title = '';
+          elSettingsToast.className = 'toast';
+        }
+      }
+    }
+  }
+
+  function clearExpiredToastOnRecovery({ prevLiveOk = true } = {}) {
+    if (!boardToastState.text || boardToastState.hoverPaused || boardToastState.detailOpen) {
+      return false;
+    }
+    if (!prevLiveOk && boardToastState.tone === 'err') {
+      clearToast({ target: 'board', onlyTone: 'err' });
+      return true;
+    }
+    if (boardToastState.expiresAt > 0 && Date.now() >= boardToastState.expiresAt) {
+      clearToast({ target: 'board' });
+      return true;
+    }
+    return false;
+  }
+
+  function flashToast(msg, tone = 'ok', durationMs = 2400) {
+    const text = String(msg || '').trim();
+    const normTone = tone === 'err' ? 'err' : tone === 'warn' ? 'warn' : 'ok';
+    const effectiveDuration = Math.max(800, Number(durationMs) || 2400);
+    const useSettingsTarget = Boolean(settingsScreenOpen && elSettingsToast);
+    if (!text) {
+      clearToast({ target: useSettingsTarget ? 'settings' : 'board' });
+      return;
+    }
+
+    if (useSettingsTarget) {
+      if (settingsToastState.timer) {
+        clearTimeout(settingsToastState.timer);
+        settingsToastState.timer = null;
+      }
+      const cls = normTone === 'err' ? 'toast err' : normTone === 'warn' ? 'toast warn' : 'toast';
+      settingsToastState.text = text;
+      settingsToastState.tone = normTone;
+      settingsToastState.expiresAt = Date.now() + effectiveDuration;
+      elSettingsToast.className = cls;
+      elSettingsToast.textContent = text;
+      elSettingsToast.title = text;
+      settingsToastState.timer = setTimeout(() => {
+        settingsToastState.timer = null;
+        clearToast({ target: 'settings' });
+      }, effectiveDuration);
+      return;
+    }
+
+    if (boardToastState.timer) {
+      clearTimeout(boardToastState.timer);
+      boardToastState.timer = null;
+    }
+    if (toastCopyResetTimer) {
+      clearTimeout(toastCopyResetTimer);
+      toastCopyResetTimer = null;
+    }
+    boardToastState.text = text;
+    boardToastState.tone = normTone;
+    boardToastState.hoverPaused = false;
+    boardToastState.detailOpen = false;
+    boardToastState.remainingMs = effectiveDuration;
+    boardToastState.expiresAt = Date.now() + effectiveDuration;
+    renderBoardToast();
+    scheduleBoardToastTimer(effectiveDuration);
   }
 
   function showArchiveResultToast(res) {
@@ -3990,25 +4329,25 @@
       typeof th.git?.merged === 'boolean' ? th.git.merged : (Number(th.git?.aheadCount) || 0) === 0;
     const unmergedCommits = isMerged ? 0 : Number(th.git?.aheadCount) || 0;
     if (unmergedCommits > 0 && th.git?.dirtyCount > 0) {
-      return `${t.subCommits(unmergedCommits)} · ${t.subDirty(th.git.dirtyCount)}`;
+      return `${t.subCommits(unmergedCommits)} | ${t.subDirty(th.git.dirtyCount)}`;
     }
     if (unmergedCommits > 0) {
       return th.branch
-        ? `${t.subCommits(unmergedCommits)} · ${th.branch}`
+        ? `${t.subCommits(unmergedCommits)} | ${th.branch}`
         : t.subCommits(unmergedCommits);
     }
     if (isCherryPicked && th.git?.dirtyCount > 0) {
-      return `${t.wtCherryPicked} · ${t.subDirty(th.git.dirtyCount)}`;
+      return `${t.wtCherryPicked} | ${t.subDirty(th.git.dirtyCount)}`;
     }
     if (th.git?.dirtyCount > 0) {
       return th.branch
-        ? `${t.subDirty(th.git.dirtyCount)} · ${th.branch}`
+        ? `${t.subDirty(th.git.dirtyCount)} | ${th.branch}`
         : t.subDirty(th.git.dirtyCount);
     }
     if (isCherryPicked) {
-      return th.branch ? `${t.wtCherryPicked} · ${th.branch}` : t.wtCherryPicked;
+      return th.branch ? `${t.wtCherryPicked} | ${th.branch}` : t.wtCherryPicked;
     }
-    if (synced && th.branch) return `${th.branch} · ${t.subSyncedCoord}`;
+    if (synced && th.branch) return `${th.branch} | ${t.subSyncedCoord}`;
     if (synced) return t.subSyncedCoord;
     if (th.branch) return th.branch;
     return t.subIdleReady;
@@ -6313,6 +6652,7 @@
   function openSettingsScreen() {
     if (!elSettingsScreen) return;
     closeModelMenu({ restoreHeader: false });
+    clearToast({ target: 'board' });
     boardScrollTop = elBoardBody.scrollTop;
     settingsScreenOpen = true;
     settingsDirtyByUser = false;
@@ -6342,6 +6682,7 @@
 
   function closeSettingsScreen() {
     if (!elSettingsScreen) return;
+    clearToast({ target: 'settings' });
     settingsScreenOpen = false;
     elSettingsScreen.hidden = true;
     elBoardScreen.hidden = false;
@@ -7411,6 +7752,7 @@
   async function openThreadDrawer(threadId) {
     if (!threadId) return;
     closeModelMenu({ restoreHeader: false });
+    clearToast({ target: 'board', onlyTone: 'err' });
     settingsScreenOpen = false;
     if (elSettingsScreen) elSettingsScreen.hidden = true;
     boardScrollTop = elBoardBody.scrollTop;
@@ -7456,8 +7798,9 @@
     elChatInput.focus();
   }
 
-  function closeThreadDrawer() {
+  function closeThreadDrawer({ refresh = true } = {}) {
     closeModelMenu({ restoreHeader: false });
+    clearToast({ target: 'board', onlyTone: 'err' });
     openThreadId = '';
     openThreadObj = null;
     lastThreadStamp = '';
@@ -7469,15 +7812,19 @@
     elThreadScreen.hidden = true;
     elBoardScreen.hidden = false;
     elBoardBody.scrollTop = boardScrollTop;
-    refreshBoard(true);
+    if (refresh !== false) {
+      refreshBoard(true);
+    }
   }
 
   async function refreshOpenThread(forceBottom = false, markRead = false) {
     if (!openThreadId || (isPanelHidden() && !forceBottom)) return;
+    const reqEpoch = scopeEpoch;
+    const reqThreadId = openThreadId;
     try {
       const qs = new URLSearchParams(
         buildScopePayload({
-          threadId: openThreadId,
+          threadId: reqThreadId,
           stamp: forceBottom ? '' : lastThreadStamp,
           markRead: markRead ? '1' : '0',
         }),
@@ -7488,6 +7835,7 @@
         { method: 'GET' },
         { timeoutMs: API_READ_TIMEOUT_MS },
       );
+      if (reqEpoch !== scopeEpoch || openThreadId !== reqThreadId) return;
       if (data.locale) applyLocale(data.locale);
       if (!data.ok) {
         elChatStream.innerHTML = `<div class="msg-err">${esc(data.error || 'Error')}</div>`;
@@ -7971,8 +8319,10 @@
 
   async function refreshBoard(force = false) {
     if (isPanelHidden() && !force) return;
+    const reqEpoch = scopeEpoch;
     try {
       const convChanged = await syncHostConversationScope();
+      if (reqEpoch !== scopeEpoch) return;
       const qs = new URLSearchParams(
         buildScopePayload({
           includeArchived: '1',
@@ -7985,15 +8335,23 @@
         { method: 'GET' },
         { timeoutMs: API_READ_TIMEOUT_MS },
       );
+      if (reqEpoch !== scopeEpoch) return;
       if (data.locale) applyLocale(data.locale);
       inspectServerInfo(data, { fromState: true });
       if (data.error) {
         setLiveStatus(false);
         return;
       }
+      const prevLiveOk = isLiveOk;
       setLiveStatus(true);
+      clearExpiredToastOnRecovery({ prevLiveOk });
 
-      if (data.projectId && data.projectId !== 'outside-of-project' && !hostProjectId) {
+      if (
+        !String(workspace || '').trim() &&
+        data.projectId &&
+        data.projectId !== 'outside-of-project' &&
+        !hostProjectId
+      ) {
         hostProjectId = String(data.projectId).trim();
       }
 
@@ -8003,6 +8361,8 @@
       const nextCoordId = String(data.coordinator?.conversationId || '');
       const coordChanged = Boolean(lastSnap && nextCoordId !== prevCoordId);
       activeScopeKey = nextScopeKey;
+      lastSnap = data;
+      lastSnapScopeEpoch = reqEpoch;
 
       const nextCoordTurnStamp = String(
         data.coordinatorTurnStamp ||
@@ -8036,6 +8396,12 @@
           memoryImeComposing = false;
           setMemoryDirty(false);
           lastMemoryTopicsKey = '';
+          if (activeModalCtx && activeModalCtx.mode !== 'plugin_update') {
+            closePtModal(true);
+          }
+          clearToast({ target: 'board' });
+        } else if (convChanged) {
+          clearToast({ target: 'board', onlyTone: 'err' });
         }
         if (scopeChanged || convChanged) {
           lastHasGitRepo = null;
@@ -8447,6 +8813,43 @@
     closeModelMenu();
   });
 
+  if (elToast) {
+    elToast.addEventListener('click', (e) => {
+      if (e.target.closest?.('[data-toast-action="close"]')) {
+        e.stopPropagation();
+        clearToast({ target: 'board' });
+        return;
+      }
+      if (e.target.closest?.('[data-toast-action="toggle"]')) {
+        e.stopPropagation();
+        toggleToastDetail();
+      }
+    });
+    elToast.addEventListener('mouseenter', pauseBoardToastTimer);
+    elToast.addEventListener('mouseleave', resumeBoardToastTimer);
+  }
+  if (elToastDetail) {
+    elToastDetail.addEventListener('mouseenter', pauseBoardToastTimer);
+    elToastDetail.addEventListener('mouseleave', resumeBoardToastTimer);
+  }
+  if (elToastDetailClose) {
+    elToastDetailClose.addEventListener('click', () => {
+      clearToast({ target: 'board' });
+    });
+  }
+  if (elToastDetailCopy) {
+    elToastDetailCopy.addEventListener('click', async () => {
+      if (!boardToastState.text) return;
+      await copyText(boardToastState.text, '');
+      elToastDetailCopy.textContent = L().toastCopiedBtn;
+      if (toastCopyResetTimer) clearTimeout(toastCopyResetTimer);
+      toastCopyResetTimer = setTimeout(() => {
+        toastCopyResetTimer = null;
+        if (elToastDetailCopy) elToastDetailCopy.textContent = L().toastCopyBtn;
+      }, 1400);
+    });
+  }
+
   elModalCancel.addEventListener('click', () => closePtModal());
   elModalClose.addEventListener('click', () => closePtModal());
   elModalBackdrop.addEventListener('click', (e) => {
@@ -8467,6 +8870,10 @@
       }
       if (activeModalCtx && !activeModalCtx.busy) {
         closePtModal();
+        return;
+      }
+      if (boardToastState.detailOpen) {
+        toggleToastDetail(false);
         return;
       }
       if (settingsScreenOpen) {
@@ -10111,11 +10518,7 @@
         workspace = uris[0] || '';
         window.sidecar.onWorkspaceChange((next) => {
           const nextWs = (next && next[0]) || '';
-          if (nextWs !== workspace) {
-            workspace = nextWs;
-            lastBoardKey = '';
-            lastHasGitRepo = null;
-            threadOpenState.clear();
+          if (resetScopeOnWorkspaceChange(nextWs)) {
             if (currentTab === 'library') loadMemory();
             refreshBoard(true);
           }
@@ -10131,12 +10534,7 @@
             typeof next === 'string'
               ? next.trim()
               : String(next?.conversationId || next?.id || readRawSidecarConvId() || '').trim();
-          if (nextId) {
-            eventHostConvId = nextId;
-            lastSdkConvId = readRawSidecarConvId() || lastSdkConvId;
-          }
-          manualPopoutConvId = '';
-          lastBoardKey = '';
+          resetScopeOnConversationChange(nextId);
           if (currentTab === 'library') loadMemory();
           refreshBoard(true);
         });
