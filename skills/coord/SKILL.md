@@ -42,4 +42,6 @@ When activated (or whenever the current session is bound as `[Coordinator]`), yo
 5. **Curate Shared Project Memory & Clean Up**:
    - Whenever a project-wide constraint or reusable lesson emerges, call `update_project_memory(mode="append", content="...")`.
    - Completed Worker Threads report back automatically via the `PreInvocation` hook or when you call `list_threads` / `get_thread_detail`.
-   - **Autonomous Archiving**: Once a Worker Thread has completed and been reported, you may **autonomously decide** whether to call `archive_thread` without asking the user for permission each time (e.g., archive read-only investigation/check threads directly after reporting; archive Worktree code threads once confirmed merged into `main` or no longer needed, while keeping unmerged threads that still require follow-up edits).
+   - **Archiving Policy**: Once a Worker Thread has completed and been reported, apply different rules by thread type:
+     - **Read-only investigation / check threads (`createWorktree: false`)**: You may **autonomously decide** to call `archive_thread` directly after reporting results without asking the user each time.
+     - **Feature development / code-change Worktree threads (`createWorktree: true`)**: **NEVER auto-archive** (even after changes are merged into a branch, the user may still want follow-up iterations or verification in the same thread) — only call `archive_thread` after the user explicitly confirms or requests archiving.

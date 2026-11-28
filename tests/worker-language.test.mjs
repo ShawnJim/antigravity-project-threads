@@ -52,18 +52,22 @@ function writeTranscript(appDataDir, convId, steps) {
   return txPath;
 }
 
-test('hook-handler v10 directive, SKILL.md, rules/AGENTS.md, and MCP schema enforce user-language matching and autonomous archiving', (t) => {
+test('hook-handler v11 directive, SKILL.md, rules/AGENTS.md, and MCP schema enforce user-language matching and mode-based archiving policy', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
   const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
 
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*10\s*;/);
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*11\s*;/);
   assert.match(skillMd, /Follow the User's Language/i);
   assert.match(skillMd, /title.*taskPrompt.*active conversation language/i);
-  assert.match(skillMd, /autonomously decide.*archive_thread.*without asking the user/i);
+  assert.match(skillMd, /Read-only.*`createWorktree:\s*false`.*autonomously decide.*`archive_thread`.*without asking the user/i);
+  assert.match(skillMd, /Worktree threads.*`createWorktree:\s*true`.*NEVER auto-archive.*user explicitly confirms/i);
+  assert.doesNotMatch(skillMd, /archive Worktree code threads once confirmed merged/i);
   assert.match(rulesMd, /title.*taskPrompt.*active conversation language/i);
-  assert.match(rulesMd, /autonomously decide.*archive_thread.*without asking the user/i);
+  assert.match(rulesMd, /read-only.*`createWorktree:\s*false`.*autonomously decide.*`archive_thread`.*without asking the user/i);
+  assert.match(rulesMd, /Worktree threads.*`createWorktree:\s*true`.*NEVER auto-archive.*user explicitly confirms/i);
+  assert.doesNotMatch(rulesMd, /archive Worktree code threads once confirmed merged/i);
   assert.match(rulesMd, /### Thread Summary.*### 线程总结/);
   assert.match(serverMjs, /user\\'s active language|user's active language/i);
 
@@ -76,7 +80,7 @@ test('hook-handler v10 directive, SKILL.md, rules/AGENTS.md, and MCP schema enfo
     workspacePath: ws,
     repoRoot: ws,
     title: '[Coordinator] LangTest',
-    directiveVersion: 9,
+    directiveVersion: 10,
   };
   saveRegistry(reg);
 
@@ -106,9 +110,10 @@ test('hook-handler v10 directive, SKILL.md, rules/AGENTS.md, and MCP schema enfo
   assert.match(directive, /Match the user's language/i);
   assert.match(directive, /`title` and `taskPrompt`/);
   assert.match(directive, /same language/i);
-  assert.match(directive, /autonomously decide.*`archive_thread`.*without asking the user/i);
-  assert.match(directive, /read-only.*merged into `main`/i);
-  assert.equal(loadRegistry().coordinators['__lang_hook__'].directiveVersion, 10);
+  assert.match(directive, /Read-only.*`createWorktree: false`.*autonomously decide.*`archive_thread`.*without asking the user/i);
+  assert.match(directive, /Worktree threads.*`createWorktree: true`.*NEVER auto-archive.*user explicitly confirms/i);
+  assert.doesNotMatch(directive, /archive Worktree code threads once confirmed merged/i);
+  assert.equal(loadRegistry().coordinators['__lang_hook__'].directiveVersion, 11);
 });
 
 test('detectPromptLanguage and buildWorkerPrompt localize Chinese tasks and preserve English templates', () => {
