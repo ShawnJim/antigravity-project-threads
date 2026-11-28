@@ -97,7 +97,8 @@ function createFakeAgentApi(dir, { exitCode = 0, stderrText = '' } = {}) {
 }
 
 function extractFunctionSource(source, fnName) {
-  const start = source.indexOf(`function ${fnName}(`);
+  let start = source.indexOf(`async function ${fnName}(`);
+  if (start === -1) start = source.indexOf(`function ${fnName}(`);
   assert.notEqual(start, -1, `${fnName} must exist in sidecars/threads/app.js`);
   const bodyStart = source.indexOf('{', source.indexOf(')', start));
   assert.notEqual(bodyStart, -1, `Could not find body brace for ${fnName}`);
@@ -701,23 +702,347 @@ test('MCP server registers manage_decisions and handles add/list/resolve/dismiss
   assert.equal(errOut?.isError, true, 'add without title returns isError');
 });
 
-test('hook-handler DIRECTIVE_VERSION=15 upgrades v14 coordinators and syncs SKILL.md + rules/AGENTS.md', (t) => {
+test('executeDecisionAction custom_reply supports explicit decisions, Worktree auto hints, empty-input rejection, cross-project fail-closed, and retired coordinator blocking', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-dec-custom-');
+  const repoA = join(tempRoot, 'repo-custom-a');
+  const repoB = join(tempRoot, 'repo-custom-b');
+  mkdirSync(repoA, { recursive: true });
+  mkdirSync(repoB, { recursive: true });
+  const keyA = normalizeKey(repoA);
+  const keyB = normalizeKey(repoB);
+
+  const reg = loadRegistry();
+  reg.coordinators[keyA] = {
+    key: keyA,
+    conversationId: 'conv-coord-a-active',
+    retiredCoordinatorIds: ['conv-coord-a-retired'],
+    workspacePath: repoA,
+    repoRoot: repoA,
+    projectId: 'proj-custom-a',
+    title: '[Coordinator] CustomA',
+  };
+  reg.coordinators[keyB] = {
+    key: keyB,
+    conversationId: 'conv-coord-b-active',
+    workspacePath: repoB,
+    repoRoot: repoB,
+    projectId: 'proj-custom-b',
+    title: '[Coordinator] CustomB',
+  };
+  reg.threads['thr-060'] = {
+    threadId: 'thr-060',
+    conversationId: 'conv-worker-060',
+    workspaceKey: keyA,
+    coordinatorId: 'conv-coord-a-active',
+    projectId: 'proj-custom-a',
+    title: '实现决策自定义指令',
+    branch: 'thread/thr-060-custom',
+    baseRef: 'dev',
+    worktreePath: join(tempRoot, 'wt-060'),
+    archived: false,
+    runState: 'RUN_STATE_IDLE',
+    bucket: 'idle',
+    git: {
+      exists: true,
+      branch: 'thread/thr-060-custom',
+      aheadCount: 2,
+      dirtyCount: 0,
+      merged: false,
+      mergeMethod: '',
+      lastCommit: 'aa11bb2 feat: custom reply input',
+    },
+  };
+  reg.threads['thr-061'] = {
+    threadId: 'thr-061',
+    conversationId: 'conv-worker-061',
+    workspaceKey: keyA,
+    coordinatorId: 'conv-coord-a-active',
+    projectId: 'proj-custom-a',
+    title: '已合入待归档线程',
+    branch: 'thread/thr-061-merged',
+    baseRef: 'dev',
+    worktreePath: join(tempRoot, 'wt-061'),
+    archived: false,
+    runState: 'RUN_STATE_IDLE',
+    bucket: 'idle',
+    git: {
+      exists: true,
+      branch: 'thread/thr-061-merged',
+      aheadCount: 0,
+      dirtyCount: 0,
+      merged: true,
+      mergeMethod: 'cherry-pick',
+      lastCommit: 'cc33dd4 fix: archive ready',
+    },
+  };
+  saveRegistry(reg);
+
+  process.env.ANTIGRAVITY_LS_ADDRESS = '127.0.0.1:59999';
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'test-csrf-custom';
+
+  const decExplicit = addDecision({
+    workspacePath: repoA,
+    coordinatorId: 'conv-coord-a-active',
+    threadId: 'thr-060',
+    title: '是否直接合入 dev？',
+    summary: '全部测试已通过，可合入或补充修改。',
+    options: [
+      { id: 'merge', label: '直接合入', action: 'send_coordinator', message: '合入 dev', style: 'primary' },
+      { id: 'skip', label: '暂缓', action: 'dismiss', style: 'secondary' },
+    ],
+  });
+
+  // 1. Empty / whitespace customMessage is rejected before any send or state mutation
+  mkdirSync(join(tempRoot, 'api-empty'), { recursive: true });
+  const emptyApi = createFakeAgentApi(join(tempRoot, 'api-empty'), { exitCode: 0 });
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = emptyApi.exePath;
+
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decExplicit.id,
+        action: 'custom_reply',
+        customMessage: '   \t\n  ',
+        workspacePath: repoA,
+      }),
+    /`customMessage` is required/,
+  );
+  assert.equal(existsSync(emptyApi.captureFile), false, 'empty input must never invoke agentapi');
+  assert.equal(listDecisions({ workspacePath: repoA }).length, 1);
+
+  // Unknown explicit decision ID fails closed without sending
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: 'dec-999',
+        action: 'custom_reply',
+        customMessage: '不应发送',
+        workspacePath: repoA,
+      }),
+    /Decision not found: dec-999/,
+  );
+  assert.equal(existsSync(emptyApi.captureFile), false);
+
+  // 2. Cross-project access denied for both explicit decision and auto hint
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decExplicit.id,
+        action: 'custom_reply',
+        customMessage: '跨项目指令',
+        workspacePath: repoB,
+      }),
+    /Cross-project access denied/,
+  );
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: 'auto:worktree_archive_ready:thr-061',
+        action: 'custom_reply',
+        customMessage: '跨项目自动提示指令',
+        threadId: 'thr-061',
+        autoKind: 'worktree_archive_ready',
+        lastCommit: 'cc33dd4 fix: archive ready',
+        workspacePath: repoB,
+      }),
+    /Cross-project access denied/,
+  );
+  assert.equal(existsSync(emptyApi.captureFile), false, 'cross-project rejection must happen before send');
+
+  // 3. Retired coordinator ID (via coordinatorId or conversationId) is rejected BEFORE send
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decExplicit.id,
+        action: 'custom_reply',
+        customMessage: '退场总控指令',
+        workspacePath: repoA,
+        coordinatorId: 'conv-coord-a-retired',
+      }),
+    /has been retired/,
+  );
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decExplicit.id,
+        action: 'custom_reply',
+        customMessage: '退场会话指令',
+        workspacePath: repoA,
+        conversationId: 'conv-coord-a-retired',
+      }),
+    /has been retired/,
+  );
+  assert.equal(existsSync(emptyApi.captureFile), false, 'retired coordinator must be blocked before send');
+
+  // 4. Send failure must keep explicit decision pending
+  const failDir = join(tempRoot, 'api-fail');
+  mkdirSync(failDir, { recursive: true });
+  const failApi = createFakeAgentApi(failDir, { exitCode: 1, stderrText: 'Coordinator offline' });
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = failApi.exePath;
+
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decExplicit.id,
+        action: 'custom_reply',
+        customMessage: '先让 Opus 复查再合入',
+        workspacePath: repoA,
+        conversationId: 'conv-worker-060',
+      }),
+    /Coordinator offline/,
+  );
+  assert.equal(listDecisions({ workspacePath: repoA }).length, 1, 'failed custom_reply must keep decision pending');
+
+  // 5. Explicit decision custom_reply success delivers full context to active coordinator & persists resolvedCustomMessage
+  const okDir1 = join(tempRoot, 'api-ok-1');
+  mkdirSync(okDir1, { recursive: true });
+  const okApi1 = createFakeAgentApi(okDir1, { exitCode: 0 });
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = okApi1.exePath;
+
+  const staleBeforeResolve = loadRegistry();
+  const customRes = await executeDecisionAction({
+    decisionId: decExplicit.id,
+    action: 'custom_reply',
+    customMessage: '合入前顺便把版本号改一下，先让 Opus 复查',
+    workspacePath: repoA,
+    conversationId: 'conv-worker-060',
+  });
+  assert.equal(customRes.ok, true);
+  assert.equal(customRes.action, 'custom_reply');
+  assert.equal(customRes.coordinatorId, 'conv-coord-a-active');
+  assert.equal(customRes.customMessage, '合入前顺便把版本号改一下，先让 Opus 复查');
+  assert.equal(customRes.decision.status, 'resolved');
+  assert.equal(customRes.decision.resolvedOptionId, 'custom_reply');
+  assert.equal(customRes.decision.resolvedCustomMessage, '合入前顺便把版本号改一下，先让 Opus 复查');
+  assert.equal(listDecisions({ workspacePath: repoA }).length, 0);
+
+  // Stale saveRegistry must NOT revert resolved explicit decision
+  saveRegistry(staleBeforeResolve);
+  const persistedDec = listDecisions({ workspacePath: repoA, includeResolved: true }).find(
+    (d) => d.id === decExplicit.id,
+  );
+  assert.equal(persistedDec?.status, 'resolved');
+  assert.equal(persistedDec?.resolvedCustomMessage, '合入前顺便把版本号改一下，先让 Opus 复查');
+
+  const cap1 = JSON.parse(readFileSync(okApi1.captureFile, 'utf8'));
+  assert.ok(cap1.argv.includes('conv-coord-a-active'));
+  assert.equal(cap1.argv.includes('conv-worker-060'), false);
+  const body1 = cap1.argv[cap1.argv.length - 1];
+  assert.match(body1, /\[BOARD_DECISION_CUSTOM_REPLY\]/);
+  assert.match(body1, /dec-001/);
+  assert.match(body1, /thr-060/);
+  assert.match(body1, /是否直接合入 dev？/);
+  assert.match(body1, /全部测试已通过，可合入或补充修改。/);
+  assert.match(body1, /合入前顺便把版本号改一下，先让 Opus 复查/);
+
+  // 6. Auto Worktree hint custom_reply: failed send must NOT dismiss; success delivers full auto context and records threadId+autoKind+lastCommit dismissal
+  const boardBeforeAuto = buildBoardDecisions({ workspacePath: repoA });
+  assert.equal(
+    boardBeforeAuto.some((d) => d.threadId === 'thr-060' && d.autoKind === 'worktree_merge_ready'),
+    true,
+  );
+  assert.equal(
+    boardBeforeAuto.some((d) => d.threadId === 'thr-061' && d.autoKind === 'worktree_archive_ready'),
+    true,
+  );
+
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = failApi.exePath;
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: 'auto:worktree_merge_ready:thr-060',
+        action: 'custom_reply',
+        customMessage: '先补单测再合并',
+        workspacePath: repoA,
+      }),
+    /Coordinator offline/,
+  );
+  assert.equal(
+    buildBoardDecisions({ workspacePath: repoA }).some(
+      (d) => d.threadId === 'thr-060' && d.autoKind === 'worktree_merge_ready',
+    ),
+    true,
+    'failed auto custom_reply must NOT dismiss auto hint',
+  );
+
+  const okDir2 = join(tempRoot, 'api-ok-2');
+  mkdirSync(okDir2, { recursive: true });
+  const okApi2 = createFakeAgentApi(okDir2, { exitCode: 0 });
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = okApi2.exePath;
+
+  const autoCustomRes = await executeDecisionAction({
+    decisionId: 'auto:worktree_merge_ready:thr-060',
+    action: 'custom_reply',
+    customMessage: '先补一组边界测试，确认通过后再 cherry-pick',
+    workspacePath: repoA,
+  });
+  assert.equal(autoCustomRes.ok, true);
+  assert.equal(autoCustomRes.action, 'custom_reply');
+  assert.equal(autoCustomRes.threadId, 'thr-060');
+  assert.equal(autoCustomRes.coordinatorId, 'conv-coord-a-active');
+  assert.equal(autoCustomRes.autoResult?.resolution, 'custom_reply');
+  assert.equal(
+    autoCustomRes.autoResult?.customMessage,
+    '先补一组边界测试，确认通过后再 cherry-pick',
+  );
+
+  const cap2 = JSON.parse(readFileSync(okApi2.captureFile, 'utf8'));
+  const body2 = cap2.argv[cap2.argv.length - 1];
+  assert.match(body2, /\[BOARD_DECISION_CUSTOM_REPLY\]/);
+  assert.match(body2, /thr-060/);
+  assert.match(body2, /实现决策自定义指令/);
+  assert.match(body2, /Topic:/);
+  assert.match(body2, /Summary:/);
+  assert.match(body2, /先补一组边界测试，确认通过后再 cherry-pick/);
+
+  // Auto hint for thr-060 stays dismissed for the same lastCommit, while thr-061 remains visible
+  const boardAfterAuto = buildBoardDecisions({ workspacePath: repoA });
+  assert.equal(
+    boardAfterAuto.some((d) => d.threadId === 'thr-060' && d.autoKind === 'worktree_merge_ready'),
+    false,
+    'handled auto hint stays hidden for same lastCommit',
+  );
+  assert.equal(
+    boardAfterAuto.some((d) => d.threadId === 'thr-061' && d.autoKind === 'worktree_archive_ready'),
+    true,
+  );
+
+  // New commit on thr-060 re-triggers the auto hint
+  const regUpdate = loadRegistry();
+  regUpdate.threads['thr-060'].git.lastCommit = 'ee55ff6 test: added edge cases';
+  saveRegistry(regUpdate);
+  assert.equal(
+    buildBoardDecisions({ workspacePath: repoA }).some(
+      (d) => d.threadId === 'thr-060' && d.autoKind === 'worktree_merge_ready',
+    ),
+    true,
+    'new commit on thr-060 must re-trigger worktree auto hint',
+  );
+});
+
+test('hook-handler DIRECTIVE_VERSION=15 upgrades v14 coordinators and reinforces everyday pending-decision registration across hook, SKILL.md, rules/AGENTS.md, and MCP', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
+  const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
 
   assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*15\s*;/);
   assert.match(skillMd, /manage_decisions/);
   assert.match(skillMd, /Pending Decisions/i);
+  assert.match(skillMd, /Not limited to Worker Thread completion callbacks/i);
+  assert.match(skillMd, /everyday planning discussions/i);
   assert.match(rulesMd, /manage_decisions/);
   assert.match(rulesMd, /Pending Decisions/i);
+  assert.match(rulesMd, /Not limited to Worker Thread callbacks/i);
+  assert.match(rulesMd, /everyday planning discussions/i);
+  assert.match(serverMjs, /Not limited to Worker Thread callbacks/i);
 
   const env = createTempEnv(t, 'pt-dec-hook-');
   const ws = join(env.tempRoot, 'hook-repo');
   const reg = loadRegistry();
-  reg.coordinators['__v12_upgrade__'] = {
-    key: '__v12_upgrade__',
-    conversationId: 'conv-v12-coord',
+  reg.coordinators['__v14_upgrade__'] = {
+    key: '__v14_upgrade__',
+    conversationId: 'conv-v14-coord',
     workspacePath: ws,
     repoRoot: ws,
     title: '[Coordinator] UpgradeV15',
@@ -735,7 +1060,7 @@ test('hook-handler DIRECTIVE_VERSION=15 upgrades v14 coordinators and syncs SKIL
     },
     input: JSON.stringify({
       hookEventName: 'PreInvocation',
-      conversationId: 'conv-v12-coord',
+      conversationId: 'conv-v14-coord',
       initialNumSteps: 8,
     }),
     encoding: 'utf8',
@@ -746,12 +1071,14 @@ test('hook-handler DIRECTIVE_VERSION=15 upgrades v14 coordinators and syncs SKIL
   const injected = out?.injectSteps?.[0]?.systemMessage?.systemMessage || '';
   assert.match(injected, /manage_decisions/);
   assert.match(injected, /Pending Decisions/i);
+  assert.match(injected, /Not limited to Worker Thread completion callbacks/i);
+  assert.match(injected, /everyday planning discussions/i);
   assert.match(injected, /action:\s*"add"/);
   assert.match(injected, /action:\s*"resolve"/);
-  assert.equal(loadRegistry().coordinators['__v12_upgrade__'].directiveVersion, 15);
+  assert.equal(loadRegistry().coordinators['__v14_upgrade__'].directiveVersion, 15);
 });
 
-test('Sidecar backend/frontend static and UI rendering checks for Pending Decisions panel, card badge, 3-locale I18N, no middle dot, no native dialogs, and LF endings', () => {
+test('Sidecar backend/frontend static and UI rendering checks for Pending Decisions panel, custom instruction input, API revision 4, IME/draft guards, 3-locale I18N, no middle dot, no native dialogs, and LF endings', () => {
   const mainMjs = readFileSync(new URL('../sidecars/threads/main.mjs', import.meta.url), 'utf8');
   const {
     appSource,
@@ -763,9 +1090,30 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
     renderO2ThreadCard,
   } = loadUiDecisionHelpers();
 
-  // Backend dual API registration
+  // Backend dual API registration, SERVER_API_REVISION=4, and decision_custom_reply capability
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*4\s*;/);
+  assert.match(mainMjs, /['"]decision_custom_reply['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/decision_action['"]/);
   assert.match(mainMjs, /executeDecisionAction/);
+  assert.match(mainMjs, /customMessage:\s*data\.customMessage/);
+  assert.match(mainMjs, /handleDecisionAction[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
+
+  // Frontend API revision, no GET fallback & no short timeout on /api/decision_action, IME & draft/focus preservation
+  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*4\s*;/);
+  const decisionPostCalls = [...appSource.matchAll(/postApi\(\s*['"]\/api\/decision_action['"][\s\S]*?\}\s*\);/g)];
+  assert.ok(decisionPostCalls.length >= 2, 'both quick action and custom reply must call /api/decision_action');
+  for (const m of decisionPostCalls) {
+    assert.match(m[0], /timeoutMs:\s*0/);
+    assert.match(m[0], /allowGetFallback:\s*false/);
+  }
+  assert.match(appSource, /expandedCustomDecisionIds/);
+  assert.match(appSource, /decisionCustomDrafts/);
+  assert.match(appSource, /decisionImeComposingIds/);
+  assert.match(appSource, /lastDecisionsRenderKey/);
+  assert.match(appSource, /deferredDecisionsList/);
+  assert.match(appSource, /e\.isComposing\s*\|\|\s*e\.keyCode\s*===\s*229/);
+  assert.match(appSource, /e\.key\s*===\s*['"]Escape['"]/);
+  assert.match(appSource, /setSelectionRange/);
 
   // HTML structure: #decisions-panel placed before #threads-cards inside #threads-pane
   const panelIdx = htmlSource.indexOf('id="decisions-panel"');
@@ -780,12 +1128,17 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
   assert.match(appSource, /\/api\/decision_action/);
   assert.match(appSource, /decisions:\s*data\.decisions\s*\|\|\s*\[\]/);
 
-  // CSS rules for panel, cards, thread linkage badge, and light theme support
+  // CSS rules for panel, cards, custom input row, thread linkage badge, and light theme support
   assert.match(cssSource, /\.decisions-panel\s*\{/);
   assert.match(cssSource, /\.decision-card\s*\{/);
   assert.match(cssSource, /\.dec-thread-badge\s*\{/);
+  assert.match(cssSource, /\.dec-btn\.dec-btn-custom\s*\{/);
+  assert.match(cssSource, /\.dec-custom-row\s*\{/);
+  assert.match(cssSource, /\.dec-custom-input\s*\{/);
+  assert.match(cssSource, /\.dec-custom-send\s*\{/);
   assert.match(cssSource, /\.o2-dec-badge\s*\{/);
   assert.match(cssSource, /:root\[data-theme="light"\]\s+\.decisions-panel\s*\{/);
+  assert.match(cssSource, /:root\[data-theme="light"\]\s+\.dec-custom-input\s*\{/);
 
   // 3-locale I18N completeness and zero middle dot in decision strings
   const decisionI18nKeys = [
@@ -806,6 +1159,12 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
     'decisionAutoArchiveSummary',
     'decisionAutoArchiveBtn',
     'decisionDismissBtn',
+    'decisionCustomBtn',
+    'decisionCustomPlaceholder',
+    'decisionCustomSendBtn',
+    'decisionCustomEmptyToast',
+    'decisionCustomSentToast',
+    'decisionCustomInputTip',
   ];
   for (const loc of ['en', 'zh-CN', 'zh-TW']) {
     for (const k of decisionI18nKeys) {
@@ -846,18 +1205,48 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
     },
   ];
 
-  for (const [loc, expectedTitle, expectedBadge, expectedArchiveBtn] of [
-    ['zh-CN', '待决策', '待决策', '验收归档'],
-    ['zh-TW', '待決策', '待決策', '驗收封存'],
-    ['en', 'Pending Decisions', 'Decision', 'Accept &amp; Archive'],
+  for (const [loc, expectedTitle, expectedBadge, expectedArchiveBtn, expectedCustomBtn, expectedSendBtn] of [
+    ['zh-CN', '待决策', '待决策', '验收归档', '其他指令', '发送'],
+    ['zh-TW', '待決策', '待決策', '驗收封存', '其他指令', '傳送'],
+    ['en', 'Pending Decisions', 'Decision', 'Accept &amp; Archive', 'Other instruction', 'Send'],
   ]) {
     setLocale(loc);
+    // Collapsed by default: toggle button rendered on both explicit and auto cards, input row hidden
     const panelHtml = renderDecisionsPanelHtml(sampleDecisions);
     assert.match(panelHtml, new RegExp(expectedTitle));
     assert.match(panelHtml, /data-dec-thread="thr-044"/);
     assert.match(panelHtml, /data-dec-dismiss="dec-001"/);
     assert.match(panelHtml, new RegExp(expectedArchiveBtn));
+    assert.match(panelHtml, /data-dec-custom-toggle="dec-001"/);
+    assert.match(panelHtml, /data-dec-custom-toggle="auto:worktree_archive_ready:thr-045"/);
+    assert.match(panelHtml, new RegExp(expectedCustomBtn));
+    assert.equal(panelHtml.includes('data-dec-custom-input='), false, 'custom input must stay collapsed by default');
     assert.equal(panelHtml.includes('·'), false, `${loc} decisions panel must never use middle dot`);
+
+    // Expanded with per-decisionId draft preservation (explicit expanded + draft, auto collapsed + draft)
+    const expandedPanelHtml = renderDecisionsPanelHtml(sampleDecisions, {
+      expandedIds: new Set(['dec-001']),
+      drafts: new Map([
+        ['dec-001', '先改版本号再合入'],
+        ['auto:worktree_archive_ready:thr-045', '保留分支待复查'],
+      ]),
+    });
+    assert.match(expandedPanelHtml, /data-dec-custom-input="dec-001"/);
+    assert.match(expandedPanelHtml, /value="先改版本号再合入"/);
+    assert.match(expandedPanelHtml, /data-dec-custom-send="dec-001"/);
+    assert.match(expandedPanelHtml, new RegExp(expectedSendBtn));
+    assert.match(expandedPanelHtml, /dec-btn-custom has-draft" data-dec-custom-toggle="auto:worktree_archive_ready:thr-045"/);
+    assert.equal(expandedPanelHtml.includes('·'), false);
+
+    // Expanded with empty draft keeps Send button disabled
+    const emptyDraftHtml = renderDecisionsPanelHtml(sampleDecisions, {
+      expandedIds: new Set(['auto:worktree_archive_ready:thr-045']),
+      drafts: new Map([['auto:worktree_archive_ready:thr-045', '   ']]),
+    });
+    assert.match(
+      emptyDraftHtml,
+      /data-dec-custom-send="auto:worktree_archive_ready:thr-045" disabled/,
+    );
 
     const cardWithDec = renderO2ThreadCard(
       { threadId: 'thr-044', title: '待决策测试', bucket: 'idle', stepsProgress: { done: 2, total: 2 } },
@@ -880,10 +1269,119 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
     '../scripts/hook-handler.mjs',
     '../sidecars/threads/main.mjs',
     '../tests/decisions-board.test.mjs',
+    '../tests/coordinator-rebind.test.mjs',
+    '../tests/project-scope-seq.test.mjs',
     '../tests/settings-default-model.test.mjs',
     '../tests/worker-language.test.mjs',
   ]) {
     const raw = readFileSync(new URL(rel, import.meta.url));
     assert.ok(!raw.includes(Buffer.from('\r')), `${rel} must use LF line endings`);
   }
+});
+
+test('Sidecar handleDecisionCustomSubmit enforces empty-input guard, sends allowGetFallback:false with timeoutMs:0, preserves draft on failure, and clears state on success', async () => {
+  const appSource = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
+  const i18nStart = appSource.indexOf('const I18N = {');
+  let depth = 0;
+  let inBrace = false;
+  let i18nEnd = -1;
+  for (let i = i18nStart; i < appSource.length; i++) {
+    if (appSource[i] === '{') {
+      depth++;
+      inBrace = true;
+    } else if (appSource[i] === '}') {
+      depth--;
+      if (inBrace && depth === 0) {
+        i18nEnd = i + 1;
+        break;
+      }
+    }
+  }
+  const i18nCode = appSource.slice(i18nStart, i18nEnd);
+  const getLocalizedFn = extractFunctionSource(appSource, 'getLocalizedDecisionDisplay');
+  const submitFn = extractFunctionSource(appSource, 'handleDecisionCustomSubmit');
+
+  const ctx = {};
+  vm.runInNewContext(
+    `
+    ${i18nCode};
+    let curLocale = 'zh-CN';
+    const L = () => I18N[curLocale] || I18N.en;
+    const pendingDecisionIds = new Set();
+    const expandedCustomDecisionIds = new Set(['dec-1']);
+    const decisionCustomDrafts = new Map([['dec-1', '先改版本号']]);
+    const decisionImeComposingIds = new Set();
+    let cachedDecisions = [{
+      id: 'dec-1',
+      source: 'explicit',
+      threadId: 'thr-044',
+      title: '是否合入 dev？',
+      summary: '测试全通过。',
+      coordinatorId: 'coord-old',
+      options: [],
+    }];
+    let lastSnap = { coordinator: { conversationId: 'coord-live' } };
+    let lastBoardKey = 'prev-key';
+    const toasts = [];
+    const postCalls = [];
+    const renderCalls = [];
+    let refreshCount = 0;
+    let nextPostResp = { ok: false, error: 'backend busy' };
+    const buildScopePayload = (extra) => ({ workspace: '/repo', conversationId: 'conv-host', projectId: 'proj-1', ...extra });
+    const flashToast = (msg, kind) => toasts.push({ msg, kind });
+    const renderDecisionsPanel = (list, opts) => renderCalls.push({ count: list.length, opts });
+    const refreshBoard = () => { refreshCount++; };
+    const postApi = async (postPath, getPath, payload, opts) => {
+      postCalls.push({ postPath, getPath, payload, opts });
+      return nextPostResp;
+    };
+    ${getLocalizedFn}
+    ${submitFn}
+    this.runTest = async () => {
+      const dec = cachedDecisions[0];
+      // 1. Blank input blocked with toast, zero network calls
+      let focused = 0;
+      await handleDecisionCustomSubmit(dec, { value: '   ', focus: () => { focused++; } }, null);
+      if (postCalls.length !== 0) throw new Error('Blank input should not call postApi');
+      if (focused !== 1) throw new Error('Blank input should refocus input');
+
+      // 2. Backend error preserves expanded state & user draft
+      await handleDecisionCustomSubmit(dec, { value: '先改版本号再合并' }, { textContent: '发送' });
+      if (postCalls.length !== 1) throw new Error('Expected 1 postApi call');
+      if (postCalls[0].opts.timeoutMs !== 0 || postCalls[0].opts.allowGetFallback !== false) {
+        throw new Error('Write API must set timeoutMs:0 and allowGetFallback:false');
+      }
+      if (postCalls[0].payload.coordinatorId !== 'coord-live') {
+        throw new Error('Must prefer live coordinatorId from lastSnap');
+      }
+      if (!expandedCustomDecisionIds.has('dec-1') || decisionCustomDrafts.get('dec-1') !== '先改版本号再合并') {
+        throw new Error('Failure must preserve expanded state and draft');
+      }
+      if (pendingDecisionIds.has('dec-1')) {
+        throw new Error('Failure must clear busy state');
+      }
+
+      // 3. Backend success clears expanded/draft/decision and refreshes board
+      nextPostResp = { ok: true, action: 'custom_reply', decisionId: 'dec-1' };
+      await handleDecisionCustomSubmit(dec, { value: '先改版本号再合并' }, { textContent: '发送' });
+      if (expandedCustomDecisionIds.has('dec-1') || decisionCustomDrafts.has('dec-1')) {
+        throw new Error('Success must clear expanded state and draft');
+      }
+      if (cachedDecisions.length !== 0 || lastBoardKey !== '' || refreshCount !== 1) {
+        throw new Error('Success must remove decision and refresh board');
+      }
+      return { toasts, postCalls, renderCalls };
+    };
+    `,
+    ctx,
+  );
+
+  const out = await ctx.runTest();
+  assert.equal(out.toasts[0].kind, 'err');
+  assert.equal(out.toasts[1].kind, 'err');
+  assert.equal(out.toasts[2].kind, 'ok');
+  assert.equal(out.postCalls[1].payload.action, 'custom_reply');
+  assert.equal(out.postCalls[1].payload.customMessage, '先改版本号再合并');
+  assert.equal(out.postCalls[1].payload.title, '是否合入 dev？');
+  assert.equal(out.postCalls[1].payload.summary, '测试全通过。');
 });

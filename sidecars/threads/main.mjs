@@ -42,6 +42,7 @@ const SERVER_CAPABILITIES = [
   'update_check',
   'update_apply',
   'decisions',
+  'decision_custom_reply',
   'rebind_coordinator',
   'coordinator_candidates',
   'review_model',
@@ -422,16 +423,23 @@ async function handleDecisionAction(data = {}) {
       autoKind: data.autoKind || '',
       lastCommit: data.lastCommit || '',
       message: data.message || '',
+      customMessage: data.customMessage ?? data.customReply ?? '',
       label: data.label || '',
       title: data.title || '',
+      summary: data.summary || '',
       workspacePath: data.workspacePath || data.workspace || '',
       conversationId: data.conversationId || '',
       coordinatorId: data.coordinatorId || '',
       projectId: data.projectId || '',
     });
-    return { ...res, locale: resolveAppLocale() };
+    return { ...res, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
   } catch (err) {
-    return { ok: false, error: err.message, locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/decision_action', handleDecisionAction);

@@ -4559,6 +4559,80 @@ a.btn-link-primary:hover {
   border-color: color-mix(in srgb, var(--pt-danger) 60%, transparent);
 }
 
+.dec-btn.dec-btn-custom {
+  border-style: dashed;
+  background: transparent;
+  color: var(--pt-sub);
+}
+.dec-btn.dec-btn-custom:hover:not(:disabled) {
+  border-style: solid;
+  background: var(--pt-surface-2);
+  border-color: var(--pt-line-strong);
+  color: var(--pt-fg);
+}
+.dec-btn.dec-btn-custom.is-active,
+.dec-btn.dec-btn-custom.has-draft {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--pt-warn) 44%, var(--pt-line));
+  background: color-mix(in srgb, var(--pt-warn) 10%, var(--pt-surface-1));
+  color: var(--pt-warn);
+}
+:root[data-theme="light"] .dec-btn.dec-btn-custom.is-active,
+:root[data-theme="light"] .dec-btn.dec-btn-custom.has-draft {
+  background: color-mix(in srgb, var(--pt-warn) 12%, #ffffff);
+  color: #8f6409;
+  border-color: color-mix(in srgb, var(--pt-warn) 42%, transparent);
+}
+
+.dec-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.dec-custom-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--pt-r-sm);
+  border: 1px solid var(--pt-line);
+  background: var(--pt-bg);
+  color: var(--pt-fg);
+  font-family: inherit;
+  font-size: 11.5px;
+  line-height: 1.3;
+  outline: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+.dec-custom-input::placeholder {
+  color: var(--pt-dim);
+}
+.dec-custom-input:focus {
+  border-color: color-mix(in srgb, var(--pt-warn) 60%, var(--pt-line-strong));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pt-warn) 16%, transparent);
+}
+.dec-custom-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+:root[data-theme="light"] .dec-custom-input {
+  background: #ffffff;
+  border-color: var(--pt-line-strong);
+  color: var(--pt-fg);
+}
+:root[data-theme="light"] .dec-custom-input:focus {
+  border-color: color-mix(in srgb, var(--pt-warn) 65%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pt-warn) 18%, transparent);
+}
+
+.dec-custom-send {
+  flex: none;
+  height: 26px;
+  padding: 0 10px;
+}
+
 /* Thread card linkage amber badge & locate highlight */
 .o2-dec-badge {
   display: inline-flex;

@@ -335,7 +335,7 @@ const TOOLS = [
   {
     name: 'manage_decisions',
     description:
-      'Register, list, resolve, or dismiss Pending Decisions pinned at the top of the right-hand Project Threads board. Use action="add" whenever you ask the user to make a call (design choice, branch merge, release, or cleanup) with 1–3 quick-action buttons, and action="resolve" once the user decides directly in chat.',
+      'Register, list, resolve, or dismiss Pending Decisions pinned at the top of the right-hand Project Threads board. Not limited to Worker Thread callbacks — use action="add" whenever ANY Coordinator reply asks the user to make a call (everyday planning discussions, architecture/design trade-offs, open Issue vs. implement directly, scheduling, branch merge, release, or cleanup) with 1–3 quick-action buttons, and promptly call action="resolve" once the user decides directly in chat.',
     inputSchema: {
       type: 'object',
       properties: {

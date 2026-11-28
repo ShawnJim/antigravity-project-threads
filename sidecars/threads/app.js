@@ -410,6 +410,12 @@
       decisionAutoArchiveSummary: (title, branch) => `${title}${branch ? ` (${branch})` : ''}`,
       decisionAutoArchiveBtn: 'Accept & Archive',
       decisionDismissBtn: 'Dismiss',
+      decisionCustomBtn: 'Other instruction',
+      decisionCustomPlaceholder: 'Type custom instruction for Coordinator…',
+      decisionCustomSendBtn: 'Send',
+      decisionCustomEmptyToast: 'Please enter a custom instruction first',
+      decisionCustomSentToast: 'Custom instruction sent to Coordinator',
+      decisionCustomInputTip: 'Press Enter to send, Esc to collapse',
     },
 
     'zh-CN': {
@@ -781,6 +787,12 @@
       decisionAutoArchiveSummary: (title, branch) => `${title}${branch ? `（${branch}）` : ''}`,
       decisionAutoArchiveBtn: '验收归档',
       decisionDismissBtn: '忽略',
+      decisionCustomBtn: '其他指令',
+      decisionCustomPlaceholder: '输入给总控的自定义指令…',
+      decisionCustomSendBtn: '发送',
+      decisionCustomEmptyToast: '请先输入自定义指令内容',
+      decisionCustomSentToast: '已将自定义指令发送给总控',
+      decisionCustomInputTip: '按 Enter 发送，按 Esc 收起',
     },
 
     'zh-TW': {
@@ -1152,6 +1164,12 @@
       decisionAutoArchiveSummary: (title, branch) => `${title}${branch ? `（${branch}）` : ''}`,
       decisionAutoArchiveBtn: '驗收封存',
       decisionDismissBtn: '忽略',
+      decisionCustomBtn: '其他指令',
+      decisionCustomPlaceholder: '輸入給總控的自訂指令…',
+      decisionCustomSendBtn: '傳送',
+      decisionCustomEmptyToast: '請先輸入自訂指令內容',
+      decisionCustomSentToast: '已將自訂指令傳送給總控',
+      decisionCustomInputTip: '按 Enter 傳送，按 Esc 收起',
     },
   };
 
@@ -1197,6 +1215,11 @@
   let tasksCardCollapsed = true; // Compact 1-line summary bar by default (like Swarm o2-prog)
   let decisionsPanelCollapsed = false;
   const pendingDecisionIds = new Set();
+  const expandedCustomDecisionIds = new Set();
+  const decisionCustomDrafts = new Map(); // decisionId -> unsent custom instruction draft
+  const decisionImeComposingIds = new Set(); // decisionId -> active IME composition
+  let lastDecisionsRenderKey = '';
+  let deferredDecisionsList = null;
   const threadOpenState = new Map(); // threadId -> boolean
   let lastBoardKey = '';
   let lastSnap = null;
@@ -3850,16 +3873,34 @@
     };
   }
 
-  function renderDecisionsPanelHtml(decisions, { collapsed = false, busyIds = null } = {}) {
+  function renderDecisionsPanelHtml(
+    decisions,
+    { collapsed = false, busyIds = null, expandedIds = null, drafts = null } = {},
+  ) {
     if (!Array.isArray(decisions) || decisions.length === 0) return '';
     const t = L();
     const busySet =
       busyIds && typeof busyIds.has === 'function' ? busyIds : pendingDecisionIds;
+    const expandedSet =
+      expandedIds && typeof expandedIds.has === 'function'
+        ? expandedIds
+        : typeof expandedCustomDecisionIds !== 'undefined'
+          ? expandedCustomDecisionIds
+          : null;
+    const draftMap =
+      drafts && typeof drafts.get === 'function'
+        ? drafts
+        : typeof decisionCustomDrafts !== 'undefined'
+          ? decisionCustomDrafts
+          : null;
 
     const cardsHtml = decisions
       .map((dec) => {
         const isAuto = dec.source === 'auto';
         const isBusy = busySet.has(dec.id);
+        const isCustomOpen = Boolean(expandedSet && expandedSet.has(dec.id));
+        const draftVal = draftMap && draftMap.has(dec.id) ? String(draftMap.get(dec.id) || '') : '';
+        const hasDraft = Boolean(draftVal.trim());
         const view = getLocalizedDecisionDisplay(dec);
         const hasMetaRow = Boolean(dec.threadId || isAuto);
         const dismissBtnHtml = `
@@ -3897,24 +3938,46 @@
           ? `<div class="decision-summary" title="${esc(view.summary)}">${esc(view.summary)}</div>`
           : '';
         const opts = (view.options || []).slice(0, 3);
-        const actionsHtml = opts.length
-          ? `<div class="decision-actions">${opts
-              .map((opt) => {
-                const styleCls =
-                  opt.style === 'primary'
-                    ? 'dec-btn-primary'
-                    : opt.style === 'danger'
-                      ? 'dec-btn-danger'
-                      : 'dec-btn-secondary';
-                return `<button type="button" class="dec-btn ${styleCls}" data-dec-id="${esc(dec.id)}" data-opt-id="${esc(opt.id)}" data-opt-action="${esc(opt.action || 'send_coordinator')}"${isBusy ? ' disabled' : ''}>${esc(isBusy ? t.decisionWorking : opt.label)}</button>`;
-              })
-              .join('')}</div>`
+        const optBtnsHtml = opts
+          .map((opt) => {
+            const styleCls =
+              opt.style === 'primary'
+                ? 'dec-btn-primary'
+                : opt.style === 'danger'
+                  ? 'dec-btn-danger'
+                  : 'dec-btn-secondary';
+            return `<button type="button" class="dec-btn ${styleCls}" data-dec-id="${esc(dec.id)}" data-opt-id="${esc(opt.id)}" data-opt-action="${esc(opt.action || 'send_coordinator')}"${isBusy ? ' disabled' : ''}>${esc(isBusy ? t.decisionWorking : opt.label)}</button>`;
+          })
+          .join('');
+        const customToggleHtml = `<button type="button" class="dec-btn dec-btn-custom${isCustomOpen ? ' is-active' : ''}${hasDraft && !isCustomOpen ? ' has-draft' : ''}" data-dec-custom-toggle="${esc(dec.id)}" aria-expanded="${isCustomOpen ? 'true' : 'false'}"${isBusy ? ' disabled' : ''}>${esc(t.decisionCustomBtn)}</button>`;
+        const actionsHtml = `<div class="decision-actions">${optBtnsHtml}${customToggleHtml}</div>`;
+        const customRowHtml = isCustomOpen
+          ? `
+            <div class="dec-custom-row" data-dec-custom-box="${esc(dec.id)}">
+              <input
+                type="text"
+                class="dec-custom-input"
+                data-dec-custom-input="${esc(dec.id)}"
+                value="${esc(draftVal)}"
+                placeholder="${esc(t.decisionCustomPlaceholder)}"
+                title="${esc(t.decisionCustomInputTip)}"
+                aria-label="${esc(t.decisionCustomPlaceholder)}"
+                autocomplete="off"${isBusy ? ' disabled' : ''}
+              />
+              <button
+                type="button"
+                class="dec-btn dec-btn-primary dec-custom-send"
+                data-dec-custom-send="${esc(dec.id)}"${isBusy || !hasDraft ? ' disabled' : ''}
+              >${esc(isBusy ? t.decisionWorking : t.decisionCustomSendBtn)}</button>
+            </div>
+          `
           : '';
         return `
-          <div class="decision-card${isAuto ? ' is-auto' : ''}${isBusy ? ' is-busy' : ''}" data-decision-id="${esc(dec.id)}">
+          <div class="decision-card${isAuto ? ' is-auto' : ''}${isBusy ? ' is-busy' : ''}${isCustomOpen ? ' is-custom-open' : ''}" data-decision-id="${esc(dec.id)}">
             ${topHtml}
             ${summaryHtml}
             ${actionsHtml}
+            ${customRowHtml}
           </div>
         `;
       })
@@ -3964,14 +4027,15 @@
     const cardEl = triggerBtn?.closest?.('.decision-card');
     if (cardEl) {
       cardEl.classList.add('is-busy');
-      cardEl.querySelectorAll('button').forEach((b) => {
-        b.disabled = true;
+      cardEl.querySelectorAll('button, input').forEach((el) => {
+        el.disabled = true;
       });
     }
     if (triggerBtn && triggerBtn.classList.contains('dec-btn')) {
       triggerBtn.textContent = t.decisionWorking;
     }
 
+    const view = getLocalizedDecisionDisplay(dec);
     const action = opt?.action || 'dismiss';
     const payload = buildScopePayload({
       decisionId: dec.id,
@@ -3982,53 +4046,201 @@
       lastCommit: dec.lastCommit || '',
       message: opt?.message || '',
       label: opt?.label || '',
-      title: dec.title || '',
-      coordinatorId: dec.coordinatorId || lastSnap?.coordinator?.conversationId || '',
+      title: view.title || dec.title || '',
+      summary: view.summary || dec.summary || '',
+      coordinatorId: lastSnap?.coordinator?.conversationId || dec.coordinatorId || '',
     });
 
     try {
-      const res = await postApi('/api/decision_action', '/api/decision_action_get', payload);
+      const res = await postApi('/api/decision_action', '/api/decision_action_get', payload, {
+        timeoutMs: 0,
+        allowGetFallback: false,
+      });
       pendingDecisionIds.delete(dec.id);
       if (!res || res.ok === false) {
         flashToast(res?.error || t.decisionActionErrToast, 'err', 3600);
-        renderDecisionsPanel(cachedDecisions);
+        renderDecisionsPanel(cachedDecisions, { force: true });
         return;
       }
 
       if (res.action === 'archive_thread') {
         showArchiveResultToast(res.archiveResult || { ok: true, archived: true });
+      } else if (res.action === 'custom_reply') {
+        flashToast(t.decisionCustomSentToast, 'ok', 2800);
       } else if (res.action === 'send_coordinator') {
         flashToast(t.decisionSentCoordToast, 'ok', 2800);
       } else {
         flashToast(t.decisionDismissedToast, 'ok', 2200);
       }
 
+      expandedCustomDecisionIds.delete(dec.id);
+      decisionCustomDrafts.delete(dec.id);
+      decisionImeComposingIds.delete(dec.id);
       cachedDecisions = cachedDecisions.filter((x) => x.id !== dec.id);
-      renderDecisionsPanel(cachedDecisions);
+      renderDecisionsPanel(cachedDecisions, { force: true });
       lastBoardKey = '';
       refreshBoard(true);
     } catch (err) {
       pendingDecisionIds.delete(dec.id);
       flashToast(err?.message || t.decisionActionErrToast, 'err', 3600);
-      renderDecisionsPanel(cachedDecisions);
+      renderDecisionsPanel(cachedDecisions, { force: true });
     }
   }
 
-  function renderDecisionsPanel(decisions) {
+  async function handleDecisionCustomSubmit(dec, inputEl, sendBtn) {
+    if (!dec || !dec.id || pendingDecisionIds.has(dec.id)) return;
+    const t = L();
+    const rawValue = inputEl ? inputEl.value : decisionCustomDrafts.get(dec.id) || '';
+    const customMessage = String(rawValue || '').trim();
+    if (!customMessage) {
+      flashToast(t.decisionCustomEmptyToast, 'err', 2400);
+      if (inputEl && typeof inputEl.focus === 'function') inputEl.focus();
+      return;
+    }
+
+    decisionCustomDrafts.set(dec.id, rawValue);
+    pendingDecisionIds.add(dec.id);
+
+    const cardEl = (sendBtn || inputEl)?.closest?.('.decision-card');
+    if (cardEl) {
+      cardEl.classList.add('is-busy');
+      cardEl.querySelectorAll('button, input').forEach((el) => {
+        el.disabled = true;
+      });
+    }
+    if (sendBtn) {
+      sendBtn.textContent = t.decisionWorking;
+    }
+
+    const view = getLocalizedDecisionDisplay(dec);
+    const payload = buildScopePayload({
+      decisionId: dec.id,
+      action: 'custom_reply',
+      customMessage,
+      threadId: dec.threadId || '',
+      autoKind: dec.autoKind || '',
+      lastCommit: dec.lastCommit || '',
+      title: view.title || dec.title || '',
+      summary: view.summary || dec.summary || '',
+      coordinatorId: lastSnap?.coordinator?.conversationId || dec.coordinatorId || '',
+    });
+
+    try {
+      const res = await postApi('/api/decision_action', '/api/decision_action_get', payload, {
+        timeoutMs: 0,
+        allowGetFallback: false,
+      });
+      pendingDecisionIds.delete(dec.id);
+      if (!res || res.ok === false) {
+        flashToast(res?.error || t.decisionActionErrToast, 'err', 3600);
+        renderDecisionsPanel(cachedDecisions, { force: true, focusDecisionId: dec.id });
+        return;
+      }
+
+      expandedCustomDecisionIds.delete(dec.id);
+      decisionCustomDrafts.delete(dec.id);
+      decisionImeComposingIds.delete(dec.id);
+      flashToast(t.decisionCustomSentToast, 'ok', 2800);
+      cachedDecisions = cachedDecisions.filter((x) => x.id !== dec.id);
+      renderDecisionsPanel(cachedDecisions, { force: true });
+      lastBoardKey = '';
+      refreshBoard(true);
+    } catch (err) {
+      pendingDecisionIds.delete(dec.id);
+      flashToast(err?.message || t.decisionActionErrToast, 'err', 3600);
+      renderDecisionsPanel(cachedDecisions, { force: true, focusDecisionId: dec.id });
+    }
+  }
+
+  function renderDecisionsPanel(
+    decisions,
+    { force = false, focusDecisionId = '', focusToggleDecisionId = '' } = {},
+  ) {
     if (!elDecisionsPanel) return;
     const list = Array.isArray(decisions) ? decisions : [];
+
+    // Sync any live input values into decisionCustomDrafts before evaluating DOM updates
+    elDecisionsPanel.querySelectorAll('input[data-dec-custom-input]').forEach((inp) => {
+      const did = inp.dataset.decCustomInput;
+      if (did) decisionCustomDrafts.set(did, inp.value);
+    });
+
+    const activeEl = document.activeElement;
+    let activeInputState = null;
+    if (
+      activeEl &&
+      elDecisionsPanel.contains(activeEl) &&
+      activeEl.classList?.contains('dec-custom-input') &&
+      activeEl.dataset?.decCustomInput
+    ) {
+      activeInputState = {
+        decisionId: activeEl.dataset.decCustomInput,
+        selectionStart: typeof activeEl.selectionStart === 'number' ? activeEl.selectionStart : null,
+        selectionEnd: typeof activeEl.selectionEnd === 'number' ? activeEl.selectionEnd : null,
+        scrollLeft: typeof activeEl.scrollLeft === 'number' ? activeEl.scrollLeft : 0,
+      };
+    }
+
     cachedDecisions = list;
     if (!list.length) {
+      expandedCustomDecisionIds.clear();
+      decisionCustomDrafts.clear();
+      decisionImeComposingIds.clear();
+      deferredDecisionsList = null;
+      lastDecisionsRenderKey = '';
       elDecisionsPanel.hidden = true;
       elDecisionsPanel.classList.remove('collapsed');
       elDecisionsPanel.innerHTML = '';
       return;
     }
+
+    const validIds = new Set(list.map((d) => d && d.id).filter(Boolean));
+    if (
+      !force &&
+      activeInputState &&
+      decisionImeComposingIds.has(activeInputState.decisionId) &&
+      validIds.has(activeInputState.decisionId)
+    ) {
+      deferredDecisionsList = list;
+      return;
+    }
+
+    for (const id of [...expandedCustomDecisionIds]) {
+      if (!validIds.has(id) && !pendingDecisionIds.has(id)) expandedCustomDecisionIds.delete(id);
+    }
+    for (const id of [...decisionCustomDrafts.keys()]) {
+      if (!validIds.has(id) && !pendingDecisionIds.has(id)) decisionCustomDrafts.delete(id);
+    }
+    for (const id of [...decisionImeComposingIds]) {
+      if (!validIds.has(id)) decisionImeComposingIds.delete(id);
+    }
+
+    const decisionsKey = JSON.stringify({
+      locale: curLocale,
+      collapsed: decisionsPanelCollapsed,
+      busy: [...pendingDecisionIds].sort(),
+      expanded: [...expandedCustomDecisionIds].sort(),
+      list,
+    });
+    if (
+      !force &&
+      !focusDecisionId &&
+      !focusToggleDecisionId &&
+      decisionsKey === lastDecisionsRenderKey &&
+      elDecisionsPanel.childElementCount > 0
+    ) {
+      return;
+    }
+    lastDecisionsRenderKey = decisionsKey;
+    deferredDecisionsList = null;
+
     elDecisionsPanel.hidden = false;
     elDecisionsPanel.classList.toggle('collapsed', decisionsPanelCollapsed);
     elDecisionsPanel.innerHTML = renderDecisionsPanelHtml(list, {
       collapsed: decisionsPanelCollapsed,
       busyIds: pendingDecisionIds,
+      expandedIds: expandedCustomDecisionIds,
+      drafts: decisionCustomDrafts,
     });
 
     const toggleBtn = elDecisionsPanel.querySelector('button[data-action="toggle-decisions"]');
@@ -4037,6 +4249,7 @@
         decisionsPanelCollapsed = !decisionsPanelCollapsed;
         elDecisionsPanel.classList.toggle('collapsed', decisionsPanelCollapsed);
         toggleBtn.setAttribute('aria-expanded', decisionsPanelCollapsed ? 'false' : 'true');
+        lastDecisionsRenderKey = '';
       });
     }
 
@@ -4074,6 +4287,131 @@
         handleDecisionActionTrigger(dec, opt, btn);
       });
     });
+
+    elDecisionsPanel.querySelectorAll('button[data-dec-custom-toggle]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const did = btn.dataset.decCustomToggle;
+        if (!did || pendingDecisionIds.has(did)) return;
+        if (expandedCustomDecisionIds.has(did)) {
+          expandedCustomDecisionIds.delete(did);
+          decisionImeComposingIds.delete(did);
+          renderDecisionsPanel(cachedDecisions, { force: true, focusToggleDecisionId: did });
+        } else {
+          expandedCustomDecisionIds.add(did);
+          renderDecisionsPanel(cachedDecisions, { force: true, focusDecisionId: did });
+        }
+      });
+    });
+
+    elDecisionsPanel.querySelectorAll('input[data-dec-custom-input]').forEach((inputEl) => {
+      const did = inputEl.dataset.decCustomInput;
+      const boxEl = inputEl.closest('.dec-custom-row');
+      const sendBtn = boxEl ? boxEl.querySelector('button[data-dec-custom-send]') : null;
+
+      inputEl.addEventListener('input', () => {
+        if (!did) return;
+        decisionCustomDrafts.set(did, inputEl.value);
+        if (sendBtn) {
+          sendBtn.disabled = pendingDecisionIds.has(did) || !inputEl.value.trim();
+        }
+      });
+
+      inputEl.addEventListener('compositionstart', () => {
+        if (did) decisionImeComposingIds.add(did);
+      });
+
+      inputEl.addEventListener('compositionend', () => {
+        if (did) {
+          decisionImeComposingIds.delete(did);
+          decisionCustomDrafts.set(did, inputEl.value);
+          if (sendBtn) {
+            sendBtn.disabled = pendingDecisionIds.has(did) || !inputEl.value.trim();
+          }
+        }
+        if (deferredDecisionsList) {
+          const pendingList = deferredDecisionsList;
+          deferredDecisionsList = null;
+          renderDecisionsPanel(pendingList);
+        }
+      });
+
+      inputEl.addEventListener('keydown', (e) => {
+        const composing = Boolean(
+          e.isComposing || e.keyCode === 229 || (did && decisionImeComposingIds.has(did)),
+        );
+        if (e.key === 'Enter' && !e.shiftKey && !composing) {
+          e.preventDefault();
+          e.stopPropagation();
+          const dec = cachedDecisions.find((x) => x.id === did);
+          if (dec) handleDecisionCustomSubmit(dec, inputEl, sendBtn);
+          return;
+        }
+        if (e.key === 'Escape' && !composing) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (did) {
+            decisionCustomDrafts.set(did, inputEl.value);
+            expandedCustomDecisionIds.delete(did);
+            decisionImeComposingIds.delete(did);
+            renderDecisionsPanel(cachedDecisions, { force: true, focusToggleDecisionId: did });
+          }
+        }
+      });
+    });
+
+    elDecisionsPanel.querySelectorAll('button[data-dec-custom-send]').forEach((sendBtn) => {
+      sendBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const did = sendBtn.dataset.decCustomSend;
+        const dec = cachedDecisions.find((x) => x.id === did);
+        const boxEl = sendBtn.closest('.dec-custom-row');
+        const inputEl = boxEl ? boxEl.querySelector('input[data-dec-custom-input]') : null;
+        if (dec) handleDecisionCustomSubmit(dec, inputEl, sendBtn);
+      });
+    });
+
+    // Restore focus / caret position on active custom input or newly toggled control
+    const targetInputId = focusDecisionId || activeInputState?.decisionId || '';
+    if (targetInputId) {
+      const targetInput = [...elDecisionsPanel.querySelectorAll('input[data-dec-custom-input]')].find(
+        (el) => el.dataset.decCustomInput === targetInputId,
+      );
+      if (targetInput && !targetInput.disabled) {
+        try {
+          targetInput.focus({ preventScroll: true });
+        } catch {
+          targetInput.focus();
+        }
+        if (focusDecisionId) {
+          const len = targetInput.value.length;
+          try {
+            targetInput.setSelectionRange(len, len);
+          } catch {}
+        } else if (activeInputState && activeInputState.decisionId === targetInputId) {
+          if (activeInputState.selectionStart !== null && activeInputState.selectionEnd !== null) {
+            try {
+              targetInput.setSelectionRange(
+                activeInputState.selectionStart,
+                activeInputState.selectionEnd,
+              );
+            } catch {}
+          }
+          targetInput.scrollLeft = activeInputState.scrollLeft;
+        }
+      }
+    } else if (focusToggleDecisionId) {
+      const targetToggle = [
+        ...elDecisionsPanel.querySelectorAll('button[data-dec-custom-toggle]'),
+      ].find((el) => el.dataset.decCustomToggle === focusToggleDecisionId);
+      if (targetToggle && !targetToggle.disabled) {
+        try {
+          targetToggle.focus({ preventScroll: true });
+        } catch {
+          targetToggle.focus();
+        }
+      }
+    }
   }
 
   function renderO2ThreadCard(th, decisionThreadIds = null) {
@@ -6630,6 +6968,13 @@
 
       if (scopeChanged || convChanged || coordChanged) {
         lastBoardKey = '';
+        if (scopeChanged) {
+          expandedCustomDecisionIds.clear();
+          decisionCustomDrafts.clear();
+          decisionImeComposingIds.clear();
+          deferredDecisionsList = null;
+          lastDecisionsRenderKey = '';
+        }
         if (scopeChanged || convChanged) {
           lastHasGitRepo = null;
           manualPopoutConvId = '';
