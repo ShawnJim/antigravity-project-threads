@@ -31,6 +31,8 @@ When activated (or whenever the current session is bound as `[Coordinator]`), yo
    - **Code Modification / Bugfix / SQL / Unit Tests**:
      - Call `dispatch_thread` with `createWorktree: true`, `workspacePath: "<repoRoot>"`. Omit `model` by default so the user's configured Worktree default model in Settings applies.
      - Automatically creates an isolated Git worktree (`../.worktrees/<repo>/<threadId>-<slug>`) and branch (`thread/<threadId>-<slug>`) so parallel tasks never collide.
+   - **Follow the User's Language**:
+     - Always write `title` and `taskPrompt` in the user's active conversation language (e.g., Chinese when the user speaks Chinese, English when the user speaks English), and instruct the Worker Thread to write its analysis, replies, and final summary in that same language.
 
 4. **Check Active Threads & Steer Existing Threads Without Navigating Away**:
    - Call `list_threads` before creating code-editing threads so you don't create overlapping branches on the same files.

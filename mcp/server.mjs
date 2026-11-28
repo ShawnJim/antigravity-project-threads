@@ -60,11 +60,11 @@ const TOOLS = [
       properties: {
         title: {
           type: 'string',
-          description: 'Short, descriptive task title for the thread (e.g., "Fix OAuth token refresh race").',
+          description: 'Short, descriptive task title for the thread in the user\'s active language (e.g., "Fix OAuth token refresh race" or "修复 OAuth 令牌刷新竞态").',
         },
         taskPrompt: {
           type: 'string',
-          description: 'Complete self-contained instructions, context, reproduction steps, and acceptance criteria for the Worker Thread.',
+          description: 'Complete self-contained instructions, context, reproduction steps, and acceptance criteria for the Worker Thread, written in the user\'s active language.',
         },
         workspacePath: {
           type: 'string',
