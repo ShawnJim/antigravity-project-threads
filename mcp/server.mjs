@@ -16,7 +16,7 @@ resolveLsEndpoint();
 
 const SERVER_INFO = {
   name: 'project-threads-coordinator',
-  version: '1.0.0',
+  version: '1.1.0',
 };
 
 const TOOLS = [
