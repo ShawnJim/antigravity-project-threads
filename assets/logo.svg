@@ -1,10 +1,67 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none">
-  <rect x="14" y="14" width="100" height="100" rx="24" fill="#1E293B" stroke="#4F8DF9" stroke-width="4"/>
-  <circle cx="40" cy="64" r="10" fill="#4F8DF9"/>
-  <circle cx="88" cy="38" r="8" fill="#81C995"/>
-  <circle cx="88" cy="64" r="8" fill="#FBBF24"/>
-  <circle cx="88" cy="90" r="8" fill="#C58AF9"/>
-  <path d="M50 64 C66 64, 66 38, 80 38" stroke="#81C995" stroke-width="4" stroke-linecap="round"/>
-  <path d="M50 64 L80 64" stroke="#FBBF24" stroke-width="4" stroke-linecap="round"/>
-  <path d="M50 64 C66 64, 66 90, 80 90" stroke="#C58AF9" stroke-width="4" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" fill="none" role="img" aria-label="Antigravity Project Threads Logo">
+  <defs>
+    <linearGradient id="pt-bg" x1="12" y1="8" x2="116" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="55%" stop-color="#172554"/>
+      <stop offset="100%" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <linearGradient id="pt-border" x1="14" y1="10" x2="114" y2="118" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.75"/>
+      <stop offset="50%" stop-color="#818CF8" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#34D399" stop-opacity="0.7"/>
+    </linearGradient>
+    <radialGradient id="pt-hub-glow" cx="36" cy="64" r="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pt-hub-fill" x1="24" y1="52" x2="48" y2="76" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7DD3FC"/>
+      <stop offset="50%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="pt-branch-top" x1="46" y1="64" x2="94" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="pt-branch-mid" x1="46" y1="64" x2="94" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#60A5FA"/>
+    </linearGradient>
+    <linearGradient id="pt-branch-bot" x1="46" y1="64" x2="94" y2="94" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="100%" stop-color="#C084FC"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded icon container (high contrast on both light and dark backgrounds) -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#pt-bg)"/>
+  <rect x="9.5" y="9.5" width="109" height="109" rx="26.5" stroke="url(#pt-border)" stroke-width="3"/>
+
+  <!-- Subtle ambient glow behind Coordinator core -->
+  <circle cx="36" cy="64" r="34" fill="url(#pt-hub-glow)"/>
+
+  <!-- Subtle parallel thread rails -->
+  <path d="M92 34 H102" stroke="#34D399" stroke-width="3" stroke-linecap="round" stroke-opacity="0.45"/>
+  <path d="M92 64 H104" stroke="#60A5FA" stroke-width="3" stroke-linecap="round" stroke-opacity="0.45"/>
+  <path d="M92 94 H102" stroke="#C084FC" stroke-width="3" stroke-linecap="round" stroke-opacity="0.45"/>
+
+  <!-- Branching paths from Coordinator hub to isolated parallel threads -->
+  <path d="M44 64 C62 64, 62 34, 84 34" stroke="url(#pt-branch-top)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M44 64 H84" stroke="url(#pt-branch-mid)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M44 64 C62 64, 62 94, 84 94" stroke="url(#pt-branch-bot)" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Coordinator core node -->
+  <circle cx="36" cy="64" r="15" fill="#0F172A" stroke="#38BDF8" stroke-width="2.5" stroke-opacity="0.65"/>
+  <circle cx="36" cy="64" r="10.5" fill="url(#pt-hub-fill)"/>
+  <circle cx="36" cy="64" r="4" fill="#F8FAFC"/>
+
+  <!-- Parallel worker thread nodes -->
+  <circle cx="88" cy="34" r="8.5" fill="#0F172A" stroke="#34D399" stroke-width="3"/>
+  <circle cx="88" cy="34" r="3.5" fill="#6EE7B7"/>
+
+  <circle cx="88" cy="64" r="8.5" fill="#0F172A" stroke="#60A5FA" stroke-width="3"/>
+  <circle cx="88" cy="64" r="3.5" fill="#BAE6FD"/>
+
+  <circle cx="88" cy="94" r="8.5" fill="#0F172A" stroke="#C084FC" stroke-width="3"/>
+  <circle cx="88" cy="94" r="3.5" fill="#E9D5FF"/>
 </svg>
