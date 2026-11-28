@@ -11,10 +11,22 @@
   const HOST_META_TIMEOUT_MS = 2000;
   const SETTINGS_AUTO_REFRESH_MIN_MS = 10_000;
   const params = new URLSearchParams(location.search);
-  const getHostConvId = () =>
-    (window.sidecar && window.sidecar.conversationId) ||
-    params.get('conversationId') ||
-    '';
+  let lastSdkConvId = '';
+  let eventHostConvId = '';
+  const readRawSidecarConvId = () =>
+    String(
+      (window.sidecar &&
+        (window.sidecar.conversationId || window.sidecar.activeConversationId)) ||
+        '',
+    ).trim();
+  const getHostConvId = () => {
+    const sdkId = readRawSidecarConvId();
+    if (sdkId && sdkId !== lastSdkConvId) {
+      lastSdkConvId = sdkId;
+      eventHostConvId = '';
+    }
+    return String(eventHostConvId || sdkId || params.get('conversationId') || '').trim();
+  };
   const doFetch = (window.sidecar && window.sidecar.fetch) || fetch;
 
   // ---------- Global App-Controlled Localization (en / zh-CN / zh-TW) ----------
@@ -38,6 +50,37 @@
       coordJumpTip: 'Switch main window back to Coordinator session',
       coordCardOpen: 'Open Coordinator ↗',
       coordCardBack: '← Back to Coordinator',
+      coordSwitchBtn: 'Switch',
+      coordSwitchThisBtn: 'Switch to This',
+      coordSwitchTip: 'Switch or rebind Project Coordinator session',
+      coordSwitchThisTip: 'Set current main window session as the new Project Coordinator',
+      rebindModalTitle: 'Switch Project Coordinator',
+      rebindModalOldLabel: 'Current Coordinator',
+      rebindModalNewLabel: 'New Coordinator',
+      rebindModalUnselected: 'Select or enter session ID',
+      rebindModalSelectLabel: 'Available project sessions',
+      rebindModalSelectManual: 'Enter conversation ID manually…',
+      rebindModalInputLabel: 'Target conversation ID',
+      rebindModalInputPh: 'Paste target conversation UUID…',
+      rebindModalCurrentTag: 'Current window',
+      rebindModalRetiredTag: 'Retired',
+      rebindModalHostHint: 'Prefilled with the current main window session for one-click switching.',
+      rebindModalMigratePill: (n) =>
+        n > 0
+          ? `Migrates ${n} active ${n === 1 ? 'thread' : 'threads'}`
+          : 'No active threads to migrate',
+      rebindModalNotice:
+        'Active unarchived threads in this project will route completion callbacks to the new Coordinator. The previous Coordinator will be marked retired; archived threads and other projects remain untouched.',
+      rebindModalConfirm: 'Confirm Switch',
+      rebindModalSwitching: 'Switching…',
+      rebindErrEmpty: 'Enter or select a target conversation ID.',
+      rebindErrSame: 'Target conversation is already the active Coordinator.',
+      rebindErrWorker: 'Cannot bind a Worker Thread as the Project Coordinator.',
+      rebindErrToast: 'Failed to switch Coordinator',
+      rebindSuccessToast: (n) =>
+        n > 0
+          ? `Coordinator switched (${n} active ${n === 1 ? 'thread' : 'threads'} migrated)`
+          : 'Coordinator switched',
       switchedCoordToast: 'Switched to Coordinator',
       kickerCoord: 'COORDINATOR',
       kickerProject: 'PROJECT',
@@ -373,6 +416,33 @@
       coordJumpTip: '将左侧主窗口切回总控会话',
       coordCardOpen: '打开总控 ↗',
       coordCardBack: '← 切回总控',
+      coordSwitchBtn: '切换总控',
+      coordSwitchThisBtn: '换绑当前',
+      coordSwitchTip: '切换或换绑当前项目的总控会话',
+      coordSwitchThisTip: '将当前主窗口会话设为新总控（自动迁移活跃线程）',
+      rebindModalTitle: '切换项目总控会话',
+      rebindModalOldLabel: '原总控会话',
+      rebindModalNewLabel: '新总控会话',
+      rebindModalUnselected: '请选择或输入会话 ID',
+      rebindModalSelectLabel: '选择本项目会话',
+      rebindModalSelectManual: '手动输入目标会话 ID…',
+      rebindModalInputLabel: '目标会话 ID',
+      rebindModalInputPh: '输入或粘贴新总控会话 UUID…',
+      rebindModalCurrentTag: '当前主窗口',
+      rebindModalRetiredTag: '已退场',
+      rebindModalHostHint: '已自动预填当前主窗口会话，确认即可一键换绑。',
+      rebindModalMigratePill: (n) =>
+        n > 0 ? `将同步迁移 ${n} 个活跃线程` : '当前无待迁移活跃线程',
+      rebindModalNotice:
+        '本项目下未归档的活跃线程回调将自动改绑至新总控，原总控将标记退场保护；已归档线程与其他项目不受影响。',
+      rebindModalConfirm: '确认切换',
+      rebindModalSwitching: '切换中…',
+      rebindErrEmpty: '请输入或选择目标会话 ID。',
+      rebindErrSame: '目标会话已是当前活跃总控。',
+      rebindErrWorker: '不能将工作线程（Worker Thread）绑定为项目总控。',
+      rebindErrToast: '切换总控失败',
+      rebindSuccessToast: (n) =>
+        n > 0 ? `已切换总控（迁移 ${n} 个活跃线程）` : '已切换项目总控',
       switchedCoordToast: '已切回总控会话',
       kickerCoord: '总控会话',
       kickerProject: '当前项目',
@@ -704,6 +774,33 @@
       coordJumpTip: '將左側主視窗切回總控會話',
       coordCardOpen: '開啟總控 ↗',
       coordCardBack: '← 切回總控',
+      coordSwitchBtn: '切換總控',
+      coordSwitchThisBtn: '換綁目前',
+      coordSwitchTip: '切換或換綁目前專案的總控會話',
+      coordSwitchThisTip: '將目前主視窗會話設為新總控（自動遷移活躍執行緒）',
+      rebindModalTitle: '切換專案總控會話',
+      rebindModalOldLabel: '原總控會話',
+      rebindModalNewLabel: '新總控會話',
+      rebindModalUnselected: '請選擇或輸入會話 ID',
+      rebindModalSelectLabel: '選擇本專案會話',
+      rebindModalSelectManual: '手動輸入目標會話 ID…',
+      rebindModalInputLabel: '目標會話 ID',
+      rebindModalInputPh: '輸入或貼上新總控會話 UUID…',
+      rebindModalCurrentTag: '目前主視窗',
+      rebindModalRetiredTag: '已退場',
+      rebindModalHostHint: '已自動預填目前主視窗會話，確認即可一鍵換綁。',
+      rebindModalMigratePill: (n) =>
+        n > 0 ? `將同步遷移 ${n} 個活躍執行緒` : '目前無待遷移活躍執行緒',
+      rebindModalNotice:
+        '本專案下未封存的活躍執行緒回呼將自動改綁至新總控，原總控將標記退場保護；已封存執行緒與其他專案不受影響。',
+      rebindModalConfirm: '確認切換',
+      rebindModalSwitching: '切換中…',
+      rebindErrEmpty: '請輸入或選擇目標會話 ID。',
+      rebindErrSame: '目標會話已是目前活躍總控。',
+      rebindErrWorker: '不能將工作執行緒（Worker Thread）綁定為專案總控。',
+      rebindErrToast: '切換總控失敗',
+      rebindSuccessToast: (n) =>
+        n > 0 ? `已切換總控（遷移 ${n} 個活躍執行緒）` : '已切換專案總控',
       switchedCoordToast: '已切回總控會話',
       kickerCoord: '總控會話',
       kickerProject: '目前專案',
@@ -1153,6 +1250,7 @@
   const elDecisionsPanel = document.getElementById('decisions-panel');
   const elBtnOpenCoord = document.getElementById('btn-open-coord');
   const elBtnCardCoord = document.getElementById('btn-card-coord');
+  const elBtnRebindCoord = document.getElementById('btn-rebind-coord');
   const elBtnChatCoord = document.getElementById('btn-chat-coord');
   const elChatStream = document.getElementById('chat-stream');
   const elChatInput = document.getElementById('chat-input');
@@ -1164,6 +1262,17 @@
   const elModalClose = document.getElementById('pt-modal-close');
   const elModalThread = document.getElementById('pt-modal-thread');
   const elModalWtInfo = document.getElementById('pt-modal-wt-info');
+  const elModalRebindBox = document.getElementById('pt-modal-rebind-box');
+  const elLblRebindOld = document.getElementById('lbl-rebind-old');
+  const elValRebindOld = document.getElementById('val-rebind-old');
+  const elLblRebindNew = document.getElementById('lbl-rebind-new');
+  const elValRebindNew = document.getElementById('val-rebind-new');
+  const elRebindHint = document.getElementById('pt-rebind-hint');
+  const elRebindSelectWrap = document.getElementById('pt-rebind-select-wrap');
+  const elLblRebindSelect = document.getElementById('lbl-rebind-select');
+  const elModalRebindSelect = document.getElementById('pt-modal-rebind-select');
+  const elLblRebindInput = document.getElementById('lbl-rebind-input');
+  const elModalRebindInput = document.getElementById('pt-modal-rebind-input');
   const elModalWarn = document.getElementById('pt-modal-warn');
   const elModalRemoveRow = document.getElementById('pt-modal-remove-row');
   const elModalRemoveWt = document.getElementById('pt-modal-remove-wt');
@@ -1195,6 +1304,11 @@
 
   async function syncHostConversationScope() {
     const convId = getHostConvId();
+    const boundCoordId = String(lastSnap?.coordinator?.conversationId || '').trim();
+    if (convId && boundCoordId && convId === boundCoordId && manualPopoutConvId) {
+      manualPopoutConvId = '';
+      lastBoardKey = '';
+    }
     if (convId === lastHostConvId) {
       return false;
     }
@@ -1259,8 +1373,22 @@
   }
 
   window.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'theme-change') {
+    if (!e.data) return;
+    if (e.data.type === 'theme-change') {
       setTimeout(syncThemeScheme, 10);
+      return;
+    }
+    if (e.data.type === 'conversation-change' || e.data.type === 'active-conversation-change') {
+      const nextId = String(
+        e.data.conversationId || e.data.payload?.conversationId || readRawSidecarConvId() || '',
+      ).trim();
+      if (nextId) {
+        eventHostConvId = nextId;
+        lastSdkConvId = readRawSidecarConvId() || lastSdkConvId;
+      }
+      manualPopoutConvId = '';
+      lastBoardKey = '';
+      refreshBoard(true);
     }
   });
   new MutationObserver(syncThemeScheme).observe(document.documentElement, {
@@ -1277,56 +1405,130 @@
     elLivePill.title = ok ? t.liveTipOk : t.liveTipStale;
   }
 
-  function getActiveMainWorkerConvId() {
-    const coordConvId = lastSnap?.coordinator?.conversationId || '';
-    const allThreads = lastSnap?.threads || cachedThreads || [];
-    if (manualPopoutConvId && manualPopoutConvId !== coordConvId) {
-      return manualPopoutConvId;
+  function computeCoordinatorUiState({
+    coordConvId = '',
+    hostConvId = '',
+    manualPopoutConvId: popoutConvId = '',
+    threads = [],
+  } = {}) {
+    const coordId = String(coordConvId || '').trim();
+    const hostId = String(hostConvId || '').trim();
+    const popoutId = String(popoutConvId || '').trim();
+    const list = Array.isArray(threads) ? threads : [];
+    const hasCoord = Boolean(coordId);
+
+    if (!hasCoord) {
+      return {
+        hasCoord: false,
+        isOnCoordinator: false,
+        away: false,
+        activeMainWorkerConvId: '',
+        switchableHostConvId: '',
+        showHeaderCoordBtn: false,
+        showCardCoordBtn: false,
+        showChatCoordBtn: false,
+        showRebindBtn: false,
+        highlightRebindBtn: false,
+        goalCardClickable: false,
+      };
     }
-    const hostId = getHostConvId();
-    if (
-      hostId &&
-      hostId !== coordConvId &&
-      allThreads.some((x) => x.conversationId === hostId)
-    ) {
-      return hostId;
+
+    const isWorkerId = (id) => Boolean(id && list.some((x) => x && x.conversationId === id));
+    let isOnCoordinator = true;
+    let activeMainWorkerConvId = '';
+    let switchableHostConvId = '';
+
+    if (hostId) {
+      if (hostId === coordId) {
+        isOnCoordinator = true;
+      } else {
+        isOnCoordinator = false;
+        if (isWorkerId(hostId)) {
+          activeMainWorkerConvId = hostId;
+        } else {
+          switchableHostConvId = hostId;
+        }
+      }
+    } else if (popoutId && popoutId !== coordId) {
+      isOnCoordinator = false;
+      activeMainWorkerConvId = popoutId;
     }
-    return '';
+
+    const away = !isOnCoordinator;
+    return {
+      hasCoord: true,
+      isOnCoordinator,
+      away,
+      activeMainWorkerConvId,
+      switchableHostConvId,
+      // Never duplicate "Back to Coordinator" across header + card; hide all when already on Coordinator
+      showHeaderCoordBtn: false,
+      showCardCoordBtn: away,
+      showChatCoordBtn: away,
+      showRebindBtn: true,
+      highlightRebindBtn: Boolean(switchableHostConvId),
+      goalCardClickable: away,
+    };
   }
 
-  function isAwayFromCoordinator(coordConvId) {
-    if (!coordConvId) return false;
-    return Boolean(getActiveMainWorkerConvId());
+  function getCoordinatorUiState() {
+    return computeCoordinatorUiState({
+      coordConvId: lastSnap?.coordinator?.conversationId || '',
+      hostConvId: getHostConvId(),
+      manualPopoutConvId,
+      threads: lastSnap?.threads || cachedThreads || [],
+    });
+  }
+
+  function getActiveMainWorkerConvId() {
+    return getCoordinatorUiState().activeMainWorkerConvId;
+  }
+
+  function shortConvId(id) {
+    const s = String(id || '').trim();
+    if (!s) return '';
+    return s.length > 16 ? `${s.slice(0, 8)}…${s.slice(-4)}` : s;
+  }
+
+  function getSwitchableHostConvId() {
+    return getCoordinatorUiState().switchableHostConvId;
   }
 
   function updateCoordinatorControls() {
-    const coordConvId = lastSnap?.coordinator?.conversationId || '';
-    const hasCoord = Boolean(coordConvId);
-    const away = isAwayFromCoordinator(coordConvId);
+    const ui = getCoordinatorUiState();
     const t = L();
 
     if (elBtnOpenCoord) {
-      elBtnOpenCoord.hidden = !hasCoord;
-      elBtnOpenCoord.classList.toggle('away', away);
-      elBtnOpenCoord.textContent = away ? t.coordJumpBtn : t.coordCalmBtn;
+      elBtnOpenCoord.hidden = !ui.showHeaderCoordBtn;
+      elBtnOpenCoord.classList.toggle('away', ui.away);
+      elBtnOpenCoord.textContent = t.coordJumpBtn;
       elBtnOpenCoord.title = t.coordJumpTip;
     }
 
     if (elGoalCard) {
-      elGoalCard.classList.toggle('clickable', hasCoord);
+      elGoalCard.classList.toggle('clickable', ui.goalCardClickable);
     }
 
     if (elBtnCardCoord) {
-      elBtnCardCoord.hidden = !hasCoord;
-      elBtnCardCoord.classList.toggle('away', away);
-      elBtnCardCoord.textContent = away ? t.coordCardBack : t.coordCardOpen;
+      elBtnCardCoord.hidden = !ui.showCardCoordBtn;
+      elBtnCardCoord.classList.toggle('away', ui.away);
+      elBtnCardCoord.textContent = t.coordCardBack;
       elBtnCardCoord.title = t.coordJumpTip;
     }
 
+    if (elBtnRebindCoord) {
+      elBtnRebindCoord.hidden = !ui.showRebindBtn;
+      elBtnRebindCoord.classList.toggle('highlight', ui.highlightRebindBtn);
+      elBtnRebindCoord.textContent = ui.highlightRebindBtn
+        ? t.coordSwitchThisBtn
+        : t.coordSwitchBtn;
+      elBtnRebindCoord.title = ui.highlightRebindBtn ? t.coordSwitchThisTip : t.coordSwitchTip;
+    }
+
     if (elBtnChatCoord) {
-      elBtnChatCoord.hidden = !hasCoord;
-      elBtnChatCoord.classList.toggle('away', away);
-      elBtnChatCoord.textContent = away ? t.coordJumpBtn : t.coordCalmBtn;
+      elBtnChatCoord.hidden = !ui.showChatCoordBtn;
+      elBtnChatCoord.classList.toggle('away', ui.away);
+      elBtnChatCoord.textContent = t.coordJumpBtn;
       elBtnChatCoord.title = t.coordJumpTip;
     }
   }
@@ -1505,6 +1707,13 @@
       elModalConfirm.textContent = activeModalCtx.busy ? t.updateApplyingBtn : t.updateModalConfirm;
       return;
     }
+    if (activeModalCtx.mode === 'rebind_coordinator') {
+      elModalConfirm.className = 'btn-solid';
+      elModalConfirm.textContent = activeModalCtx.busy
+        ? t.rebindModalSwitching
+        : t.rebindModalConfirm;
+      return;
+    }
     const isForce = !elModalForceRow.hidden && elModalForceWt.checked;
     elModalConfirm.className = isForce ? 'btn-danger' : 'btn-solid';
     if (activeModalCtx.busy) {
@@ -1526,11 +1735,191 @@
     }
     activeModalCtx = null;
     elModalBackdrop.hidden = true;
+    if (elModalRebindBox) elModalRebindBox.hidden = true;
     elModalErr.hidden = true;
     elModalErr.textContent = '';
   }
 
+  function validateRebindTargetId(rawTargetId, oldCoordId) {
+    const t = L();
+    const targetId = String(rawTargetId || '').trim();
+    if (!targetId) return { ok: false, targetId: '', error: t.rebindErrEmpty };
+    if (oldCoordId && targetId === oldCoordId) {
+      return { ok: false, targetId, error: t.rebindErrSame };
+    }
+    const allThreads = lastSnap?.threads || cachedThreads || [];
+    if (allThreads.some((x) => x.conversationId === targetId)) {
+      return { ok: false, targetId, error: t.rebindErrWorker };
+    }
+    return { ok: true, targetId, error: '' };
+  }
+
+  function syncRebindModalPreview({ showEmptyError = false } = {}) {
+    if (!activeModalCtx || activeModalCtx.mode !== 'rebind_coordinator') return;
+    const t = L();
+    const rawVal = String(elModalRebindInput?.value || '').trim();
+    const check = validateRebindTargetId(rawVal, activeModalCtx.oldCoordId);
+    const matchedCand = (activeModalCtx.candidates || []).find((c) => c.id === rawVal) || null;
+    if (elValRebindNew) {
+      if (rawVal) {
+        const display = matchedCand?.title
+          ? `${matchedCand.title} (${shortConvId(rawVal)})`
+          : shortConvId(rawVal);
+        elValRebindNew.textContent = display;
+        elValRebindNew.title = rawVal;
+        elValRebindNew.classList.remove('is-placeholder');
+      } else {
+        elValRebindNew.textContent = t.rebindModalUnselected;
+        elValRebindNew.title = '';
+        elValRebindNew.classList.add('is-placeholder');
+      }
+    }
+    const showErr = !check.ok && (Boolean(rawVal) || showEmptyError);
+    elModalErr.hidden = !showErr;
+    elModalErr.textContent = showErr ? check.error : '';
+    if (!activeModalCtx.busy) {
+      elModalConfirm.disabled = !check.ok;
+    }
+  }
+
+  function populateRebindCandidateSelect(candidates = [], selectedId = '') {
+    if (!elRebindSelectWrap || !elModalRebindSelect) return;
+    const t = L();
+    const list = Array.isArray(candidates) ? candidates : [];
+    if (!list.length) {
+      elRebindSelectWrap.hidden = true;
+      elModalRebindSelect.innerHTML = '';
+      return;
+    }
+    const optsHtml = [
+      ...list.map((c) => {
+        const tags = [];
+        if (c.isCurrentHost) tags.push(t.rebindModalCurrentTag);
+        if (c.isRetired) tags.push(t.rebindModalRetiredTag);
+        const tagSuffix = tags.length ? ` [${tags.join(' / ')}]` : '';
+        const baseLabel = c.title ? `${c.title} (${shortConvId(c.id)})` : shortConvId(c.id);
+        return `<option value="${esc(c.id)}">${esc(baseLabel + tagSuffix)}</option>`;
+      }),
+      `<option value="">${esc(t.rebindModalSelectManual)}</option>`,
+    ];
+    elModalRebindSelect.innerHTML = optsHtml.join('');
+    elModalRebindSelect.value = list.some((c) => c.id === selectedId) ? selectedId : '';
+    elRebindSelectWrap.hidden = false;
+  }
+
+  function openRebindCoordinatorModal(triggerBtn = null) {
+    const coord = lastSnap?.coordinator || null;
+    if (!coord || !coord.conversationId) return;
+    const t = L();
+    const oldCoordId = String(coord.conversationId || '').trim();
+    const switchableHostId = getSwitchableHostConvId();
+    const activeThreadsCount = (lastSnap?.threads || cachedThreads || []).filter(
+      (x) => !x.archived,
+    ).length;
+
+    activeModalCtx = {
+      mode: 'rebind_coordinator',
+      oldCoordId,
+      activeThreadsCount,
+      candidates: [],
+      triggerBtn,
+      busy: false,
+      onDone: null,
+    };
+
+    elModalTitle.textContent = t.rebindModalTitle;
+    elModalClose.title = t.closeTip;
+    elModalCancel.textContent = t.fCancel;
+
+    const headerMeta = resolveBoardHeaderDisplay(lastSnap);
+    elModalThread.textContent = headerMeta.goalTitle || headerMeta.panelTitle || t.defaultProjTitle;
+
+    const pills = [
+      `<span class="wt-pill">${esc(t.rebindModalMigratePill(activeThreadsCount))}</span>`,
+    ];
+    if (lastSnap?.scopeKey) {
+      pills.push(
+        `<span class="pt-modal-path" title="${esc(lastSnap.scopeKey)}">${esc(lastSnap.scopeKey)}</span>`,
+      );
+    }
+    elModalWtInfo.innerHTML = pills.join('');
+
+    if (elModalRebindBox) elModalRebindBox.hidden = false;
+    if (elLblRebindOld) elLblRebindOld.textContent = t.rebindModalOldLabel;
+    if (elValRebindOld) {
+      const oldTitle = stripCoordinatorPrefix(coord.title || '');
+      elValRebindOld.textContent = oldTitle
+        ? `${oldTitle} (${shortConvId(oldCoordId)})`
+        : shortConvId(oldCoordId);
+      elValRebindOld.title = oldCoordId;
+    }
+    if (elLblRebindNew) elLblRebindNew.textContent = t.rebindModalNewLabel;
+    if (elLblRebindSelect) elLblRebindSelect.textContent = t.rebindModalSelectLabel;
+    if (elLblRebindInput) elLblRebindInput.textContent = t.rebindModalInputLabel;
+    if (elModalRebindInput) {
+      elModalRebindInput.placeholder = t.rebindModalInputPh;
+      elModalRebindInput.value = switchableHostId || '';
+      elModalRebindInput.disabled = false;
+    }
+    if (elRebindHint) {
+      elRebindHint.hidden = !switchableHostId;
+      elRebindHint.textContent = switchableHostId ? t.rebindModalHostHint : '';
+    }
+    populateRebindCandidateSelect([], switchableHostId);
+
+    elModalWarn.hidden = false;
+    elModalWarn.textContent = t.rebindModalNotice;
+    elModalRemoveRow.hidden = true;
+    elModalBranchRow.hidden = true;
+    elModalForceRow.hidden = true;
+
+    elModalErr.hidden = true;
+    elModalErr.textContent = '';
+    elModalCancel.disabled = false;
+    elModalClose.disabled = false;
+    if (elModalRebindSelect) elModalRebindSelect.disabled = false;
+
+    syncModalConfirmButton();
+    syncRebindModalPreview({ showEmptyError: false });
+    elModalBackdrop.hidden = false;
+    (switchableHostId ? elModalConfirm : elModalRebindInput || elModalCancel).focus();
+
+    // Asynchronously load same-project non-worker candidate sessions without blocking modal open
+    const modalRef = activeModalCtx;
+    const qs = new URLSearchParams(
+      buildScopePayload({
+        workspaceKey: activeScopeKey || lastSnap?.scopeKey || '',
+        coordinatorId: oldCoordId,
+      }),
+    );
+    doFetch(`/api/coordinator_candidates?${qs}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (activeModalCtx !== modalRef || !data?.ok) return;
+        modalRef.candidates = Array.isArray(data.candidates) ? data.candidates : [];
+        if (typeof data.activeThreadCount === 'number') {
+          modalRef.activeThreadsCount = data.activeThreadCount;
+          const nextPills = [
+            `<span class="wt-pill">${esc(L().rebindModalMigratePill(data.activeThreadCount))}</span>`,
+          ];
+          if (lastSnap?.scopeKey) {
+            nextPills.push(
+              `<span class="pt-modal-path" title="${esc(lastSnap.scopeKey)}">${esc(lastSnap.scopeKey)}</span>`,
+            );
+          }
+          elModalWtInfo.innerHTML = nextPills.join('');
+        }
+        const curInput = String(elModalRebindInput?.value || '').trim();
+        populateRebindCandidateSelect(modalRef.candidates, curInput);
+        syncRebindModalPreview({ showEmptyError: false });
+      })
+      .catch(() => {
+        // Offline or unsupported; manual input and prefilled host session remain available
+      });
+  }
+
   function openWorktreeModal({ mode, thread, triggerBtn = null, onDone = null }) {
+    if (elModalRebindBox) elModalRebindBox.hidden = true;
     const t = L();
     const dirtyCount = Number(thread.git?.dirtyCount) || 0;
     const aheadCount = Number(thread.git?.aheadCount) || 0;
@@ -2382,8 +2771,10 @@
   function popoutToMainCanvas(targetConvId) {
     if (!targetConvId) return;
     const coordConvId = lastSnap?.coordinator?.conversationId || '';
+    const hostId = getHostConvId();
+    // Only use manualPopoutConvId fallback when host doesn't expose active conversationId
     manualPopoutConvId =
-      targetConvId && targetConvId !== coordConvId ? targetConvId : '';
+      !hostId && targetConvId && targetConvId !== coordConvId ? targetConvId : '';
     if (window.sidecar?.ui?.toggleConversation) {
       window.sidecar.ui.toggleConversation(targetConvId);
     } else if (window.parent && window.parent !== window) {
@@ -5993,6 +6384,9 @@
 
       const nextScopeKey = String(data.scopeKey || '');
       const scopeChanged = activeScopeKey !== null && nextScopeKey !== activeScopeKey;
+      const prevCoordId = String(lastSnap?.coordinator?.conversationId || '');
+      const nextCoordId = String(data.coordinator?.conversationId || '');
+      const coordChanged = Boolean(lastSnap && nextCoordId !== prevCoordId);
       activeScopeKey = nextScopeKey;
 
       const nextCoordTurnStamp = String(
@@ -6008,17 +6402,19 @@
       );
       if (nextCoordTurnStamp) {
         lastCoordinatorTurnStamp = nextCoordTurnStamp;
-      } else if (scopeChanged || convChanged) {
+      } else if (scopeChanged || convChanged || coordChanged) {
         lastCoordinatorTurnStamp = '';
       }
 
-      if (scopeChanged || convChanged) {
+      if (scopeChanged || convChanged || coordChanged) {
         lastBoardKey = '';
-        lastHasGitRepo = null;
-        manualPopoutConvId = '';
-        threadOpenState.clear();
-        if (currentTab === 'library') {
-          loadMemory();
+        if (scopeChanged || convChanged) {
+          lastHasGitRepo = null;
+          manualPopoutConvId = '';
+          threadOpenState.clear();
+          if (currentTab === 'library') {
+            loadMemory();
+          }
         }
       }
 
@@ -6026,12 +6422,14 @@
       const mustRefreshSettingsNow =
         scopeChanged ||
         convChanged ||
+        coordChanged ||
         !loadedSettingsData ||
         nextScopeKey !== String(loadedSettingsData.scopeKey || '');
-      if (coordTurnChanged) {
+      if (coordTurnChanged || coordChanged) {
         settingsNeedsRefresh = true;
       }
       if (mustRefreshSettingsNow) {
+        if (coordChanged) loadedSettingsData = null;
         loadSettingsData({
           syncInputs: settingsScreenOpen && !settingsDirtyByUser && !isSettingsDraftDirty(),
         });
@@ -6066,6 +6464,7 @@
       const key = JSON.stringify({
         locale: curLocale,
         scopeKey: nextScopeKey,
+        hostConvId: getHostConvId(),
         manualPopoutConvId,
         hasGitRepo: Boolean(data.hasGitRepo),
         projectName: data.projectName || '',
@@ -6134,9 +6533,21 @@
     e.stopPropagation();
     jumpToCoordinator();
   });
+  if (elBtnRebindCoord) {
+    elBtnRebindCoord.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openRebindCoordinatorModal(elBtnRebindCoord);
+    });
+  }
   elGoalCard.addEventListener('click', (e) => {
-    if (e.target.closest('#btn-sort') || e.target.closest('#btn-card-coord')) return;
-    if (lastSnap?.coordinator?.conversationId) {
+    if (
+      e.target.closest('#btn-sort') ||
+      e.target.closest('#btn-card-coord') ||
+      e.target.closest('#btn-rebind-coord')
+    ) {
+      return;
+    }
+    if (getCoordinatorUiState().goalCardClickable) {
       jumpToCoordinator();
     }
   });
@@ -6209,6 +6620,38 @@
     }
     syncModalConfirmButton();
   });
+
+  if (elModalRebindSelect) {
+    elModalRebindSelect.addEventListener('change', () => {
+      if (!activeModalCtx || activeModalCtx.mode !== 'rebind_coordinator') return;
+      const chosen = String(elModalRebindSelect.value || '').trim();
+      if (chosen && elModalRebindInput) {
+        elModalRebindInput.value = chosen;
+      } else if (!chosen && elModalRebindInput) {
+        elModalRebindInput.focus();
+      }
+      syncRebindModalPreview({ showEmptyError: false });
+    });
+  }
+
+  if (elModalRebindInput) {
+    elModalRebindInput.addEventListener('input', () => {
+      if (!activeModalCtx || activeModalCtx.mode !== 'rebind_coordinator') return;
+      const raw = String(elModalRebindInput.value || '').trim();
+      if (elModalRebindSelect && !elRebindSelectWrap?.hidden) {
+        const hasOpt = [...elModalRebindSelect.options].some((o) => o.value === raw);
+        elModalRebindSelect.value = hasOpt ? raw : '';
+      }
+      syncRebindModalPreview({ showEmptyError: false });
+    });
+    elModalRebindInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && activeModalCtx?.mode === 'rebind_coordinator' && !activeModalCtx.busy) {
+        e.preventDefault();
+        if (!elModalConfirm.disabled) elModalConfirm.click();
+        else syncRebindModalPreview({ showEmptyError: true });
+      }
+    });
+  }
 
   document.getElementById('composer-meta').addEventListener('click', (e) => {
     const modelBtn = e.target.closest('#btn-comp-model');
@@ -6404,6 +6847,14 @@
     if (!activeModalCtx || activeModalCtx.busy) return;
     const ctx = activeModalCtx;
     const th = ctx.thread;
+    if (ctx.mode === 'rebind_coordinator') {
+      const check = validateRebindTargetId(elModalRebindInput?.value || '', ctx.oldCoordId);
+      if (!check.ok) {
+        syncRebindModalPreview({ showEmptyError: true });
+        return;
+      }
+      ctx.targetId = check.targetId;
+    }
     ctx.busy = true;
     elModalErr.hidden = true;
     elModalErr.textContent = '';
@@ -6413,9 +6864,47 @@
     elModalRemoveWt.disabled = true;
     elModalDelBranch.disabled = true;
     elModalForceWt.disabled = true;
+    if (elModalRebindInput) elModalRebindInput.disabled = true;
+    if (elModalRebindSelect) elModalRebindSelect.disabled = true;
     syncModalConfirmButton();
 
     try {
+      if (ctx.mode === 'rebind_coordinator') {
+        const res = await postApi(
+          '/api/rebind_coordinator',
+          '/api/rebind_coordinator_get',
+          buildScopePayload({
+            workspaceKey: activeScopeKey || lastSnap?.scopeKey || '',
+            coordinatorId: ctx.oldCoordId || '',
+            newCoordinatorId: ctx.targetId || '',
+            migrateActiveThreads: true,
+          }),
+        );
+        if (!res?.ok) {
+          ctx.busy = false;
+          const errMsg = res?.error || L().rebindErrToast;
+          elModalErr.hidden = false;
+          elModalErr.textContent = errMsg;
+          elModalConfirm.disabled = false;
+          elModalCancel.disabled = false;
+          elModalClose.disabled = false;
+          if (elModalRebindInput) elModalRebindInput.disabled = false;
+          if (elModalRebindSelect) elModalRebindSelect.disabled = false;
+          syncModalConfirmButton();
+          flashToast(errMsg, 'err', 4200);
+          return;
+        }
+        closePtModal(true);
+        manualPopoutConvId = '';
+        lastBoardKey = '';
+        loadedSettingsData = null;
+        await refreshBoard(true);
+        loadSettingsData({
+          syncInputs: settingsScreenOpen && !settingsDirtyByUser && !isSettingsDraftDirty(),
+        });
+        flashToast(L().rebindSuccessToast(Number(res.migratedCount) || 0), 'ok', 3200);
+        return;
+      }
       if (ctx.mode === 'plugin_update') {
         pluginUpdateApplying = true;
         clearUpdateCardNotice();
@@ -6521,6 +7010,8 @@
       elModalRemoveWt.disabled = false;
       elModalDelBranch.disabled = false;
       elModalForceWt.disabled = false;
+      if (elModalRebindInput) elModalRebindInput.disabled = false;
+      if (elModalRebindSelect) elModalRebindSelect.disabled = false;
       syncModalConfirmButton();
     }
   });
@@ -7124,6 +7615,7 @@
   }
 
   function openPluginUpdateModal(triggerBtn = null) {
+    if (elModalRebindBox) elModalRebindBox.hidden = true;
     const st = pluginUpdateState;
     if (!st || !st.isGitInstall || st.isDirty || pluginUpdateApplying) return;
     const t = L();
@@ -7232,7 +7724,16 @@
     }
     if (window.sidecar && typeof window.sidecar.onConversationChange === 'function') {
       try {
-        window.sidecar.onConversationChange(() => {
+        window.sidecar.onConversationChange((next) => {
+          const nextId =
+            typeof next === 'string'
+              ? next.trim()
+              : String(next?.conversationId || next?.id || readRawSidecarConvId() || '').trim();
+          if (nextId) {
+            eventHostConvId = nextId;
+            lastSdkConvId = readRawSidecarConvId() || lastSdkConvId;
+          }
+          manualPopoutConvId = '';
           lastBoardKey = '';
           if (currentTab === 'library') loadMemory();
           refreshBoard(true);

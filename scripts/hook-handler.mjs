@@ -3,7 +3,7 @@ import {
   initCoordinator,
   inspectWorktreeGit,
   loadRegistry,
-  saveRegistry,
+  mutateRegistry,
   syncCompletionToCoordinator,
 } from '../lib/store.mjs';
 import { extractThreadCompletion } from '../lib/transcript.mjs';
@@ -58,6 +58,18 @@ function buildCoordinatorDirective(coord) {
     '   - If a callback duplicates an already-reported conclusion, acknowledge briefly in one line or stay concise without exposing internal dedup metadata. **NEVER call `dispatch_thread` again in response to a completion sync!**',
     `4. **Thread management & archiving policy**: To check thread status, steer an existing thread, or archive finished work, call \`list_threads\`, \`get_thread_detail\`, \`send_thread_message\`, or \`archive_thread\` — ALWAYS pass \`coordinatorId: ${JSON.stringify(cid)}\` and \`workspacePath: ${JSON.stringify(repo)}\` on every call so strict fail-closed cross-project isolation and project-local \`#N\` sequence lookup are enforced (single-thread calls without scope are rejected fail-closed). Follow strict mode-based archiving rules once a Worker Thread has completed and been reported: (a) **Read-only investigation / check threads (\`createWorktree: false\`)**: you may **autonomously decide** to call \`archive_thread\` directly after reporting results without asking the user each time; (b) **Feature development / code-change Worktree threads (\`createWorktree: true\`)**: do **NOT** auto-archive before user acceptance (even after changes are merged into a branch, keep the thread open for verification or follow-up iterations); however, **once the user confirms acceptance / sign-off** (e.g. "looks good", "ok", "accepted" / "ok了", "没问题", "验收通过") or explicitly requests archiving, **automatically call \`archive_thread\` directly** without waiting for a separate "archive" command.`,
     `5. **Pending Decisions board (\`manage_decisions\`)**: Whenever your reply or summary card asks the user to make a decision (e.g. architecture/design choice, whether to merge a branch, whether to release, or whether to archive/clean up), synchronously call \`manage_decisions\` with \`action: "add"\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`, optional \`threadId\`, concise \`title\`, optional \`summary\`, and 1–3 quick-action \`options\` (\`send_coordinator\` / \`archive_thread\` / \`dismiss\`) so it pins in the right-hand **Pending Decisions** panel. Whenever the user replies directly in chat to decide, promptly call \`manage_decisions\` with \`action: "resolve"\` and \`decisionId\` to clear it so resolved items never linger on the board.`,
+  ].join('\n');
+}
+
+function buildRetiredCoordinatorNotice(coord) {
+  const newCid = String(coord?.conversationId || '').trim();
+  const scopeLabel = coord?.repoRoot || coord?.workspacePath || coord?.title || coord?.key || 'Current Project';
+  const newLink = newCid ? `conversation://${newCid}` : '(new Coordinator session)';
+  return [
+    `[Project Coordinator Retired — Scope: ${scopeLabel}]`,
+    `This conversation is NO LONGER the active Project Coordinator. Project coordination has been switched to the new Coordinator session: ${newLink}.`,
+    'Do NOT call `dispatch_thread`, update shared coordination state, or operate on active project threads from this retired session using stale coordinator IDs from earlier conversation history.',
+    `Please concisely inform the user that project coordination has moved to [New Coordinator](${newLink}) and direct any new orchestration requests there.`,
   ].join('\n');
 }
 
@@ -130,13 +142,7 @@ async function main() {
           // Fallback: still persist local summary & state if LS/agentapi was unreachable (unless waiting on bg task)
           const comp = extractThreadCompletion(convId, input.transcriptPath || '');
           if (!comp.waitingOnBackgroundTask) {
-            if (comp.cardSummary) thread.lastSummary = comp.cardSummary;
-            thread.runState = 'RUN_STATE_IDLE';
-            thread.hasPendingBgTask = false;
-            thread.activeTool = '';
-            thread.activeToolObj = null;
-            thread.lastCompletedAt = new Date().toISOString();
-            thread.updatedAt = thread.lastCompletedAt;
+            let nextGit = null;
             if (thread.worktreePath) {
               const coord =
                 (thread.workspaceKey && reg.coordinators?.[thread.workspaceKey]) ||
@@ -144,13 +150,27 @@ async function main() {
                   (c) => c.conversationId === thread.coordinatorId,
                 ) ||
                 null;
-              thread.git = await inspectWorktreeGit(thread.worktreePath, {
+              nextGit = await inspectWorktreeGit(thread.worktreePath, {
                 baseRef: thread.baseRef,
                 defaultBranch: coord?.defaultBranch || '',
                 repoRoot: thread.repoRoot || coord?.repoRoot || '',
               });
             }
-            saveRegistry(reg);
+            const completedAt = new Date().toISOString();
+            mutateRegistry((freshReg) => {
+              const freshT =
+                freshReg.threads[thread.threadId] ||
+                Object.values(freshReg.threads || {}).find((x) => x.conversationId === convId);
+              if (!freshT) return;
+              if (comp.cardSummary) freshT.lastSummary = comp.cardSummary;
+              freshT.runState = 'RUN_STATE_IDLE';
+              freshT.hasPendingBgTask = false;
+              freshT.activeTool = '';
+              freshT.activeToolObj = null;
+              freshT.lastCompletedAt = completedAt;
+              freshT.updatedAt = completedAt;
+              if (nextGit) freshT.git = nextGit;
+            });
           }
         }
       }
@@ -185,24 +205,94 @@ async function main() {
     }
 
     if (!coord) {
-      process.stdout.write('{}\n');
+      const retiredOwner = Object.values(reg.coordinators || {}).find(
+        (c) =>
+          c &&
+          c.conversationId &&
+          c.conversationId !== convId &&
+          Array.isArray(c.retiredCoordinatorIds) &&
+          c.retiredCoordinatorIds.includes(convId),
+      );
+      if (!retiredOwner) {
+        process.stdout.write('{}\n');
+        return;
+      }
+
+      const stepCount = Number(input.initialNumSteps) || 0;
+      const ownerRebindSeq = Number(retiredOwner.rebindSeq) || 0;
+      const prevNotice = retiredOwner.retiredNotified?.[convId] || null;
+      const compactedRetired = Boolean(
+        prevNotice?.lastStepCount && stepCount > 0 && stepCount < prevNotice.lastStepCount,
+      );
+      const alreadyNotifiedForCurrentTarget = Boolean(
+        prevNotice &&
+          prevNotice.targetCoordinatorId === retiredOwner.conversationId &&
+          (Number(prevNotice.rebindSeq) || 0) >= ownerRebindSeq &&
+          !compactedRetired,
+      );
+
+      if (alreadyNotifiedForCurrentTarget) {
+        if (stepCount > 0 && stepCount !== prevNotice.lastStepCount) {
+          mutateRegistry((freshReg) => {
+            const freshOwner = freshReg.coordinators?.[retiredOwner.key];
+            if (!freshOwner) return;
+            if (!freshOwner.retiredNotified || typeof freshOwner.retiredNotified !== 'object') {
+              freshOwner.retiredNotified = {};
+            }
+            const curEntry = freshOwner.retiredNotified[convId] || prevNotice;
+            freshOwner.retiredNotified[convId] = {
+              ...curEntry,
+              lastStepCount: stepCount,
+            };
+          });
+        }
+        process.stdout.write('{}\n');
+        return;
+      }
+
+      const noticeText = buildRetiredCoordinatorNotice(retiredOwner);
+      const notifiedAt = new Date().toISOString();
+      mutateRegistry((freshReg) => {
+        const freshOwner = freshReg.coordinators?.[retiredOwner.key];
+        if (!freshOwner || freshOwner.conversationId === convId) return;
+        if (!freshOwner.retiredNotified || typeof freshOwner.retiredNotified !== 'object') {
+          freshOwner.retiredNotified = {};
+        }
+        freshOwner.retiredNotified[convId] = {
+          notifiedAt,
+          targetCoordinatorId: freshOwner.conversationId,
+          rebindSeq: Number(freshOwner.rebindSeq) || 0,
+          lastStepCount: stepCount,
+        };
+      });
+
+      process.stdout.write(
+        `${JSON.stringify({
+          injectSteps: [
+            {
+              systemMessage: {
+                systemMessage: noticeText,
+              },
+            },
+          ],
+        })}\n`,
+      );
       return;
     }
 
     const messages = [];
-    let dirty = false;
+    let shouldUpdateDirective = false;
+    let shouldUpdateSteps = false;
     const stepCount = Number(input.initialNumSteps) || 0;
     const compacted = coord.lastStepCount && stepCount > 0 && stepCount < coord.lastStepCount;
 
     // Push ONLY once on initial Coordinator bind (or after /compact) to prevent context bloat
     if (coord.directiveVersion !== DIRECTIVE_VERSION || compacted) {
       messages.push(buildCoordinatorDirective(coord));
-      coord.directiveVersion = DIRECTIVE_VERSION;
-      dirty = true;
+      shouldUpdateDirective = true;
     }
     if (stepCount > 0 && stepCount !== coord.lastStepCount) {
-      coord.lastStepCount = stepCount;
-      dirty = true;
+      shouldUpdateSteps = true;
     }
 
     // Fallback injection ONLY for threads that have NEVER been pushed/notified and are not waiting on a background task
@@ -216,10 +306,11 @@ async function main() {
       return false;
     });
 
+    const notifiedIds = [];
+    const now = new Date().toISOString();
     if (newlyFinished.length > 0) {
-      const now = new Date().toISOString();
       const bullets = newlyFinished.map((t) => {
-        t.notifiedCoordinatorAt = now;
+        notifiedIds.push(t.threadId);
         const gitNote = t.git?.lastCommit ? ` | Latest commit: \`${t.git.lastCommit}\`` : '';
         const sum = t.lastSummary ? `\n  > ${t.lastSummary.replace(/\r?\n+/g, ' ').slice(0, 260)}` : '';
         return `- **\`${t.threadId}\`** ${t.title} (\`${t.branch || 'read-only'}\`)${gitNote}${sum}`;
@@ -230,10 +321,25 @@ async function main() {
           ...bullets,
         ].join('\n'),
       );
-      dirty = true;
     }
 
-    if (dirty) saveRegistry(reg);
+    if (shouldUpdateDirective || shouldUpdateSteps || notifiedIds.length > 0) {
+      mutateRegistry((freshReg) => {
+        const freshCoord =
+          (coord.key && freshReg.coordinators?.[coord.key]) ||
+          Object.values(freshReg.coordinators || {}).find((c) => c.conversationId === convId);
+        if (freshCoord && freshCoord.conversationId === convId) {
+          if (shouldUpdateDirective) freshCoord.directiveVersion = DIRECTIVE_VERSION;
+          if (shouldUpdateSteps) freshCoord.lastStepCount = stepCount;
+        }
+        for (const tid of notifiedIds) {
+          const freshT = freshReg.threads?.[tid];
+          if (freshT && !freshT.notifiedCoordinatorAt) {
+            freshT.notifiedCoordinatorAt = now;
+          }
+        }
+      });
+    }
 
     if (!messages.length) {
       process.stdout.write('{}\n');

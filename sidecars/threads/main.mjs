@@ -17,9 +17,11 @@ import {
   getEffectiveSettings,
   getThreadMessages,
   initCoordinator,
+  listCoordinatorCandidates,
   loadSettings,
   markThreadRead,
   readProjectMemory,
+  rebindCoordinator,
   resolveAppLocale,
   resolveProjectScope,
   saveSettingsWithFastResponse,
@@ -291,6 +293,41 @@ async function handleInit(data = {}) {
   }
 }
 registerDualApi('/api/init', handleInit);
+
+async function handleRebindCoordinator(data = {}) {
+  try {
+    const res = await rebindCoordinator({
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
+      projectId: data.projectId || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+      newCoordinatorId: data.newCoordinatorId || '',
+      title: data.title || '',
+      migrateActiveThreads: parseBool(data.migrateActiveThreads, true),
+    });
+    return { ...res, locale: resolveAppLocale() };
+  } catch (err) {
+    return { ok: false, error: err.message, locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/rebind_coordinator', handleRebindCoordinator);
+
+async function handleCoordinatorCandidates(data = {}) {
+  try {
+    const res = await listCoordinatorCandidates({
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
+      projectId: data.projectId || '',
+      coordinatorId: data.coordinatorId || '',
+      conversationId: data.conversationId || '',
+    });
+    return { ...res, locale: resolveAppLocale() };
+  } catch (err) {
+    return { ok: false, error: err.message, candidates: [], locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/coordinator_candidates', handleCoordinatorCandidates);
 
 async function handleDispatch(data = {}) {
   try {

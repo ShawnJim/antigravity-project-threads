@@ -106,6 +106,7 @@
             <span id="goal-kicker-text">PROJECT</span>
             <div class="goal-actions">
               <button type="button" id="btn-card-coord" class="coord-card-btn" hidden></button>
+              <button type="button" id="btn-rebind-coord" class="coord-card-btn coord-switch-btn" hidden></button>
               <button type="button" id="btn-sort" class="sort-chip" hidden>
                 <span id="lbl-sort">Status</span>
                 <svg class="ico ico-xs" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
@@ -331,6 +332,28 @@
       <div id="pt-modal-body" class="pt-modal-body">
         <div id="pt-modal-thread" class="pt-modal-thread"></div>
         <div id="pt-modal-wt-info" class="pt-modal-wt-info"></div>
+        <div id="pt-modal-rebind-box" class="pt-modal-rebind-box" hidden>
+          <div class="pt-rebind-route">
+            <div class="pt-rebind-node">
+              <span id="lbl-rebind-old" class="pt-rebind-node-lbl">Current Coordinator</span>
+              <span id="val-rebind-old" class="pt-rebind-node-id mono"></span>
+            </div>
+            <span class="pt-rebind-arrow" aria-hidden="true">→</span>
+            <div class="pt-rebind-node is-next">
+              <span id="lbl-rebind-new" class="pt-rebind-node-lbl">New Coordinator</span>
+              <span id="val-rebind-new" class="pt-rebind-node-id mono"></span>
+            </div>
+          </div>
+          <div id="pt-rebind-hint" class="pt-rebind-hint" hidden></div>
+          <div id="pt-rebind-select-wrap" class="field pt-rebind-field" hidden>
+            <label id="lbl-rebind-select" for="pt-modal-rebind-select">Available project sessions</label>
+            <select id="pt-modal-rebind-select"></select>
+          </div>
+          <div class="field pt-rebind-field">
+            <label id="lbl-rebind-input" for="pt-modal-rebind-input">Target conversation ID</label>
+            <input id="pt-modal-rebind-input" type="text" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
         <div id="pt-modal-warn" class="pt-modal-warn" hidden></div>
         <label id="pt-modal-remove-row" class="chk pt-modal-chk" hidden>
           <input id="pt-modal-remove-wt" type="checkbox">
