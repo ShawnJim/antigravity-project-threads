@@ -207,7 +207,8 @@
       composerPh: 'Ask anything, @ to mention, / for actions',
       modelSwitchTip: 'Switch model for next message',
       modelPendingTip: 'Pending — applies on next message',
-      modelMenuTitle: 'Select model',
+      modelMenuTitle: 'Model',
+      modelEffortTitle: 'Thinking Effort',
       modelBack: 'Back',
       modelRunningHint: 'Thread is running — new model applies on your next message',
       modelNextMsgHint: 'Applies on your next message',
@@ -452,7 +453,8 @@
       composerPh: '输入追问或补充指令（Enter 发送）…',
       modelSwitchTip: '切换下条消息使用的模型',
       modelPendingTip: '已选待生效 — 将在下条消息应用',
-      modelMenuTitle: '选择模型',
+      modelMenuTitle: '模型',
+      modelEffortTitle: '思考深度',
       modelBack: '返回',
       modelRunningHint: '线程正在运行 — 新模型将在下条消息生效',
       modelNextMsgHint: '将在下条消息生效',
@@ -700,7 +702,8 @@
       composerPh: '輸入追問或補充指令（Enter 傳送）…',
       modelSwitchTip: '切換下則訊息使用的模型',
       modelPendingTip: '已選待生效 — 將在下則訊息套用',
-      modelMenuTitle: '選擇模型',
+      modelMenuTitle: '模型',
+      modelEffortTitle: '思考深度',
       modelBack: '返回',
       modelRunningHint: '執行緒正在執行 — 新模型將在下則訊息生效',
       modelNextMsgHint: '將在下則訊息生效',
@@ -2662,8 +2665,9 @@
       if (compactLimit > 0 && compactPercent !== null) {
         const limitText = formatTokenCount(compactLimit, { millionThreshold: 1_000_000 });
         const toneCls = compactPercent >= 90 ? 'danger' : compactPercent >= 70 ? 'warn' : 'ok';
+        const emptyAttr = compactPercent === 0 ? ' data-empty="true"' : '';
         parts.push(
-          `<span class="o2-usage-item o2-usage-compact"><span class="o2-usage-lbl">${esc(t.usageCompactLine)}</span><span class="o2-usage-bar" aria-hidden="true"><i class="${toneCls}" style="width:${compactPercent}%"></i></span><span class="o2-usage-val tabular">${esc(ctxText)} / ${esc(limitText)} (${compactPercent}%)</span></span>`,
+          `<span class="o2-usage-item o2-usage-compact"><span class="o2-usage-lbl">${esc(t.usageCompactLine)}</span><span class="o2-usage-bar" aria-hidden="true"><i class="${toneCls}" style="width:${compactPercent}%"${emptyAttr}></i></span><span class="o2-usage-val tabular">${esc(ctxText)} / ${esc(limitText)} (${compactPercent}%)</span></span>`,
         );
       } else {
         parts.push(
@@ -3795,10 +3799,322 @@
     );
   }
 
+  const MODEL_MENU_SUB_WIDTH = 152;
+  const MODEL_MENU_SUB_MIN_WIDTH = 132;
+  const MODEL_MENU_SUB_GAP = 6;
+  const MODEL_MENU_EDGE_PAD = 8;
+  const MODEL_MENU_FLYOUT_MIN_VW = 372;
+
+  let modelMenuHoverFamilyKey = '';
+  let modelMenuLastFamilies = [];
+  let modelMenuCloseTimer = null;
+  let modelMenuSwitchTimer = null;
+
+  function formatEffortDisplayLabel(label, thinkingLevel = '') {
+    const raw = String(thinkingLevel || label || '').trim();
+    if (!raw) return '';
+    if (/^x[-_\s]?high$/i.test(raw)) return 'Extra High';
+    return raw;
+  }
+
+  function clearModelSubmenuTimers() {
+    if (modelMenuCloseTimer) {
+      clearTimeout(modelMenuCloseTimer);
+      modelMenuCloseTimer = null;
+    }
+    if (modelMenuSwitchTimer) {
+      clearTimeout(modelMenuSwitchTimer);
+      modelMenuSwitchTimer = null;
+    }
+  }
+
+  function canUseModelMenuFlyout(
+    viewportWidth = typeof window !== 'undefined' && Number.isFinite(window.innerWidth)
+      ? window.innerWidth
+      : 0,
+  ) {
+    return Number.isFinite(viewportWidth) && viewportWidth >= MODEL_MENU_FLYOUT_MIN_VW;
+  }
+
+  function computeModelSubmenuLayout({
+    viewportWidth,
+    viewportHeight,
+    mainRect,
+    rowRect,
+    subWidth = MODEL_MENU_SUB_WIDTH,
+    subMinWidth = MODEL_MENU_SUB_MIN_WIDTH,
+    subHeight = 160,
+    gap = MODEL_MENU_SUB_GAP,
+    edge = MODEL_MENU_EDGE_PAD,
+  } = {}) {
+    const vw = Number(viewportWidth) || 0;
+    const vh = Number(viewportHeight) || 0;
+    if (!canUseModelMenuFlyout(vw) || !mainRect || !Number.isFinite(mainRect.width)) {
+      return { mode: 'drilldown', side: 'right', top: 0, maxWidth: subWidth, shiftMainX: 0 };
+    }
+
+    const spaceRight = vw - mainRect.right - edge;
+    const spaceLeft = mainRect.left - edge;
+    const idealNeeded = subWidth + gap;
+    const minNeeded = subMinWidth + gap;
+
+    let side = 'right';
+    let shiftMainX = 0;
+    let avail = spaceRight;
+
+    if (spaceRight >= idealNeeded) {
+      side = 'right';
+      avail = spaceRight;
+    } else if (spaceLeft >= idealNeeded) {
+      side = 'left';
+      avail = spaceLeft;
+    } else if (spaceRight >= minNeeded || spaceLeft >= minNeeded) {
+      if (spaceRight >= spaceLeft) {
+        side = 'right';
+        avail = spaceRight;
+      } else {
+        side = 'left';
+        avail = spaceLeft;
+      }
+    } else {
+      const totalMinNeeded = mainRect.width + gap + subMinWidth + edge * 2;
+      if (vw >= totalMinNeeded) {
+        const desiredW = Math.min(subWidth, Math.max(subMinWidth, vw - mainRect.width - gap - edge * 2));
+        if (spaceRight >= spaceLeft) {
+          side = 'right';
+          const targetMainLeft = Math.max(edge, vw - edge - desiredW - gap - mainRect.width);
+          shiftMainX = Math.round(targetMainLeft - mainRect.left);
+          avail = vw - (mainRect.right + shiftMainX) - edge;
+        } else {
+          side = 'left';
+          const targetMainLeft = Math.min(vw - edge - mainRect.width, edge + desiredW + gap);
+          shiftMainX = Math.round(targetMainLeft - mainRect.left);
+          avail = mainRect.left + shiftMainX - edge;
+        }
+      } else {
+        return { mode: 'drilldown', side: 'right', top: 0, maxWidth: subWidth, shiftMainX: 0 };
+      }
+    }
+
+    const maxWidth = Math.max(subMinWidth, Math.min(subWidth, Math.floor(avail - gap)));
+    const rawRelTop = rowRect ? Math.round(rowRect.top - mainRect.top - 28) : 0;
+    let top = rawRelTop;
+    if (vh > 0) {
+      const absTop = mainRect.top + top;
+      const absBottom = absTop + subHeight;
+      if (absBottom > vh - edge) {
+        top -= absBottom - (vh - edge);
+      }
+      if (mainRect.top + top < edge) {
+        top = Math.round(edge - mainRect.top);
+      }
+    }
+    return { mode: 'flyout', side, top: Math.round(top), maxWidth, shiftMainX };
+  }
+
+  function resetModelMenuMainShift() {
+    if (elModelMenu && elModelMenu.style) {
+      elModelMenu.style.transform = '';
+    }
+  }
+
+  function syncModelMenuFamilyRowStates() {
+    if (!elModelMenu || typeof elModelMenu.querySelectorAll !== 'function') return;
+    elModelMenu.querySelectorAll('.pt-model-opt[data-family-key]').forEach((row) => {
+      const isOpen = Boolean(modelMenuHoverFamilyKey && row.dataset.familyKey === modelMenuHoverFamilyKey);
+      row.classList.toggle('submenu-open', isOpen);
+      row.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
+
+  function closeModelSubmenu() {
+    clearModelSubmenuTimers();
+    modelMenuHoverFamilyKey = '';
+    resetModelMenuMainShift();
+    const subEl = elModelMenu && typeof elModelMenu.querySelector === 'function'
+      ? elModelMenu.querySelector('.pt-model-submenu')
+      : null;
+    if (subEl) {
+      subEl.hidden = true;
+      subEl.innerHTML = '';
+      delete subEl.dataset.familyKey;
+      delete subEl.dataset.side;
+      if (subEl.style) {
+        subEl.style.top = '';
+        subEl.style.width = '';
+      }
+    }
+    syncModelMenuFamilyRowStates();
+  }
+
+  function scheduleCloseModelSubmenu(delayMs = 160) {
+    if (modelMenuSwitchTimer) {
+      clearTimeout(modelMenuSwitchTimer);
+      modelMenuSwitchTimer = null;
+    }
+    if (modelMenuCloseTimer) clearTimeout(modelMenuCloseTimer);
+    modelMenuCloseTimer = setTimeout(() => {
+      modelMenuCloseTimer = null;
+      closeModelSubmenu();
+    }, delayMs);
+  }
+
+  function renderModelSubmenuMarkup(fam, t) {
+    const effortTitle = t.modelEffortTitle || 'Thinking Effort';
+    const itemsHtml = (fam.tiers || [])
+      .map((tier) => {
+        const tierDisplay = formatEffortDisplayLabel(tier.label);
+        const quotaPct =
+          tier.quotaInfo && typeof tier.quotaInfo.remainingFraction === 'number'
+            ? Math.max(0, Math.min(100, Math.round(tier.quotaInfo.remainingFraction * 100)))
+            : null;
+        const tipParts = [
+          tier.rawLabel,
+          tier.tagDescription || tier.description || '',
+          quotaPct !== null ? `${quotaPct}%` : '',
+        ].filter(Boolean);
+        return `<button type="button" class="pt-model-opt pt-model-sub-opt${tier.active ? ' active' : ''}" role="option" aria-selected="${tier.active ? 'true' : 'false'}" data-model-key="${esc(tier.value)}" title="${esc(tipParts.join(' — '))}"><span class="pt-model-main"><span class="pt-model-name">${esc(tierDisplay)}</span></span>${tier.active ? `<span class="pt-model-trail"><span class="pt-model-chk" aria-hidden="true">${ICONS.check}</span></span>` : ''}</button>`;
+      })
+      .join('');
+    return `
+      <div class="pt-model-submenu-hdr">
+        <span class="pt-model-submenu-title">${esc(effortTitle)}</span>
+      </div>
+      <div class="pt-model-submenu-list">${itemsHtml}</div>
+    `;
+  }
+
+  function positionModelSubmenu(subEl, anchorRow) {
+    if (!subEl || !elModelMenu) return { mode: 'drilldown' };
+    resetModelMenuMainShift();
+    const cardEl =
+      typeof elModelMenu.querySelector === 'function'
+        ? elModelMenu.querySelector('.pt-model-menu-card')
+        : null;
+    const vw =
+      typeof window !== 'undefined' && Number.isFinite(window.innerWidth)
+        ? window.innerWidth
+        : 0;
+    const vh =
+      typeof window !== 'undefined' && Number.isFinite(window.innerHeight)
+        ? window.innerHeight
+        : 0;
+    const mainRect =
+      cardEl && typeof cardEl.getBoundingClientRect === 'function'
+        ? cardEl.getBoundingClientRect()
+        : typeof elModelMenu.getBoundingClientRect === 'function'
+          ? elModelMenu.getBoundingClientRect()
+          : null;
+    if (!mainRect || !mainRect.width) {
+      return { mode: canUseModelMenuFlyout(vw) ? 'flyout' : 'drilldown', side: 'right', top: 0, maxWidth: MODEL_MENU_SUB_WIDTH, shiftMainX: 0 };
+    }
+    const rowRect =
+      anchorRow && typeof anchorRow.getBoundingClientRect === 'function'
+        ? anchorRow.getBoundingClientRect()
+        : null;
+    const measuredSubH =
+      typeof subEl.getBoundingClientRect === 'function'
+        ? Math.max(subEl.getBoundingClientRect().height || 0, 120)
+        : 160;
+    const layout = computeModelSubmenuLayout({
+      viewportWidth: vw,
+      viewportHeight: vh,
+      mainRect,
+      rowRect,
+      subHeight: measuredSubH,
+    });
+    if (layout.mode !== 'flyout') {
+      return layout;
+    }
+    if (layout.shiftMainX && elModelMenu.style) {
+      elModelMenu.style.transform = `translateX(${layout.shiftMainX}px)`;
+    }
+    subEl.dataset.side = layout.side;
+    if (subEl.style) {
+      subEl.style.top = `${layout.top}px`;
+      subEl.style.width = `${layout.maxWidth}px`;
+    }
+    return layout;
+  }
+
+  function openModelSubmenu(famKey, anchorRow = null, { focusFirst = false } = {}) {
+    if (!elModelMenu || !modelMenuOpen || modelMenuFamilyKey) return false;
+    clearModelSubmenuTimers();
+    const fam = modelMenuLastFamilies.find((f) => f.key === famKey && f.hasTiers) || null;
+    if (!fam) {
+      closeModelSubmenu();
+      return false;
+    }
+    const subEl =
+      typeof elModelMenu.querySelector === 'function'
+        ? elModelMenu.querySelector('.pt-model-submenu')
+        : null;
+    if (!subEl) return false;
+
+    const row =
+      anchorRow ||
+      (typeof elModelMenu.querySelectorAll === 'function'
+        ? [...elModelMenu.querySelectorAll('.pt-model-opt[data-family-key]')].find(
+            (el) => el.dataset.familyKey === famKey,
+          )
+        : null);
+
+    const t = L();
+    subEl.innerHTML = renderModelSubmenuMarkup(fam, t);
+    subEl.dataset.familyKey = famKey;
+    subEl.hidden = false;
+
+    const layout = positionModelSubmenu(subEl, row);
+    if (layout.mode !== 'flyout') {
+      subEl.hidden = true;
+      subEl.innerHTML = '';
+      delete subEl.dataset.familyKey;
+      modelMenuHoverFamilyKey = '';
+      syncModelMenuFamilyRowStates();
+      return false;
+    }
+
+    modelMenuHoverFamilyKey = famKey;
+    syncModelMenuFamilyRowStates();
+
+    if (focusFirst && typeof subEl.querySelector === 'function') {
+      const target =
+        subEl.querySelector('.pt-model-sub-opt.active') ||
+        subEl.querySelector('.pt-model-sub-opt');
+      if (target && typeof target.focus === 'function') target.focus();
+    }
+    return true;
+  }
+
+  function repositionModelSubmenu() {
+    if (!modelMenuOpen || !modelMenuHoverFamilyKey || modelMenuFamilyKey || !elModelMenu) return;
+    const subEl =
+      typeof elModelMenu.querySelector === 'function'
+        ? elModelMenu.querySelector('.pt-model-submenu')
+        : null;
+    if (!subEl || subEl.hidden) return;
+    const row =
+      typeof elModelMenu.querySelectorAll === 'function'
+        ? [...elModelMenu.querySelectorAll('.pt-model-opt[data-family-key]')].find(
+            (el) => el.dataset.familyKey === modelMenuHoverFamilyKey,
+          )
+        : null;
+    const layout = positionModelSubmenu(subEl, row);
+    if (layout.mode !== 'flyout') {
+      const fallbackKey = modelMenuHoverFamilyKey;
+      closeModelSubmenu();
+      modelMenuFamilyKey = fallbackKey;
+      renderModelMenu();
+    }
+  }
+
   function closeModelMenu({ restoreHeader = true } = {}) {
     if (!modelMenuOpen) return;
+    clearModelSubmenuTimers();
     modelMenuOpen = false;
     modelMenuFamilyKey = '';
+    modelMenuHoverFamilyKey = '';
+    resetModelMenuMainShift();
     if (elModelMenu) {
       elModelMenu.hidden = true;
       delete elModelMenu.dataset.renderKey;
@@ -3807,28 +4123,31 @@
     if (restoreHeader && openThreadObj) renderThreadHeader(openThreadObj);
   }
 
-  function renderModelBadgeHtml(tagTitle, isDefault, quotaInfo, defaultBadgeText) {
-    const metaBadges = [];
+  function renderModelTagHtml(tagTitle, isDefault, defaultBadgeText) {
     if (tagTitle) {
       const warnTag = /leaving|notice|deprecat/i.test(tagTitle);
-      metaBadges.push(
-        `<span class="pt-model-tag${warnTag ? ' warn' : ''}">${esc(tagTitle)}</span>`,
-      );
-    } else if (isDefault) {
-      metaBadges.push(`<span class="pt-model-tag">${esc(defaultBadgeText)}</span>`);
+      return `<span class="pt-model-tag${warnTag ? ' warn' : ''}">${esc(tagTitle)}</span>`;
     }
+    if (isDefault) {
+      return `<span class="pt-model-tag">${esc(defaultBadgeText)}</span>`;
+    }
+    return '';
+  }
+
+  function renderLowQuotaHtml(quotaInfo) {
     if (quotaInfo && typeof quotaInfo.remainingFraction === 'number') {
       const pct = Math.max(0, Math.min(100, Math.round(quotaInfo.remainingFraction * 100)));
-      metaBadges.push(
-        `<span class="pt-model-quota${pct <= 20 ? ' low' : ''}">${pct}%</span>`,
-      );
+      if (pct <= 20) {
+        return `<span class="pt-model-quota low">${pct}%</span>`;
+      }
     }
-    return metaBadges.join('');
+    return '';
   }
 
   function renderModelMenu() {
     if (!elModelMenu || !modelMenuOpen || !openThreadObj) return;
     const t = L();
+    const effortTitle = t.modelEffortTitle || 'Thinking Effort';
     const th = openThreadObj;
     const isRunning = !th.archived && th.runState === 'RUN_STATE_RUNNING';
     const pending = pendingModelByThread.get(th.threadId) || null;
@@ -3849,11 +4168,20 @@
             },
           )
         : [];
+    modelMenuLastFamilies = families;
+
     const activeFamily = modelMenuFamilyKey
       ? families.find((f) => f.key === modelMenuFamilyKey && f.hasTiers) || null
       : null;
     if (modelMenuFamilyKey && !activeFamily && !selectableModelsLoading) {
       modelMenuFamilyKey = '';
+    }
+    if (
+      modelMenuHoverFamilyKey &&
+      !families.some((f) => f.key === modelMenuHoverFamilyKey && f.hasTiers) &&
+      !selectableModelsLoading
+    ) {
+      modelMenuHoverFamilyKey = '';
     }
 
     const renderKey = [
@@ -3871,26 +4199,33 @@
     }
     const prevMode = elModelMenu.dataset.menuMode || '';
     const nextMode = activeFamily ? `level2:${activeFamily.key}` : 'level1';
-    const prevList = elModelMenu.querySelector('.pt-model-menu-list');
+    const prevList =
+      typeof elModelMenu.querySelector === 'function'
+        ? elModelMenu.querySelector('.pt-model-menu-list')
+        : null;
     const prevScroll = prevList && prevMode === nextMode ? prevList.scrollTop : 0;
 
+    let hdrCls = 'pt-model-menu-hdr';
     let hdrInnerHtml = '';
     let bodyHtml = '';
-    const hintText = isRunning ? t.modelRunningHint : t.modelNextMsgHint;
+    const runningHintHtml = isRunning
+      ? `<span class="pt-model-menu-hint running">${esc(t.modelRunningHint)}</span>`
+      : '';
 
     if (selectableModelsLoading && selectableModels.length === 0) {
       hdrInnerHtml = `
         <span class="pt-model-menu-title">${esc(t.modelMenuTitle)}</span>
-        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+        ${runningHintHtml}
       `;
       bodyHtml = `<div class="pt-model-menu-empty">${esc(t.modelLoading)}</div>`;
     } else if (!selectableModels.length) {
       hdrInnerHtml = `
         <span class="pt-model-menu-title">${esc(t.modelMenuTitle)}</span>
-        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+        ${runningHintHtml}
       `;
       bodyHtml = `<div class="pt-model-menu-empty">${esc(t.modelEmpty)}</div>`;
     } else if (activeFamily) {
+      hdrCls = 'pt-model-menu-hdr pt-model-menu-hdr-drill';
       const famTagHtml = activeFamily.tagTitle
         ? `<span class="pt-model-tag${/leaving|notice|deprecat/i.test(activeFamily.tagTitle) ? ' warn' : ''}">${esc(activeFamily.tagTitle)}</span>`
         : '';
@@ -3900,64 +4235,100 @@
           <span class="pt-model-menu-family" title="${esc(activeFamily.label)}">${esc(activeFamily.label)}</span>
           ${famTagHtml}
         </div>
-        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+        <span class="pt-model-menu-sublabel">${esc(effortTitle)}</span>
+        ${runningHintHtml}
       `;
       bodyHtml = `<div class="pt-model-menu-list">${activeFamily.tiers
         .map((tier) => {
-          const badgesHtml = renderModelBadgeHtml(
-            tier.tagTitle,
-            tier.isDefault,
-            tier.quotaInfo,
-            t.modelDefaultBadge,
-          );
+          const tierDisplay = formatEffortDisplayLabel(tier.label);
+          const tagHtml = renderModelTagHtml(tier.tagTitle, tier.isDefault, t.modelDefaultBadge);
+          const lowQuotaHtml = renderLowQuotaHtml(tier.quotaInfo);
           const tipParts = [tier.rawLabel, tier.tagDescription || tier.description || ''].filter(Boolean);
-          return `<button type="button" class="pt-model-opt${tier.active ? ' active' : ''}" role="option" aria-selected="${tier.active ? 'true' : 'false'}" data-model-key="${esc(tier.value)}" title="${esc(tipParts.join(' — '))}"><span class="pt-model-chk" aria-hidden="true">${tier.active ? ICONS.check : ''}</span><span class="pt-model-name">${esc(tier.label)}</span>${badgesHtml ? `<span class="pt-model-meta">${badgesHtml}</span>` : ''}</button>`;
+          const trailHtml =
+            lowQuotaHtml || tier.active
+              ? `<span class="pt-model-trail">${lowQuotaHtml}${tier.active ? `<span class="pt-model-chk" aria-hidden="true">${ICONS.check}</span>` : ''}</span>`
+              : '';
+          return `<button type="button" class="pt-model-opt${tier.active ? ' active' : ''}" role="option" aria-selected="${tier.active ? 'true' : 'false'}" data-model-key="${esc(tier.value)}" title="${esc(tipParts.join(' — '))}"><span class="pt-model-main"><span class="pt-model-name">${esc(tierDisplay)}</span>${tagHtml}</span>${trailHtml}</button>`;
         })
         .join('')}</div>`;
     } else {
       hdrInnerHtml = `
         <span class="pt-model-menu-title">${esc(t.modelMenuTitle)}</span>
-        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+        ${runningHintHtml}
       `;
       bodyHtml = `<div class="pt-model-menu-list">${families
         .map((fam) => {
-          const badgesHtml = renderModelBadgeHtml(
+          const tagHtml = renderModelTagHtml(
             fam.tagTitle,
             !fam.hasTiers && fam.hasDefaultBadge,
-            fam.quotaInfo,
             t.modelDefaultBadge,
           );
+          const lowQuotaHtml = renderLowQuotaHtml(fam.quotaInfo);
+          const quotaPct =
+            fam.quotaInfo && typeof fam.quotaInfo.remainingFraction === 'number'
+              ? Math.max(0, Math.min(100, Math.round(fam.quotaInfo.remainingFraction * 100)))
+              : null;
+          const famTip = quotaPct !== null ? `${fam.title} (${quotaPct}%)` : fam.title;
           if (fam.hasTiers) {
-            const effortHtml = fam.activeEffortLabel
-              ? `<span class="pt-model-effort">${esc(fam.activeEffortLabel)}</span>`
+            const effortDisplay = formatEffortDisplayLabel(fam.activeEffortLabel);
+            const effortHtml = effortDisplay
+              ? `<span class="pt-model-effort">${esc(effortDisplay)}</span>`
               : '';
-            return `<button type="button" class="pt-model-opt${fam.active ? ' active' : ''}" role="option" aria-selected="${fam.active ? 'true' : 'false'}" aria-haspopup="true" data-family-key="${esc(fam.key)}" title="${esc(fam.title)}"><span class="pt-model-chk" aria-hidden="true">${fam.active ? ICONS.check : ''}</span><span class="pt-model-name">${esc(fam.label)}</span><span class="pt-model-meta">${effortHtml}${badgesHtml}<span class="pt-model-chev" aria-hidden="true">${ICONS.chevronRight}</span></span></button>`;
+            const isSubOpen = Boolean(modelMenuHoverFamilyKey && modelMenuHoverFamilyKey === fam.key);
+            return `<button type="button" class="pt-model-opt${fam.active ? ' active' : ''}${isSubOpen ? ' submenu-open' : ''}" role="option" aria-selected="${fam.active ? 'true' : 'false'}" aria-haspopup="menu" aria-expanded="${isSubOpen ? 'true' : 'false'}" data-family-key="${esc(fam.key)}" title="${esc(famTip)}"><span class="pt-model-main"><span class="pt-model-name">${esc(fam.label)}</span>${effortHtml}${tagHtml}</span><span class="pt-model-trail">${lowQuotaHtml}${fam.active ? `<span class="pt-model-chk" aria-hidden="true">${ICONS.check}</span>` : ''}<span class="pt-model-chev" aria-hidden="true">${ICONS.chevronRight}</span></span></button>`;
           }
-          return `<button type="button" class="pt-model-opt${fam.active ? ' active' : ''}" role="option" aria-selected="${fam.active ? 'true' : 'false'}" data-model-key="${esc(fam.singleModelKey)}" title="${esc(fam.title)}"><span class="pt-model-chk" aria-hidden="true">${fam.active ? ICONS.check : ''}</span><span class="pt-model-name">${esc(fam.label)}</span>${badgesHtml ? `<span class="pt-model-meta">${badgesHtml}</span>` : ''}</button>`;
+          const trailHtml =
+            lowQuotaHtml || fam.active
+              ? `<span class="pt-model-trail">${lowQuotaHtml}${fam.active ? `<span class="pt-model-chk" aria-hidden="true">${ICONS.check}</span>` : ''}</span>`
+              : '';
+          return `<button type="button" class="pt-model-opt${fam.active ? ' active' : ''}" role="option" aria-selected="${fam.active ? 'true' : 'false'}" data-model-key="${esc(fam.singleModelKey)}" title="${esc(famTip)}"><span class="pt-model-main"><span class="pt-model-name">${esc(fam.label)}</span>${tagHtml}</span>${trailHtml}</button>`;
         })
         .join('')}</div>`;
     }
 
     elModelMenu.innerHTML = `
-      <div class="pt-model-menu-hdr">
-        ${hdrInnerHtml}
+      <div class="pt-model-menu-card">
+        <div class="${hdrCls}">
+          ${hdrInnerHtml}
+        </div>
+        ${bodyHtml}
       </div>
-      ${bodyHtml}
+      <div class="pt-model-submenu" role="listbox" aria-label="${esc(effortTitle)}" hidden></div>
     `;
     elModelMenu.dataset.renderKey = renderKey;
     elModelMenu.dataset.menuMode = nextMode;
     elModelMenu.hidden = false;
 
-    const nextList = elModelMenu.querySelector('.pt-model-menu-list');
-    if (nextList && prevScroll > 0) {
-      nextList.scrollTop = prevScroll;
+    const nextList =
+      typeof elModelMenu.querySelector === 'function'
+        ? elModelMenu.querySelector('.pt-model-menu-list')
+        : null;
+    if (nextList) {
+      if (prevScroll > 0) nextList.scrollTop = prevScroll;
+      if (typeof nextList.addEventListener === 'function') {
+        nextList.addEventListener('scroll', () => {
+          if (modelMenuHoverFamilyKey && !modelMenuFamilyKey) {
+            repositionModelSubmenu();
+          }
+        });
+      }
+    }
+
+    if (!activeFamily && modelMenuHoverFamilyKey && canUseModelMenuFlyout()) {
+      openModelSubmenu(modelMenuHoverFamilyKey);
+    } else if (activeFamily) {
+      modelMenuHoverFamilyKey = '';
+      resetModelMenuMainShift();
     }
   }
 
   function openModelMenu() {
     if (!openThreadObj || openThreadObj.archived) return;
+    clearModelSubmenuTimers();
     modelMenuOpen = true;
     modelMenuFamilyKey = '';
+    modelMenuHoverFamilyKey = '';
+    resetModelMenuMainShift();
     renderThreadHeader(openThreadObj);
     renderModelMenu();
     if (!selectableModels.length || Date.now() - selectableModelsLoadedAt > 30_000) {
@@ -3966,7 +4337,7 @@
     const activeOpt =
       elModelMenu?.querySelector('.pt-model-opt.active') ||
       elModelMenu?.querySelector('.pt-model-opt');
-    if (activeOpt) {
+    if (activeOpt && typeof activeOpt.scrollIntoView === 'function') {
       activeOpt.scrollIntoView({ block: 'nearest' });
     }
   }
@@ -4672,9 +5043,14 @@
   });
 
   function stepBackModelMenuToLevel1() {
-    const prevFamKey = modelMenuFamilyKey;
-    modelMenuFamilyKey = '';
-    renderModelMenu();
+    const prevFamKey = modelMenuFamilyKey || modelMenuHoverFamilyKey;
+    if (modelMenuHoverFamilyKey && !modelMenuFamilyKey) {
+      closeModelSubmenu();
+    } else {
+      modelMenuFamilyKey = '';
+      modelMenuHoverFamilyKey = '';
+      renderModelMenu();
+    }
     if (!elModelMenu) return;
     const match = prevFamKey
       ? [...elModelMenu.querySelectorAll('.pt-model-opt[data-family-key]')].find(
@@ -4684,7 +5060,71 @@
     (match || elModelMenu.querySelector('.pt-model-opt'))?.focus();
   }
 
+  function enterModelFamilyLevel2(famKey, anchorRow = null, { focusSubmenu = false } = {}) {
+    if (!famKey) return;
+    if (!modelMenuFamilyKey && canUseModelMenuFlyout()) {
+      const openedFlyout = openModelSubmenu(famKey, anchorRow, { focusFirst: focusSubmenu });
+      if (openedFlyout) return;
+    }
+    closeModelSubmenu();
+    modelMenuFamilyKey = famKey;
+    renderModelMenu();
+    const target =
+      elModelMenu?.querySelector('.pt-model-opt.active') ||
+      elModelMenu?.querySelector('.pt-model-opt');
+    if (target) {
+      target.focus();
+      target.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
   if (elModelMenu) {
+    elModelMenu.addEventListener('pointerover', (e) => {
+      if (!modelMenuOpen || modelMenuFamilyKey || !canUseModelMenuFlyout()) return;
+      if (e.pointerType === 'touch') return;
+      if (e.target.closest('.pt-model-submenu')) {
+        clearModelSubmenuTimers();
+        return;
+      }
+      const famOpt = e.target.closest('.pt-model-menu-card .pt-model-opt[data-family-key]');
+      if (famOpt) {
+        const famKey = famOpt.dataset.familyKey || '';
+        if (!famKey) return;
+        if (modelMenuCloseTimer) {
+          clearTimeout(modelMenuCloseTimer);
+          modelMenuCloseTimer = null;
+        }
+        if (modelMenuHoverFamilyKey === famKey) {
+          if (modelMenuSwitchTimer) {
+            clearTimeout(modelMenuSwitchTimer);
+            modelMenuSwitchTimer = null;
+          }
+          return;
+        }
+        if (!modelMenuHoverFamilyKey) {
+          openModelSubmenu(famKey, famOpt);
+        } else {
+          if (modelMenuSwitchTimer) clearTimeout(modelMenuSwitchTimer);
+          modelMenuSwitchTimer = setTimeout(() => {
+            modelMenuSwitchTimer = null;
+            if (modelMenuOpen && !modelMenuFamilyKey) {
+              openModelSubmenu(famKey, famOpt);
+            }
+          }, 95);
+        }
+        return;
+      }
+      const singleOpt = e.target.closest('.pt-model-menu-card .pt-model-opt[data-model-key]');
+      if (singleOpt && modelMenuHoverFamilyKey) {
+        scheduleCloseModelSubmenu(140);
+      }
+    });
+
+    elModelMenu.addEventListener('mouseleave', () => {
+      if (!modelMenuOpen || modelMenuFamilyKey || !modelMenuHoverFamilyKey) return;
+      scheduleCloseModelSubmenu(180);
+    });
+
     elModelMenu.addEventListener('click', (e) => {
       const backBtn = e.target.closest('.pt-model-back');
       if (backBtn) {
@@ -4697,29 +5137,26 @@
       e.stopPropagation();
       const famKey = opt.dataset.familyKey || '';
       if (famKey) {
-        modelMenuFamilyKey = famKey;
-        renderModelMenu();
-        const target =
-          elModelMenu.querySelector('.pt-model-opt.active') ||
-          elModelMenu.querySelector('.pt-model-opt');
-        if (target) {
-          target.focus();
-          target.scrollIntoView({ block: 'nearest' });
-        }
+        enterModelFamilyLevel2(famKey, opt, { focusSubmenu: false });
         return;
       }
       const chosen = getModelByIdFromCatalog(opt.dataset.modelKey || '');
       if (chosen) selectThreadModel(chosen);
     });
+
     elModelMenu.addEventListener('keydown', (e) => {
       if (!modelMenuOpen) return;
-      if ((e.key === 'ArrowLeft' || e.key === 'Backspace') && modelMenuFamilyKey) {
+      const inSubmenu = Boolean(document.activeElement?.closest?.('.pt-model-submenu'));
+      if ((e.key === 'ArrowLeft' || e.key === 'Backspace') && (modelMenuFamilyKey || inSubmenu || modelMenuHoverFamilyKey)) {
         e.preventDefault();
         e.stopPropagation();
         stepBackModelMenuToLevel1();
         return;
       }
-      const opts = [...elModelMenu.querySelectorAll('.pt-model-opt')];
+      const scope = inSubmenu
+        ? elModelMenu.querySelector('.pt-model-submenu')
+        : elModelMenu.querySelector('.pt-model-menu-card') || elModelMenu;
+      const opts = [...scope.querySelectorAll('.pt-model-opt')];
       if (!opts.length) return;
       const idx = opts.indexOf(document.activeElement);
       if (e.key === 'ArrowDown') {
@@ -4730,13 +5167,23 @@
         opts[(idx - 1 + opts.length) % opts.length].focus();
       } else if (e.key === 'ArrowRight' && idx >= 0 && opts[idx].dataset.familyKey) {
         e.preventDefault();
-        opts[idx].click();
+        enterModelFamilyLevel2(opts[idx].dataset.familyKey, opts[idx], { focusSubmenu: true });
       } else if (e.key === 'Enter' && idx >= 0) {
         e.preventDefault();
-        opts[idx].click();
+        if (opts[idx].dataset.familyKey) {
+          enterModelFamilyLevel2(opts[idx].dataset.familyKey, opts[idx], { focusSubmenu: true });
+        } else {
+          opts[idx].click();
+        }
       }
     });
   }
+
+  window.addEventListener('resize', () => {
+    if (modelMenuOpen && modelMenuHoverFamilyKey && !modelMenuFamilyKey) {
+      repositionModelSubmenu();
+    }
+  });
 
   document.addEventListener('click', (e) => {
     if (!modelMenuOpen) return;
@@ -4754,7 +5201,7 @@
       if (modelMenuOpen) {
         e.preventDefault();
         e.stopPropagation();
-        if (modelMenuFamilyKey) {
+        if (modelMenuFamilyKey || modelMenuHoverFamilyKey) {
           stepBackModelMenuToLevel1();
         } else {
           closeModelMenu();

@@ -281,6 +281,18 @@ test('Sidecar telemetry row renders compactly across en/zh-CN/zh-TW, color-codes
   assert.match(enHtml, /class="danger" style="width:94%"/);
   assert.equal(enHtml.includes('·'), false, 'en telemetry row must never use middle dot');
 
+  // Low non-zero percent keeps visible fill (no data-empty); 0% marks data-empty="true"
+  setLocale('zh-CN');
+  const lowPctHtml = renderThreadUsageRow({
+    usage: { ...sampleThread.usage, totalTokens: 33500, contextTokens: 18600, compactPercent: 4, compactCount: 0 },
+  });
+  assert.match(lowPctHtml, /class="ok" style="width:4%">/);
+  assert.equal(lowPctHtml.includes('data-empty'), false);
+  const zeroPctHtml = renderThreadUsageRow({
+    usage: { ...sampleThread.usage, totalTokens: 1200, contextTokens: 200, compactPercent: 0, compactCount: 0 },
+  });
+  assert.match(zeroPctHtml, /class="ok" style="width:0%" data-empty="true"/);
+
   // Static assertions for I18N keys, CSS rules, and no native confirm/alert/prompt
   for (const loc of ['en', 'zh-CN', 'zh-TW']) {
     assert.ok(I18N[loc].usageTokensLabel, `Missing usageTokensLabel in ${loc}`);
@@ -290,10 +302,15 @@ test('Sidecar telemetry row renders compactly across en/zh-CN/zh-TW, color-codes
   }
 
   assert.match(appSource, /\$\{usageHtml\}\s*\n\s*<div class="o2-th-actions">/);
-  assert.match(cssSource, /\.o2-th-usage\s*\{/);
+  assert.match(cssSource, /\.o2-th-usage\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;/s);
+  assert.match(cssSource, /\.o2-usage-val\s*\{[^}]*font-weight:\s*500;/s);
+  assert.match(cssSource, /\.o2-usage-bar\s*>\s*i\s*\{[^}]*min-width:\s*6px;/s);
+  assert.match(cssSource, /\.o2-usage-bar\s*>\s*i\[data-empty="true"\][^}]*min-width:\s*0;/s);
   assert.match(cssSource, /\.o2-usage-bar\s*>\s*i\.ok\s*\{/);
   assert.match(cssSource, /\.o2-usage-bar\s*>\s*i\.warn\s*\{/);
   assert.match(cssSource, /\.o2-usage-bar\s*>\s*i\.danger\s*\{/);
+  assert.match(cssSource, /\.o2-usage-pill\s*\{[^}]*border:\s*0;/s);
+  assert.match(cssSource, /:root\[data-theme="light"\]\s+\.o2-usage-pill\s*\{/);
   assert.equal(
     /\bwindow\.(?:confirm|alert|prompt)\s*\(/.test(appSource),
     false,

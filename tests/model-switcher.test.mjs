@@ -550,12 +550,15 @@ test('static checks: Sidecar UI wires #btn-comp-model, .pt-model-menu outside #c
   assert.match(appJs, /modelRunningHint/);
   assert.match(appJs, /Escape/);
   assert.match(themeCss, /\.pt-model-menu\b/);
+  assert.match(themeCss, /\.pt-model-menu-card\b/);
+  assert.match(themeCss, /\.pt-model-submenu\b/);
   assert.match(themeCss, /\.pt-model-back\b/);
   assert.match(themeCss, /\.pt-model-effort\b/);
+  assert.match(themeCss, /\.pt-model-trail\b/);
   assert.match(themeCss, /button\.comp-model-pill\b/);
 
   // All 3 locales define model switcher strings
-  for (const key of ['modelSwitchTip', 'modelPendingTip', 'modelMenuTitle', 'modelBack', 'modelRunningHint', 'modelGroupModels', 'fTier']) {
+  for (const key of ['modelSwitchTip', 'modelPendingTip', 'modelMenuTitle', 'modelEffortTitle', 'modelBack', 'modelRunningHint', 'modelGroupModels', 'fTier']) {
     const matches = appJs.match(new RegExp(`\\b${key}:`, 'g')) || [];
     assert.equal(matches.length, 3, `${key} must be localized in en, zh-CN, and zh-TW`);
   }
@@ -602,13 +605,48 @@ function loadUiComposerMenuContext() {
     let modelMenuFamilyKey = '';
     let openThreadId = '';
     let openThreadObj = null;
+    let mockViewport = { width: 520, height: 760 };
     const pendingModelByThread = new Map();
+    const mockSubmenuEl = {
+      hidden: true,
+      dataset: {},
+      style: {},
+      innerHTML: '',
+      getBoundingClientRect() {
+        return { top: 0, left: 0, width: 152, height: 148 };
+      },
+      querySelector() {
+        return null;
+      },
+    };
+    const mockCardEl = {
+      getBoundingClientRect() {
+        return { top: 240, left: 16, right: 276, bottom: 520, width: 260, height: 280 };
+      },
+    };
     const elModelMenu = {
       hidden: true,
       dataset: {},
+      style: {},
       innerHTML: '',
-      querySelector() {
+      querySelector(sel) {
+        if (sel === '.pt-model-submenu') return mockSubmenuEl;
+        if (sel === '.pt-model-menu-card') return mockCardEl;
         return null;
+      },
+      querySelectorAll() {
+        return [];
+      },
+      getBoundingClientRect() {
+        return mockCardEl.getBoundingClientRect();
+      },
+    };
+    const window = {
+      get innerWidth() {
+        return mockViewport.width;
+      },
+      get innerHeight() {
+        return mockViewport.height;
       },
     };
     const elChatInput = { focus() {} };
@@ -624,8 +662,9 @@ function loadUiComposerMenuContext() {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
     const L = () => ({
-      modelMenuTitle: 'Model',
-      modelBack: 'Back',
+      modelMenuTitle: curLocale === 'en' ? 'Model' : '模型',
+      modelEffortTitle: curLocale === 'en' ? 'Thinking Effort' : '思考深度',
+      modelBack: curLocale === 'en' ? 'Back' : '返回',
       modelRunningHint: 'Thread is running — new model applies on your next message',
       modelNextMsgHint: 'Applies on your next message',
       modelLoading: 'Loading models…',
@@ -643,11 +682,18 @@ function loadUiComposerMenuContext() {
     this.api = {
       buildComposerModelMenuData,
       getModelByIdFromCatalog,
+      formatEffortDisplayLabel,
+      canUseModelMenuFlyout,
+      computeModelSubmenuLayout,
       openModelMenu,
       renderModelMenu,
+      openModelSubmenu,
+      closeModelSubmenu,
       closeModelMenu,
       selectThreadModel,
       setState(patch = {}) {
+        if ('curLocale' in patch) curLocale = patch.curLocale;
+        if ('viewport' in patch) mockViewport = { ...mockViewport, ...patch.viewport };
         if ('selectableModels' in patch) {
           selectableModels = patch.selectableModels;
           selectableModelsLoadedAt = Date.now();
@@ -664,7 +710,9 @@ function loadUiComposerMenuContext() {
         return {
           modelMenuOpen,
           modelMenuFamilyKey,
+          modelMenuHoverFamilyKey,
           elModelMenu,
+          mockSubmenuEl,
           pendingModelByThread,
         };
       },
@@ -749,27 +797,56 @@ test('two-level composer .pt-model-menu groups families (Level 1) and efforts (L
     },
   });
 
-  // 1. Open starts at Level 1 with family rows
+  // 1. Open starts at Level 1 with native-aligned family rows (friendly Extra High, right-side trail check/chevron, no middle dot)
   ui.openModelMenu();
   const state1 = ui.getState();
   assert.equal(state1.modelMenuOpen, true);
   assert.equal(state1.modelMenuFamilyKey, '');
   assert.equal(state1.elModelMenu.hidden, false);
   assert.equal(state1.elModelMenu.dataset.menuMode, 'level1');
+  assert.match(state1.elModelMenu.innerHTML, /class="pt-model-menu-card"/);
+  assert.match(state1.elModelMenu.innerHTML, /class="pt-model-submenu"/);
   assert.match(state1.elModelMenu.innerHTML, /data-family-key="family:gemini 4 neon"/);
   assert.match(state1.elModelMenu.innerHTML, /data-family-key="family:gemini 4 hydrogen"/);
   assert.match(state1.elModelMenu.innerHTML, /data-model-key="gpt-oss-120b-medium"/);
-  assert.match(state1.elModelMenu.innerHTML, /pt-model-effort">XHigh</);
+  assert.match(state1.elModelMenu.innerHTML, /pt-model-effort">Extra High</);
+  // Model name comes directly inside .pt-model-main (no leading left checkmark pushing labels out of alignment)
+  assert.match(state1.elModelMenu.innerHTML, /<span class="pt-model-main"><span class="pt-model-name">Gemini 4 Neon</);
+  assert.match(state1.elModelMenu.innerHTML, /<span class="pt-model-trail">.*pt-model-chk.*pt-model-chev/);
+  assert.equal(state1.elModelMenu.innerHTML.includes('·'), false, 'Model menu must never use middle dot');
 
-  // 2. Drill into Level 2 for Gemini 4 Hydrogen -> sticky Back header + Low & XHigh effort rows
+  // 1b. Hovering/opening floating Thinking Effort submenu populates .pt-model-submenu without rebuilding Level 1
+  state1.elModelMenu.innerHTML += '<!--level1-sentinel-->';
+  const openedFlyout = ui.openModelSubmenu('family:gemini 4 hydrogen', {
+    getBoundingClientRect: () => ({ top: 310, left: 20, right: 270, bottom: 342, width: 250, height: 32 }),
+  });
+  assert.equal(openedFlyout, true);
+  const stateFly = ui.getState();
+  assert.equal(stateFly.modelMenuHoverFamilyKey, 'family:gemini 4 hydrogen');
+  assert.equal(stateFly.mockSubmenuEl.hidden, false);
+  assert.equal(stateFly.mockSubmenuEl.dataset.side, 'right');
+  assert.match(stateFly.mockSubmenuEl.innerHTML, /Thinking Effort/);
+  assert.match(stateFly.mockSubmenuEl.innerHTML, /pt-model-name">Low</);
+  assert.match(stateFly.mockSubmenuEl.innerHTML, /pt-model-name">Extra High</);
+  assert.match(stateFly.mockSubmenuEl.innerHTML, /data-model-key="gemini-4-hydrogen-xhigh".*pt-model-trail.*pt-model-chk/);
+  assert.equal(stateFly.mockSubmenuEl.innerHTML.includes('·'), false);
+  // Simulated 1.2s poll keeps both Level 1 and floating submenu intact
+  ui.renderModelMenu();
+  assert.ok(ui.getState().elModelMenu.innerHTML.endsWith('<!--level1-sentinel-->'));
+  assert.equal(ui.getState().modelMenuHoverFamilyKey, 'family:gemini 4 hydrogen');
+  assert.equal(ui.getState().mockSubmenuEl.hidden, false);
+
+  // 2. Narrow fallback / explicit Level 2 drill-down for Gemini 4 Hydrogen -> sticky Back header + Low & Extra High rows
   ui.setState({ modelMenuFamilyKey: 'family:gemini 4 hydrogen' });
   ui.renderModelMenu();
   const state2 = ui.getState();
   assert.equal(state2.elModelMenu.dataset.menuMode, 'level2:family:gemini 4 hydrogen');
   assert.match(state2.elModelMenu.innerHTML, /class="pt-model-back"/);
   assert.match(state2.elModelMenu.innerHTML, /pt-model-menu-family[^>]*>Gemini 4 Hydrogen</);
+  assert.match(state2.elModelMenu.innerHTML, /pt-model-menu-sublabel">Thinking Effort</);
   assert.match(state2.elModelMenu.innerHTML, /data-model-key="gemini-4-hydrogen-low"/);
   assert.match(state2.elModelMenu.innerHTML, /data-model-key="gemini-4-hydrogen-xhigh"/);
+  assert.match(state2.elModelMenu.innerHTML, /pt-model-name">Extra High</);
 
   // 3. Simulated 1.2s background poll calling renderModelMenu() preserves Level 2 intact (early no-op)
   state2.elModelMenu.innerHTML += '<!--sentinel-->';
@@ -782,6 +859,7 @@ test('two-level composer .pt-model-menu groups families (Level 1) and efforts (L
   ui.selectThreadModel(chosenLow);
   assert.equal(ui.getState().modelMenuOpen, false);
   assert.equal(ui.getState().modelMenuFamilyKey, '');
+  assert.equal(ui.getState().modelMenuHoverFamilyKey, '');
   assert.equal(ui.getState().pendingModelByThread.get('thr-1')?.id, 'gemini-4-hydrogen-low');
 
   // 5. Reopening always starts at Level 1
@@ -794,4 +872,67 @@ test('two-level composer .pt-model-menu groups families (Level 1) and efforts (L
   ui.selectThreadModel(chosenGpt);
   assert.equal(ui.getState().modelMenuOpen, false);
   assert.equal(ui.getState().pendingModelByThread.get('thr-1')?.id, 'gpt-oss-120b-medium');
+});
+
+test('computeModelSubmenuLayout adapts right/left placement, horizontal shift, vertical clamping, and narrow drilldown fallback', () => {
+  const ui = loadUiComposerMenuContext();
+
+  // 1. Plenty of room on the right -> flyout opens on the right
+  const rightLayout = ui.computeModelSubmenuLayout({
+    viewportWidth: 520,
+    viewportHeight: 700,
+    mainRect: { top: 240, left: 16, right: 276, bottom: 520, width: 260, height: 280 },
+    rowRect: { top: 300, left: 20, right: 270, bottom: 332, width: 250, height: 32 },
+    subHeight: 150,
+  });
+  assert.equal(rightLayout.mode, 'flyout');
+  assert.equal(rightLayout.side, 'right');
+  assert.equal(rightLayout.shiftMainX, 0);
+  assert.equal(rightLayout.maxWidth, 152);
+
+  // 2. Right edge tight, room on the left -> flips automatically to left side
+  const leftLayout = ui.computeModelSubmenuLayout({
+    viewportWidth: 480,
+    viewportHeight: 700,
+    mainRect: { top: 240, left: 210, right: 470, bottom: 520, width: 260, height: 280 },
+    rowRect: { top: 300, left: 214, right: 466, bottom: 332, width: 252, height: 32 },
+    subHeight: 150,
+  });
+  assert.equal(leftLayout.mode, 'flyout');
+  assert.equal(leftLayout.side, 'left');
+  assert.equal(leftLayout.shiftMainX, 0);
+
+  // 3. Centered main menu where neither side alone fits, but shifting horizontally fits side-by-side
+  const shiftedLayout = ui.computeModelSubmenuLayout({
+    viewportWidth: 400,
+    viewportHeight: 700,
+    mainRect: { top: 240, left: 90, right: 310, bottom: 520, width: 220, height: 280 },
+    rowRect: { top: 300, left: 94, right: 306, bottom: 332, width: 212, height: 32 },
+    subHeight: 150,
+  });
+  assert.equal(shiftedLayout.mode, 'flyout');
+  assert.notEqual(shiftedLayout.shiftMainX, 0);
+
+  // 4. Bottom overflow clamps vertical position inside viewport
+  const clampedLayout = ui.computeModelSubmenuLayout({
+    viewportWidth: 520,
+    viewportHeight: 540,
+    mainRect: { top: 240, left: 16, right: 276, bottom: 520, width: 260, height: 280 },
+    rowRect: { top: 470, left: 20, right: 270, bottom: 502, width: 250, height: 32 },
+    subHeight: 160,
+  });
+  assert.equal(clampedLayout.mode, 'flyout');
+  assert.ok(240 + clampedLayout.top + 160 <= 540 - 8, 'Submenu bottom must be clamped within viewport');
+
+  // 5. Very narrow sidecar (< 372px) -> degrades gracefully to drilldown mode
+  const narrowLayout = ui.computeModelSubmenuLayout({
+    viewportWidth: 320,
+    viewportHeight: 700,
+    mainRect: { top: 240, left: 10, right: 310, bottom: 520, width: 300, height: 280 },
+    rowRect: { top: 300, left: 14, right: 306, bottom: 332, width: 292, height: 32 },
+    subHeight: 150,
+  });
+  assert.equal(narrowLayout.mode, 'drilldown');
+  assert.equal(ui.canUseModelMenuFlyout(320), false);
+  assert.equal(ui.canUseModelMenuFlyout(400), true);
 });
