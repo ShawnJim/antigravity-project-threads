@@ -19,14 +19,16 @@
         (window.sidecar.conversationId || window.sidecar.activeConversationId)) ||
         '',
     ).trim();
-  const getHostConvId = () => {
+  const getLiveHostConvId = () => {
     const sdkId = readRawSidecarConvId();
     if (sdkId && sdkId !== lastSdkConvId) {
       lastSdkConvId = sdkId;
       eventHostConvId = '';
     }
-    return String(eventHostConvId || sdkId || params.get('conversationId') || '').trim();
+    return String(eventHostConvId || sdkId || '').trim();
   };
+  const getHostConvId = () =>
+    getLiveHostConvId() || String(params.get('conversationId') || '').trim();
   const doFetch = (window.sidecar && window.sidecar.fetch) || fetch;
 
   // ---------- Global App-Controlled Localization (en / zh-CN / zh-TW) ----------
@@ -1373,7 +1375,7 @@
   }
 
   window.addEventListener('message', (e) => {
-    if (!e.data) return;
+    if (!e.data || (e.source && e.source !== window.parent && e.source !== window)) return;
     if (e.data.type === 'theme-change') {
       setTimeout(syncThemeScheme, 10);
       return;
@@ -1382,7 +1384,7 @@
       const nextId = String(
         e.data.conversationId || e.data.payload?.conversationId || readRawSidecarConvId() || '',
       ).trim();
-      if (nextId) {
+      if (nextId && nextId.length <= 200 && !/[\r\n\t\s]/.test(nextId)) {
         eventHostConvId = nextId;
         lastSdkConvId = readRawSidecarConvId() || lastSdkConvId;
       }
@@ -1408,6 +1410,7 @@
   function computeCoordinatorUiState({
     coordConvId = '',
     hostConvId = '',
+    hasLiveHostConvId = true,
     manualPopoutConvId: popoutConvId = '',
     threads = [],
   } = {}) {
@@ -1422,6 +1425,7 @@
         hasCoord: false,
         isOnCoordinator: false,
         away: false,
+        cardCoordCalm: false,
         activeMainWorkerConvId: '',
         switchableHostConvId: '',
         showHeaderCoordBtn: false,
@@ -1434,15 +1438,20 @@
     }
 
     const isWorkerId = (id) => Boolean(id && list.some((x) => x && x.conversationId === id));
-    let isOnCoordinator = true;
+    let isOnCoordinator = false;
+    let away = false;
+    let cardCoordCalm = false;
     let activeMainWorkerConvId = '';
     let switchableHostConvId = '';
 
-    if (hostId) {
+    if (hasLiveHostConvId && hostId) {
+      // Live host conversationId from sidecar SDK/events is authoritative
       if (hostId === coordId) {
         isOnCoordinator = true;
+        away = false;
       } else {
         isOnCoordinator = false;
+        away = true;
         if (isWorkerId(hostId)) {
           activeMainWorkerConvId = hostId;
         } else {
@@ -1450,31 +1459,56 @@
         }
       }
     } else if (popoutId && popoutId !== coordId) {
+      // Static URL fallback (or empty hostId): manualPopout tracks active worker popout
       isOnCoordinator = false;
+      away = true;
       activeMainWorkerConvId = popoutId;
+    } else if (hostId) {
+      // Static URL fallback without popout
+      if (hostId === coordId) {
+        isOnCoordinator = true;
+        away = false;
+      } else {
+        isOnCoordinator = false;
+        away = true;
+        if (isWorkerId(hostId)) {
+          activeMainWorkerConvId = hostId;
+        } else {
+          switchableHostConvId = hostId;
+        }
+      }
+    } else {
+      // Unknown host session (hostConvId empty): never pretend to be on Coordinator;
+      // keep a single calm non-highlighted "Open Coordinator" entry on the card only.
+      isOnCoordinator = false;
+      away = false;
+      cardCoordCalm = true;
     }
 
-    const away = !isOnCoordinator;
     return {
       hasCoord: true,
       isOnCoordinator,
       away,
+      cardCoordCalm,
       activeMainWorkerConvId,
       switchableHostConvId,
-      // Never duplicate "Back to Coordinator" across header + card; hide all when already on Coordinator
+      // Never duplicate "Back to Coordinator" across header + card; hide all when confirmed on Coordinator.
+      // Inline preview header (#btn-chat-coord) shows ONLY when confirmed away from Coordinator.
       showHeaderCoordBtn: false,
-      showCardCoordBtn: away,
+      showCardCoordBtn: !isOnCoordinator,
       showChatCoordBtn: away,
       showRebindBtn: true,
       highlightRebindBtn: Boolean(switchableHostConvId),
-      goalCardClickable: away,
+      goalCardClickable: !isOnCoordinator,
     };
   }
 
   function getCoordinatorUiState() {
+    const liveHostId = getLiveHostConvId();
     return computeCoordinatorUiState({
       coordConvId: lastSnap?.coordinator?.conversationId || '',
-      hostConvId: getHostConvId(),
+      hostConvId: liveHostId || String(params.get('conversationId') || '').trim(),
+      hasLiveHostConvId: Boolean(liveHostId),
       manualPopoutConvId,
       threads: lastSnap?.threads || cachedThreads || [],
     });
@@ -1512,7 +1546,7 @@
     if (elBtnCardCoord) {
       elBtnCardCoord.hidden = !ui.showCardCoordBtn;
       elBtnCardCoord.classList.toggle('away', ui.away);
-      elBtnCardCoord.textContent = t.coordCardBack;
+      elBtnCardCoord.textContent = ui.cardCoordCalm ? t.coordCardOpen : t.coordCardBack;
       elBtnCardCoord.title = t.coordJumpTip;
     }
 
@@ -2771,10 +2805,10 @@
   function popoutToMainCanvas(targetConvId) {
     if (!targetConvId) return;
     const coordConvId = lastSnap?.coordinator?.conversationId || '';
-    const hostId = getHostConvId();
-    // Only use manualPopoutConvId fallback when host doesn't expose active conversationId
+    const liveHostId = getLiveHostConvId();
+    // Only use manualPopoutConvId fallback when host doesn't expose a live conversationId
     manualPopoutConvId =
-      !hostId && targetConvId && targetConvId !== coordConvId ? targetConvId : '';
+      !liveHostId && targetConvId && targetConvId !== coordConvId ? targetConvId : '';
     if (window.sidecar?.ui?.toggleConversation) {
       window.sidecar.ui.toggleConversation(targetConvId);
     } else if (window.parent && window.parent !== window) {

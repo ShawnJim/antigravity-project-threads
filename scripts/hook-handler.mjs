@@ -1,5 +1,6 @@
 import { resolveLsEndpoint } from '../lib/ls-client.mjs';
 import {
+  findRetiredCoordinatorOwner,
   initCoordinator,
   inspectWorktreeGit,
   loadRegistry,
@@ -181,10 +182,84 @@ async function main() {
 
   if (event === 'PreInvocation') {
     let coord = Object.values(reg.coordinators).find((c) => c.conversationId === convId);
+    const directUserText = extractDirectUserMessage(input.lastUserInput);
+    const hasSlashCoord = LEADING_SLASH_COORD_RE.test(directUserText);
+
+    // Check retired Coordinator BEFORE `/coord` auto-bootstrap so a retired session
+    // can never silently hijack active Coordinator ownership via `/coord`.
+    if (!coord) {
+      const retiredOwner = findRetiredCoordinatorOwner(reg, convId);
+      if (retiredOwner) {
+        const stepCount = Number(input.initialNumSteps) || 0;
+        const ownerRebindSeq = Number(retiredOwner.rebindSeq) || 0;
+        const prevNotice = retiredOwner.retiredNotified?.[convId] || null;
+        const compactedRetired = Boolean(
+          prevNotice?.lastStepCount && stepCount > 0 && stepCount < prevNotice.lastStepCount,
+        );
+        const alreadyNotifiedForCurrentTarget = Boolean(
+          prevNotice &&
+            prevNotice.targetCoordinatorId === retiredOwner.conversationId &&
+            (Number(prevNotice.rebindSeq) || 0) >= ownerRebindSeq &&
+            !compactedRetired &&
+            !hasSlashCoord,
+        );
+
+        if (alreadyNotifiedForCurrentTarget) {
+          // Avoid writing registry on every retired turn; only checkpoint stepCount periodically for /compact detection
+          if (
+            stepCount > 0 &&
+            (!prevNotice.lastStepCount || stepCount >= prevNotice.lastStepCount + 6)
+          ) {
+            mutateRegistry((freshReg) => {
+              const freshOwner = freshReg.coordinators?.[retiredOwner.key];
+              if (!freshOwner) return;
+              if (!freshOwner.retiredNotified || typeof freshOwner.retiredNotified !== 'object') {
+                freshOwner.retiredNotified = {};
+              }
+              const curEntry = freshOwner.retiredNotified[convId] || prevNotice;
+              freshOwner.retiredNotified[convId] = {
+                ...curEntry,
+                lastStepCount: stepCount,
+              };
+            });
+          }
+          process.stdout.write('{}\n');
+          return;
+        }
+
+        const noticeText = buildRetiredCoordinatorNotice(retiredOwner);
+        const notifiedAt = new Date().toISOString();
+        mutateRegistry((freshReg) => {
+          const freshOwner = freshReg.coordinators?.[retiredOwner.key];
+          if (!freshOwner || freshOwner.conversationId === convId) return;
+          if (!freshOwner.retiredNotified || typeof freshOwner.retiredNotified !== 'object') {
+            freshOwner.retiredNotified = {};
+          }
+          freshOwner.retiredNotified[convId] = {
+            notifiedAt,
+            targetCoordinatorId: freshOwner.conversationId,
+            rebindSeq: Number(freshOwner.rebindSeq) || 0,
+            lastStepCount: stepCount,
+          };
+        });
+
+        process.stdout.write(
+          `${JSON.stringify({
+            injectSteps: [
+              {
+                systemMessage: {
+                  systemMessage: noticeText,
+                },
+              },
+            ],
+          })}\n`,
+        );
+        return;
+      }
+    }
 
     // Auto-bootstrap on the VERY FIRST `/coord` turn before `init_project_coordinator` MCP tool runs
-    const directUserText = extractDirectUserMessage(input.lastUserInput);
-    if (!coord && LEADING_SLASH_COORD_RE.test(directUserText)) {
+    if (!coord && hasSlashCoord) {
       const isWorkerThread = Object.values(reg.threads || {}).some(
         (t) => t?.conversationId === convId,
       );
@@ -205,78 +280,7 @@ async function main() {
     }
 
     if (!coord) {
-      const retiredOwner = Object.values(reg.coordinators || {}).find(
-        (c) =>
-          c &&
-          c.conversationId &&
-          c.conversationId !== convId &&
-          Array.isArray(c.retiredCoordinatorIds) &&
-          c.retiredCoordinatorIds.includes(convId),
-      );
-      if (!retiredOwner) {
-        process.stdout.write('{}\n');
-        return;
-      }
-
-      const stepCount = Number(input.initialNumSteps) || 0;
-      const ownerRebindSeq = Number(retiredOwner.rebindSeq) || 0;
-      const prevNotice = retiredOwner.retiredNotified?.[convId] || null;
-      const compactedRetired = Boolean(
-        prevNotice?.lastStepCount && stepCount > 0 && stepCount < prevNotice.lastStepCount,
-      );
-      const alreadyNotifiedForCurrentTarget = Boolean(
-        prevNotice &&
-          prevNotice.targetCoordinatorId === retiredOwner.conversationId &&
-          (Number(prevNotice.rebindSeq) || 0) >= ownerRebindSeq &&
-          !compactedRetired,
-      );
-
-      if (alreadyNotifiedForCurrentTarget) {
-        if (stepCount > 0 && stepCount !== prevNotice.lastStepCount) {
-          mutateRegistry((freshReg) => {
-            const freshOwner = freshReg.coordinators?.[retiredOwner.key];
-            if (!freshOwner) return;
-            if (!freshOwner.retiredNotified || typeof freshOwner.retiredNotified !== 'object') {
-              freshOwner.retiredNotified = {};
-            }
-            const curEntry = freshOwner.retiredNotified[convId] || prevNotice;
-            freshOwner.retiredNotified[convId] = {
-              ...curEntry,
-              lastStepCount: stepCount,
-            };
-          });
-        }
-        process.stdout.write('{}\n');
-        return;
-      }
-
-      const noticeText = buildRetiredCoordinatorNotice(retiredOwner);
-      const notifiedAt = new Date().toISOString();
-      mutateRegistry((freshReg) => {
-        const freshOwner = freshReg.coordinators?.[retiredOwner.key];
-        if (!freshOwner || freshOwner.conversationId === convId) return;
-        if (!freshOwner.retiredNotified || typeof freshOwner.retiredNotified !== 'object') {
-          freshOwner.retiredNotified = {};
-        }
-        freshOwner.retiredNotified[convId] = {
-          notifiedAt,
-          targetCoordinatorId: freshOwner.conversationId,
-          rebindSeq: Number(freshOwner.rebindSeq) || 0,
-          lastStepCount: stepCount,
-        };
-      });
-
-      process.stdout.write(
-        `${JSON.stringify({
-          injectSteps: [
-            {
-              systemMessage: {
-                systemMessage: noticeText,
-              },
-            },
-          ],
-        })}\n`,
-      );
+      process.stdout.write('{}\n');
       return;
     }
 
@@ -295,13 +299,25 @@ async function main() {
       shouldUpdateSteps = true;
     }
 
-    // Fallback injection ONLY for threads that have NEVER been pushed/notified and are not waiting on a background task
+    // Fallback injection ONLY for threads that have NEVER been pushed/notified, are not suppressed by a stale
+    // pre-rebind historical baseline, and are not waiting on a background task
     const newlyFinished = Object.values(reg.threads).filter((t) => {
       if (t.archived || t.coordinatorId !== convId || !t.lastCompletedAt) return false;
       if (t.pushedToCoordinatorAt || t.notifiedCoordinatorAt) return false;
       if (t.runState === 'RUN_STATE_IDLE' || t.runState !== 'RUN_STATE_RUNNING') {
         const comp = extractThreadCompletion(t.conversationId);
-        return !comp.waitingOnBackgroundTask;
+        if (comp.waitingOnBackgroundTask) return false;
+        const suppressedByBaseline =
+          (Number.isInteger(t.reboundBaselineStepIndex) &&
+            comp.stepIndex >= 0 &&
+            comp.stepIndex <= t.reboundBaselineStepIndex) ||
+          (Boolean(t.reboundBaselineAt) &&
+            comp.stepIndex < 0 &&
+            t.lastCompletedAt <= t.reboundBaselineAt);
+        if (suppressedByBaseline) {
+          return false;
+        }
+        return true;
       }
       return false;
     });
