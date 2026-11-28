@@ -52,16 +52,18 @@ function writeTranscript(appDataDir, convId, steps) {
   return txPath;
 }
 
-test('hook-handler v9 directive, SKILL.md, rules/AGENTS.md, and MCP schema enforce user-language matching', (t) => {
+test('hook-handler v10 directive, SKILL.md, rules/AGENTS.md, and MCP schema enforce user-language matching and autonomous archiving', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
   const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
 
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*9\s*;/);
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*10\s*;/);
   assert.match(skillMd, /Follow the User's Language/i);
   assert.match(skillMd, /title.*taskPrompt.*active conversation language/i);
+  assert.match(skillMd, /autonomously decide.*archive_thread.*without asking the user/i);
   assert.match(rulesMd, /title.*taskPrompt.*active conversation language/i);
+  assert.match(rulesMd, /autonomously decide.*archive_thread.*without asking the user/i);
   assert.match(rulesMd, /### Thread Summary.*### 线程总结/);
   assert.match(serverMjs, /user\\'s active language|user's active language/i);
 
@@ -74,7 +76,7 @@ test('hook-handler v9 directive, SKILL.md, rules/AGENTS.md, and MCP schema enfor
     workspacePath: ws,
     repoRoot: ws,
     title: '[Coordinator] LangTest',
-    directiveVersion: 8,
+    directiveVersion: 9,
   };
   saveRegistry(reg);
 
@@ -104,7 +106,9 @@ test('hook-handler v9 directive, SKILL.md, rules/AGENTS.md, and MCP schema enfor
   assert.match(directive, /Match the user's language/i);
   assert.match(directive, /`title` and `taskPrompt`/);
   assert.match(directive, /same language/i);
-  assert.equal(loadRegistry().coordinators['__lang_hook__'].directiveVersion, 9);
+  assert.match(directive, /autonomously decide.*`archive_thread`.*without asking the user/i);
+  assert.match(directive, /read-only.*merged into `main`/i);
+  assert.equal(loadRegistry().coordinators['__lang_hook__'].directiveVersion, 10);
 });
 
 test('detectPromptLanguage and buildWorkerPrompt localize Chinese tasks and preserve English templates', () => {
