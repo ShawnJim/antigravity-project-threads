@@ -971,7 +971,7 @@ test('P1-2 & P0-1 hook-handler PreInvocation: blocks /coord hijack in retired se
     /Project Coordinator Retired/,
   );
 
-  // 5. New active coordinator receives v13 standing protocol + ONLY recent thr-051 (NOT stale thr-050!)
+  // 5. New active coordinator receives v14 standing protocol + ONLY recent thr-051 (NOT stale thr-050!)
   const newTurn1 = runHook(
     'PreInvocation',
     { conversationId: 'conv-hook-new', initialNumSteps: 1, lastUserInput: '<USER_REQUEST>开始工作</USER_REQUEST>' },
@@ -982,7 +982,7 @@ test('P1-2 & P0-1 hook-handler PreInvocation: blocks /coord hijack in retired se
   const updateMsg = newTurn1.injectSteps[1].systemMessage.systemMessage;
   assert.match(updateMsg, /thr-051/);
   assert.doesNotMatch(updateMsg, /thr-050/);
-  assert.equal(loadRegistry().coordinators[keyA].directiveVersion, 13);
+  assert.equal(loadRegistry().coordinators[keyA].directiveVersion, 14);
 
   // 6. Rebinding again to conv-hook-third updates retirement notice for conv-hook-old
   await rebindCoordinator({ workspacePath: repoA, newCoordinatorId: 'conv-hook-third' });
@@ -1297,10 +1297,21 @@ test('Sidecar API, UI rebind modal, 3-locale I18N, P1-4 coordinator button visib
   const themeCss = readFileSync(new URL('../sidecars/threads/theme.css', import.meta.url), 'utf8');
   const hookMjs = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
 
-  // 1. Backend routes & hook-handler lock discipline
+  // 1. Backend routes, API revision/capabilities, & hook-handler lock discipline
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/rebind_coordinator['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/coordinator_candidates['"]/);
-  assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*13\s*;/);
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*3\s*;/);
+  assert.match(mainMjs, /['"]rebind_coordinator['"]/);
+  assert.match(mainMjs, /['"]coordinator_candidates['"]/);
+  assert.match(mainMjs, /handleRebindCoordinator[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
+  assert.match(mainMjs, /handleCoordinatorCandidates[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
+  assert.match(appJs, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*3\s*;/);
+  assert.match(appJs, /fetchJsonWithTimeout\(\s*`\/api\/coordinator_candidates\?\$\{qs\}`/);
+  assert.match(
+    appJs,
+    /postApi\(\s*['"]\/api\/rebind_coordinator['"][\s\S]*?allowGetFallback:\s*false/,
+  );
+  assert.match(hookMjs, /const\s+DIRECTIVE_VERSION\s*=\s*14\s*;/);
   assert.doesNotMatch(hookMjs, /\bsaveRegistry\b/, 'hook-handler must use mutateRegistry exclusively');
 
   // 2. HTML structure & message event source validation

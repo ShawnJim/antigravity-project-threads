@@ -34,7 +34,7 @@ import {
 const THIS_FILE = fileURLToPath(import.meta.url);
 const HERE = dirname(THIS_FILE);
 const PLUGIN_ROOT = join(HERE, '..', '..');
-const SERVER_API_REVISION = 2;
+const SERVER_API_REVISION = 3;
 const SERVER_CAPABILITIES = [
   'settings',
   'settings_save_fast',
@@ -42,6 +42,8 @@ const SERVER_CAPABILITIES = [
   'update_check',
   'update_apply',
   'decisions',
+  'rebind_coordinator',
+  'coordinator_candidates',
 ];
 const app = new SidecarApp();
 
@@ -306,9 +308,14 @@ async function handleRebindCoordinator(data = {}) {
       title: data.title || '',
       migrateActiveThreads: parseBool(data.migrateActiveThreads, true),
     });
-    return { ...res, locale: resolveAppLocale() };
+    return { ...res, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
   } catch (err) {
-    return { ok: false, error: err.message, locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/rebind_coordinator', handleRebindCoordinator);
@@ -322,9 +329,15 @@ async function handleCoordinatorCandidates(data = {}) {
       coordinatorId: data.coordinatorId || '',
       conversationId: data.conversationId || '',
     });
-    return { ...res, locale: resolveAppLocale() };
+    return { ...res, locale: resolveAppLocale(), serverInfo: buildServerInfo() };
   } catch (err) {
-    return { ok: false, error: err.message, candidates: [], locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      candidates: [],
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/coordinator_candidates', handleCoordinatorCandidates);

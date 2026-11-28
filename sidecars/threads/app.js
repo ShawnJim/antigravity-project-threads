@@ -3,7 +3,7 @@
 
   const BOARD_POLL_MS = 2200;
   const CHAT_POLL_MS = 1200;
-  const EXPECTED_SERVER_API_REVISION = 2;
+  const EXPECTED_SERVER_API_REVISION = 3;
   const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
   const API_READ_TIMEOUT_MS = 10_000;
   const API_WRITE_TIMEOUT_MS = 12_000;
@@ -1926,9 +1926,13 @@
         coordinatorId: oldCoordId,
       }),
     );
-    doFetch(`/api/coordinator_candidates?${qs}`)
-      .then((res) => res.json())
-      .then((data) => {
+    fetchJsonWithTimeout(
+      `/api/coordinator_candidates?${qs}`,
+      { method: 'GET' },
+      { timeoutMs: API_READ_TIMEOUT_MS },
+    )
+      .then(({ data }) => {
+        inspectServerInfo(data);
         if (activeModalCtx !== modalRef || !data?.ok) return;
         modalRef.candidates = Array.isArray(data.candidates) ? data.candidates : [];
         if (typeof data.activeThreadCount === 'number') {
@@ -6913,6 +6917,7 @@
             newCoordinatorId: ctx.targetId || '',
             migrateActiveThreads: true,
           }),
+          { allowGetFallback: false, expectServerInfo: true },
         );
         if (!res?.ok) {
           ctx.busy = false;
@@ -7023,6 +7028,17 @@
       }
     } catch (err) {
       ctx.busy = false;
+      if (ctx.mode === 'rebind_coordinator') {
+        if (err?.isBackendMismatch) {
+          backendVersionMismatch = {
+            kind: 'stale_backend',
+            startedVersion: '',
+            diskVersion: '',
+            reason: err.code || 'route_not_found',
+          };
+        }
+        flashToast(err?.message || L().rebindErrToast, 'err', 4200);
+      }
       if (ctx.mode === 'plugin_update') {
         pluginUpdateApplying = false;
         if (err?.isBackendMismatch) {
