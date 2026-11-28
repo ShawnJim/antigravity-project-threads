@@ -1490,6 +1490,37 @@ test('Issue #12 review (thr-101) mixed-topology regression: legacy global thr-00
     /Cross-project access denied/,
   );
 
+  // thr-105 P1-1: Unregistered coordinatorId / conversationId (without workspacePath/expectedScopeKey)
+  // must fail closed in sync resolveDecision() / dismissDecision() instead of degrading to global fail-open
+  assert.throws(
+    () => resolveDecision({ decisionId: decA.id, coordinatorId: 'coord-unregistered-other' }),
+    /Unable to resolve project scope for decision \(fail-closed\)/,
+  );
+  assert.throws(
+    () => resolveDecision({ decisionId: decA.id, conversationId: 'conv-unregistered-other' }),
+    /Unable to resolve project scope for decision \(fail-closed\)/,
+  );
+  assert.throws(
+    () => dismissDecision({ decisionId: decA.id, coordinatorId: 'coord-unregistered-other' }),
+    /Unable to resolve project scope for decision \(fail-closed\)/,
+  );
+  assert.throws(
+    () => dismissDecision(decA.id, { conversationId: 'conv-unregistered-other' }),
+    /Unable to resolve project scope for decision \(fail-closed\)/,
+  );
+  assert.throws(
+    () => dismissDecision({ threadId: 'thr-001', coordinatorId: 'coord-unregistered-other' }),
+    /Unable to resolve project scope for decision \(fail-closed\)/,
+  );
+  assert.throws(
+    () => dismissDecision('auto:worktree_merge_ready:thr-001', { conversationId: 'conv-unregistered-other' }),
+    /Unable to resolve project scope for decision \(fail-closed\)/,
+  );
+  assert.equal(listDecisions({ workspacePath: repoA }).length, 1, 'decA must remain pending after fail-closed blocks');
+  const regAfterFailClosed = loadRegistry();
+  assert.equal(regAfterFailClosed.dismissedAutoDecisions['thr-001:*'], undefined);
+  assert.equal(regAfterFailClosed.dismissedAutoDecisions['thr-001:worktree_merge_ready'], undefined);
+
   // 3. P1-1 & P2-1: executeDecisionAction(auto:worktree_merge_ready:thr-001) targets Project B, never Legacy A
   // Make a new commit on b1 so the auto decision naturally re-triggers for commitB2
   writeFileSync(join(b1.worktreePath, 'new-b-2.txt'), 'new b commit 2\n', 'utf8');
