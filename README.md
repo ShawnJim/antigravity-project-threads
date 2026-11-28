@@ -4,7 +4,8 @@
   <h1>Antigravity Project Threads</h1>
 
   <p>
-    Claude Code Projects–style persistent Coordinator and parallel isolated Worker Threads for <strong>Antigravity 2.0 Desktop</strong>.
+    <strong>Protect your focus. Scale your output.</strong><br />
+    The attention-first parallel engineering workspace for <strong>Antigravity 2.0 Desktop</strong>: one calm Coordinator for your decisions, isolated background Worker Threads for everything else.
   </p>
 
   <p>
@@ -21,7 +22,16 @@
 
 ---
 
-**Antigravity Project Threads** (`project-threads`) brings a **Claude Code Projects**–style ongoing project coordination workflow to **Antigravity 2.0 Desktop**: pin your main window as an always-on **`[Coordinator]`** session, dispatch physically isolated **Git Worktree** (or zero-copy read-only) worker threads in the background via native `ConversationService`, and manage threads, **Pending Decisions**, inline **Preview** chats, Coordinator switching, and plugin updates directly in the right-hand **Project Threads** sidecar board.
+Running multiple AI agents in parallel shouldn't turn you into a full-time tab switcher. **Antigravity Project Threads** (`project-threads`) turns **Antigravity 2.0 Desktop** into an **attention-first command center** for parallel development: pin your main window as an always-on **`[Coordinator]`** focused purely on scoping, architecture, and judgment; delegate implementation and deep investigations to physically isolated **Git Worktree** (or zero-copy read-only) background threads via native `ConversationService`; and let structured summaries, **Pending Decisions**, inline **`Preview`** chats, Coordinator switching, and plugin updates converge cleanly in the right-hand **Project Threads** sidecar board.
+
+## Built for Developer Attention
+
+Parallel AI coding breaks down when your own working memory becomes the bottleneck. **Project Threads** offloads the orchestration overhead so you stay in flow:
+
+- **Stay in One Calm Window**: Keep `[Coordinator]` clean and high-signal for design tradeoffs, task decomposition, and review—never drown your main conversation in hundreds of lines of search noise or build logs.
+- **Parallel Execution Without Branch Chaos**: Spin up isolated Git Worktrees for code changes and zero-copy read-only threads for investigations simultaneously, with zero working-tree collisions.
+- **Decisions Come to You**: Finished threads push structured summaries back automatically, while choices, merges, and sign-offs surface in the pinned **Pending Decisions** queue for one-click action.
+- **Inspect Without Losing Context**: Click any thread card to open a 1:1 inline **`Preview`** drawer right beside your Coordinator—follow up, steer a worker, or switch its model without ever leaving your seat.
 
 ## Highlights
 

@@ -2,7 +2,7 @@
   "name": "project-threads",
   "displayName": "Project Threads",
   "version": "1.2.0-rc.1",
-  "description": "Claude Projects-style ongoing work coordinator for Antigravity 2.0: persistent Coordinator session, isolated Git worktree or read-only background worker threads, per-project memory sync, and live Swarm-styled sidecar board with inline chat preview.",
+  "description": "Attention-first parallel dev workspace for Antigravity 2.0: pin a calm Coordinator for decisions, dispatch isolated Git worktree or read-only background threads, and manage Pending Decisions, shared memory, and inline Preview chats in one live board.",
   "logo": "assets/logo.svg",
   "author": {
     "name": "ShawnJim",

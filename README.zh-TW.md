@@ -4,7 +4,8 @@
   <h1>Antigravity Project Threads</h1>
 
   <p>
-    為 <strong>Antigravity 2.0 Desktop</strong> 打造的 Claude Code Projects 風格常駐專案總控與平行隔離工作執行緒體系。
+    <strong>把注意力留給決策，讓多 Agent 平行開發井然有序。</strong><br />
+    專為 <strong>Antigravity 2.0 Desktop</strong> 打造的注意力管理與平行工程外掛：一個常駐聚焦的專案總控，搭配多條實體隔離的背景工作執行緒。
   </p>
 
   <p>
@@ -21,7 +22,16 @@
 
 ---
 
-**Antigravity Project Threads**（`project-threads`）在 **Antigravity 2.0 Desktop** 中重現 **Claude Code Projects** 風格的持續專案總控與平行工作執行緒體系：將左側主視窗錨定為常駐 **`[Coordinator]`** 總控工作階段，背景透過原生 `ConversationService` 平行派發實體隔離的 **Git Worktree**（或零拷貝唯讀）子執行緒，並在右側 **Project Threads** 輔助面板一站式管理即時執行緒、**待決策（Pending Decisions）**、內嵌 **`Preview`** 對話、一鍵切換總控與外掛更新。
+同時驅動多個 AI Agent 開發，不該讓你淪為疲於奔命的「視窗切換員」。**Antigravity Project Threads**（`project-threads`）是專為 **Antigravity 2.0 Desktop** 打造的**注意力管理與平行開發指揮中樞**：將左側主視窗錨定為始終清醒的 **`[Coordinator]`** 總控工作階段，專注處理拆解、權衡與拍板；將程式碼修改與深度排查透過原生 `ConversationService` 背景派發至實體隔離的 **Git Worktree**（或零拷貝唯讀）子執行緒；並將完成摘要、**待決策（Pending Decisions）** 卡片、內嵌 **`Preview`** 對話、一鍵切換總控與外掛更新統一收口於右側 **Project Threads** 看板——告別頻繁切窗、拒絕分支互踩，讓高併發 AI 開發真正可控。
+
+## 為什麼你需要它：把注意力還給工程決策
+
+當同時推進多個需求與排查任務時，真正的瓶頸往往不是模型速度，而是人類大腦的上下文切換損耗。**Project Threads** 將繁瑣的排程、追蹤與分支協調從大腦卸載出去：
+
+- **守住主視窗心流**：左側 `[Coordinator]` 始終維持高訊噪比，只聚焦架構判斷、任務拆解與結果驗收，不再被數百行檢索日誌或報錯輸出淹沒。
+- **真正無衝突的平行執行**：修改程式碼自動隔離於獨立 Git Worktree，唯讀排查零拷貝直連主儲存庫，多條任務同時推進卻互不污染工作區。
+- **讓待拍板事項主動找你**：子執行緒收尾後自動向總控回傳結構化總結；需要選擇方案、合併分支或確認封存時，統一置頂收口於右側 **待決策** 佇列，一鍵回應不遺漏。
+- **不切窗即可隨時介入**：點擊任意執行緒卡片即可於右側展開 1:1 內嵌 **`Preview`** 抽屜，隨時追問、糾偏或中途切換模型，視線與思路無需離開主視窗。
 
 ## 核心特色
 
