@@ -3098,6 +3098,39 @@ button.comp-model-pill:disabled .comp-model-chev {
   gap: 2px;
   flex-shrink: 0;
 }
+.pt-model-menu-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+button.pt-model-back {
+  height: 22px;
+  padding: 0 7px 0 4px;
+  border-radius: var(--pt-r-sm);
+  border: 1px solid var(--pt-line);
+  background: var(--pt-surface-2);
+  color: var(--pt-fg-2);
+  font-size: 11px;
+  font-weight: 500;
+  gap: 2px;
+  flex-shrink: 0;
+}
+button.pt-model-back:hover:not(:disabled) {
+  background: var(--pt-surface-3);
+  border-color: var(--pt-line-strong);
+  color: var(--pt-fg);
+}
+.pt-model-menu-family {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--pt-text-xs);
+  font-weight: 600;
+  color: var(--pt-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .pt-model-menu-title {
   font-size: 11px;
   font-weight: 600;
@@ -3180,6 +3213,26 @@ button.pt-model-opt.active {
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
+}
+.pt-model-effort {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pt-dim);
+  white-space: nowrap;
+}
+button.pt-model-opt.active .pt-model-effort {
+  color: var(--pt-accent);
+}
+.pt-model-chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pt-dim);
+  flex-shrink: 0;
+}
+button.pt-model-opt:hover .pt-model-chev,
+button.pt-model-opt:focus-visible .pt-model-chev {
+  color: var(--pt-fg-2);
 }
 .pt-model-tag {
   font-size: 10px;

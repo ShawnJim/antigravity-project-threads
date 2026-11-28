@@ -185,15 +185,15 @@ function startMockLs(
 test('loadSettings / saveSettings persist global defaults, project overrides, inherit mode, corrupt fallbacks, and clears cleanly', (t) => {
   const { stateDir } = createTempEnv(t, 'pt-set-persist-');
 
-  // 1. Missing settings.json falls back cleanly to pro/pro
+  // 1. Missing settings.json falls back cleanly to inherit/inherit
   const initial = loadSettings();
-  assert.deepEqual(initial.defaults, { worktreeModel: 'pro', readOnlyModel: 'pro' });
+  assert.deepEqual(initial.defaults, { worktreeModel: 'inherit', readOnlyModel: 'inherit' });
   assert.deepEqual(initial.projects, {});
 
   // 2. Corrupt settings.json falls back cleanly without throwing
   writeFileSync(join(stateDir, 'settings.json'), '{not-valid-json', 'utf8');
   const recovered = loadSettings();
-  assert.deepEqual(recovered.defaults, { worktreeModel: 'pro', readOnlyModel: 'pro' });
+  assert.deepEqual(recovered.defaults, { worktreeModel: 'inherit', readOnlyModel: 'inherit' });
 
   // 3. Save global defaults via patch (including 'inherit')
   const savedGlobal = saveSettings({
@@ -268,7 +268,13 @@ test('loadSettings / saveSettings persist global defaults, project overrides, in
   assert.equal(loadSettings().projects[wk], undefined);
 
   saveSettings({ scope: 'global', reset: true });
-  assert.deepEqual(loadSettings().defaults, { worktreeModel: 'pro', readOnlyModel: 'pro' });
+  assert.deepEqual(loadSettings().defaults, { worktreeModel: 'inherit', readOnlyModel: 'inherit' });
+
+  // Backend still accepts and preserves legacy 'pro' / 'flash' / 'flash_lite' if stored directly
+  const legacySaved = saveSettings({
+    defaults: { worktreeModel: 'pro', readOnlyModel: 'flash-lite' },
+  });
+  assert.deepEqual(legacySaved.defaults, { worktreeModel: 'pro', readOnlyModel: 'flash_lite' });
 });
 
 test('getEffectiveSettings and resolveDefaultDispatchModel enforce project precedence, expose coordinator model, and resolve inherit', async (t) => {
@@ -787,28 +793,31 @@ test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier mo
 
   const groupOpts = {
     includeFollowGlobal: true,
-    followGlobalLabel: 'Follow Global Default (Gemini Pro)',
+    followGlobalLabel: 'Follow Global Default (Follow Coordinator · Gemini 4 Neon (High))',
     includeInherit: true,
     inheritLabel: 'Follow Coordinator (Gemini 4 Neon (High))',
-    includeTierAliases: true,
-    tierAliasGroupLabel: 'Auto Tier',
   };
 
   const libGroups = buildModelFamilyGroups(richCatalog, groupOpts);
   const uiGroups = ui.buildModelFamilyGroups(richCatalog, groupOpts);
   assert.deepEqual(JSON.parse(JSON.stringify(uiGroups)), JSON.parse(JSON.stringify(libGroups)));
 
-  // Verify special modes order at top
+  // Verify special modes order at top and NO synthetic Auto Tier (__tier__) group exists
+  assert.equal(libGroups.some((g) => g.kind === 'tier' || g.key === '__tier__'), false);
   assert.equal(libGroups[0].kind, 'follow_global');
   assert.equal(libGroups[0].hasTiers, false);
   assert.equal(libGroups[1].kind, 'inherit');
   assert.equal(libGroups[1].hasTiers, false);
-  assert.equal(libGroups[2].kind, 'tier');
-  assert.equal(libGroups[2].hasTiers, true);
-  assert.deepEqual(
-    libGroups[2].tiers.map((x) => x.value),
-    ['pro', 'flash', 'flash_lite'],
-  );
+  assert.equal(libGroups[2].kind, 'family');
+  for (const g of libGroups) {
+    for (const tierOpt of g.tiers || []) {
+      assert.equal(
+        /^(?:pro|flash|flash lite)$/i.test(tierOpt.label),
+        false,
+        `Tier dropdown must not show Pro/Flash/Flash Lite (${g.label} -> ${tierOpt.label})`,
+      );
+    }
+  }
 
   // Multi-tier family grouping & Low -> Medium -> High -> XHigh ordering + defaultValue
   const neonGrp = libGroups.find((g) => g.label === 'Gemini 4 Neon');
@@ -848,12 +857,13 @@ test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier mo
   assert.ok(flash38Grp);
   assert.equal(flash38Grp.hasTiers, false);
 
-  // Reverse-lookup round-trip across stored variants
+  // Reverse-lookup round-trip across stored variants (legacy pro/flash/flash-lite map to concrete models!)
   const roundTripCases = [
     ['', '__follow_global__', ''],
     ['inherit', '__inherit__', 'inherit'],
-    ['pro', '__tier__', 'pro'],
-    ['flash-lite', '__tier__', 'flash_lite'],
+    ['pro', 'family:gemini 4 neon', 'gemini-4-neon-high'],
+    ['flash', 'family:gemini 3.8 flash', 'gemini-3.8-flash-medium'],
+    ['flash-lite', 'family:gemini 3.8 flash', 'gemini-3.8-flash-medium'],
     ['gemini-4-hydrogen-xhigh', 'family:gemini 4 hydrogen', 'gemini-4-hydrogen-xhigh'],
     ['gemini-4-hydrogen-tiered-xhigh', 'family:gemini 4 hydrogen', 'gemini-4-hydrogen-xhigh'],
     ['MODEL_PLACEHOLDER_M528', 'family:gemini 4 hydrogen', 'gemini-4-hydrogen-xhigh'],
@@ -871,6 +881,69 @@ test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier mo
     assert.equal(uiSel.groupKey, libSel.groupKey, `UI parity groupKey for ${input}`);
     assert.equal(uiSel.value, libSel.value, `UI parity value for ${input}`);
   }
+
+  // Legacy flash_lite prefers explicit Flash Lite catalog model when present
+  const catalogWithLite = [
+    ...richCatalog,
+    {
+      id: 'gemini-3.8-flash-lite',
+      modelId: 'gemini-3.8-flash-lite',
+      modelEnum: 'MODEL_PLACEHOLDER_M320',
+      label: 'Gemini 3.8 Flash Lite (Standard)',
+      isDefault: false,
+    },
+  ];
+  const liteGroupsLib = buildModelFamilyGroups(catalogWithLite, groupOpts);
+  const liteGroupsUi = ui.buildModelFamilyGroups(catalogWithLite, groupOpts);
+  const liteSel = resolveModelFamilySelection('flash_lite', liteGroupsLib);
+  assert.equal(liteSel.value, 'gemini-3.8-flash-lite');
+  assert.equal(ui.resolveModelFamilySelection('flash_lite', liteGroupsUi).value, 'gemini-3.8-flash-lite');
+
+  // Offline catalog (no concrete models): legacy aliases fall back cleanly to inherit / follow_global, NEVER custom:pro
+  const offlineGlobalGroups = buildModelFamilyGroups([], {
+    includeFollowGlobal: false,
+    includeInherit: true,
+  });
+  const offlineProjectGroups = buildModelFamilyGroups([], {
+    includeFollowGlobal: true,
+    includeInherit: true,
+  });
+  for (const legacy of ['pro', 'flash', 'flash_lite']) {
+    const offGlobalSel = resolveModelFamilySelection(legacy, offlineGlobalGroups, {
+      fallbackValue: 'inherit',
+    });
+    assert.equal(offGlobalSel.groupKey, '__inherit__');
+    assert.equal(offGlobalSel.value, 'inherit');
+    assert.equal(
+      ui.resolveModelFamilySelection(legacy, offlineGlobalGroups, { fallbackValue: 'inherit' }).value,
+      'inherit',
+    );
+    const offProjSel = resolveModelFamilySelection(legacy, offlineProjectGroups, {
+      fallbackValue: '',
+    });
+    assert.equal(offProjSel.groupKey, '__follow_global__');
+    assert.equal(offProjSel.value, '');
+  }
+
+  // Verify + New Thread two-level (#f-model + #f-tier) dispatch modal groups & default fallback
+  const dispatchGroups = buildModelFamilyGroups(richCatalog, {
+    includeFollowGlobal: true,
+    followGlobalLabel: 'Use Settings Default (Follow Coordinator · Gemini 4 Neon (High))',
+    includeInherit: true,
+    inheritLabel: 'Follow Coordinator (Gemini 4 Neon (High))',
+  });
+  assert.equal(dispatchGroups[0].label, 'Use Settings Default (Follow Coordinator · Gemini 4 Neon (High))');
+  assert.equal(dispatchGroups[0].hasTiers, false);
+  assert.equal(dispatchGroups[1].key, '__inherit__');
+  assert.equal(dispatchGroups[2].kind, 'family');
+  assert.equal(dispatchGroups.some((g) => g.key === '__tier__'), false);
+  const dispatchDefaultSel = resolveModelFamilySelection('', dispatchGroups, { fallbackValue: '' });
+  assert.equal(dispatchDefaultSel.groupKey, '__follow_global__');
+  assert.equal(dispatchDefaultSel.value, '');
+  const dispatchHydroSel = resolveModelFamilySelection('gemini-4-hydrogen-xhigh', dispatchGroups, { fallbackValue: '' });
+  assert.equal(dispatchHydroSel.groupKey, 'family:gemini 4 hydrogen');
+  assert.equal(dispatchHydroSel.value, 'gemini-4-hydrogen-xhigh');
+  assert.equal(dispatchHydroSel.group?.hasTiers, true);
 });
 
 test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar API/UI, I18N, and LF endings', (t) => {
@@ -909,8 +982,10 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar 
   assert.match(indexHtml, /id="set-worktree-tier"/);
   assert.match(indexHtml, /id="set-readonly-model"/);
   assert.match(indexHtml, /id="set-readonly-tier"/);
+  assert.match(indexHtml, /id="f-model"/);
+  assert.match(indexHtml, /id="f-tier"/);
   assert.match(indexHtml, /<option value="">/);
-  assert.match(indexHtml, /<option value="inherit">/);
+  assert.match(indexHtml, /<option value="(?:__)?inherit(?:__)?">/);
 
   // Redundant effective-models preview card removed from HTML, JS, and CSS
   assert.equal(/settings-preview-card|val-preview-wt|val-preview-ro|src-preview-wt|src-preview-ro|settings-unsaved-badge/.test(indexHtml), false);
@@ -921,7 +996,13 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar 
   assert.match(themeCss, /\.settings-model-row/);
   assert.match(themeCss, /@media\s*\(max-width:\s*320px\)/);
 
+  // Auto Tier (__tier__ / 智能档位) completely removed from Settings/Dispatch UI & helpers
+  assert.equal(/value=["']__tier__["']|Auto Tier|智能档位|智慧層級/.test(indexHtml), false);
+  assert.equal(/settingsTierAutoGroup|modelGroupTiers|tierPro\b|tierFlash\b|tierFlashLite\b|__tier__|智能档位|Auto Tier|智慧層級/.test(appJs), false);
+
   for (const key of [
+    'fTier',
+    'modelBack',
     'settingsTip',
     'settingsTitle',
     'settingsScopeGlobal',
@@ -933,7 +1014,6 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar 
     'settingsTierDefault',
     'settingsTierStandard',
     'settingsTierNone',
-    'settingsTierAutoGroup',
     'settingsInheritOption',
     'settingsInheritWithModel',
     'settingsInheritShort',
@@ -970,12 +1050,13 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=8, skill, MCP, Sidecar 
 
   // 7. Verify hook-handler PreInvocation emits updated v8 directive without hardcoded model: "pro"
   const hookEnv = createTempEnv(t, 'pt-set-hook-');
+  const hookWorkspace = join(hookEnv.tempRoot, 'hook-workspace');
   const hookReg = loadRegistry();
   hookReg.coordinators['__hook_test__'] = {
     key: '__hook_test__',
     conversationId: 'conv-hook-coord',
-    workspacePath: repoRoot,
-    repoRoot,
+    workspacePath: hookWorkspace,
+    repoRoot: hookWorkspace,
     title: '[Coordinator] HookTest',
     directiveVersion: 7,
   };

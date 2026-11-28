@@ -155,6 +155,7 @@
       fTitlePh: 'e.g., Fix OAuth token refresh race',
       fBranch: 'Git branch (optional)',
       fModel: 'Model',
+      fTier: 'Effort',
       fWt: 'Create isolated Git worktree branch (uncheck for fast read-only checks)',
       fWtDisabled: 'Git worktree unavailable (no Git repository in this project)',
       fPrompt: 'Task instructions',
@@ -205,16 +206,13 @@
       modelSwitchTip: 'Switch model for next message',
       modelPendingTip: 'Pending — applies on next message',
       modelMenuTitle: 'Select model',
+      modelBack: 'Back',
       modelRunningHint: 'Thread is running — new model applies on your next message',
       modelNextMsgHint: 'Applies on your next message',
       modelLoading: 'Loading models…',
       modelEmpty: 'Live model catalog unavailable',
       modelDefaultBadge: 'Default',
-      modelGroupTiers: 'Tier Defaults',
       modelGroupModels: 'Available Models',
-      tierPro: 'Pro',
-      tierFlash: 'Flash',
-      tierFlashLite: 'Flash Lite',
       roleWorker: 'Worker',
       roleReadOnly: 'Read-only',
       readOnlyMode: 'Shared session',
@@ -249,11 +247,10 @@
       settingsResetToast: 'Settings reset to defaults',
       settingsClearedProjectToast: 'Cleared project overrides',
       settingsModelColLabel: 'Model',
-      settingsTierColLabel: 'Tier',
+      settingsTierColLabel: 'Effort',
       settingsTierDefault: 'Default',
       settingsTierStandard: 'Standard',
       settingsTierNone: '—',
-      settingsTierAutoGroup: 'Auto Tier',
       settingsInheritOption: 'Follow Coordinator (inherit)',
       settingsInheritWithModel: (lbl) => `Follow Coordinator (${lbl})`,
       settingsInheritShort: 'Follow Coordinator',
@@ -398,6 +395,7 @@
       fTitlePh: '例如：排查提前建单未触发自动清关的前置条件',
       fBranch: 'Git 分支名（可选）',
       fModel: '模型',
+      fTier: '档位',
       fWt: '创建独立 Git Worktree 隔离副本（纯只读代码排查可取消勾选）',
       fWtDisabled: '当前项目未关联 Git 仓库（仅支持无 Worktree 后台会话）',
       fPrompt: '任务说明',
@@ -447,16 +445,13 @@
       modelSwitchTip: '切换下条消息使用的模型',
       modelPendingTip: '已选待生效 — 将在下条消息应用',
       modelMenuTitle: '选择模型',
+      modelBack: '返回',
       modelRunningHint: '线程正在运行 — 新模型将在下条消息生效',
       modelNextMsgHint: '将在下条消息生效',
       modelLoading: '正在加载模型列表…',
       modelEmpty: '暂无法获取实时模型列表',
       modelDefaultBadge: '默认',
-      modelGroupTiers: '默认档位',
       modelGroupModels: '可选模型',
-      tierPro: 'Pro',
-      tierFlash: 'Flash',
-      tierFlashLite: 'Flash Lite',
       roleWorker: '工作线程',
       roleReadOnly: '只读排查',
       readOnlyMode: '共享会话',
@@ -498,7 +493,6 @@
       settingsTierDefault: '默认',
       settingsTierStandard: '标准',
       settingsTierNone: '—',
-      settingsTierAutoGroup: '智能档位',
       settingsInheritOption: '跟随主会话模型 (inherit)',
       settingsInheritWithModel: (lbl) => `跟随主会话模型 (${lbl})`,
       settingsInheritShort: '跟随主会话模型',
@@ -643,6 +637,7 @@
       fTitlePh: '例如：排查提前建單未觸發自動清關的前置條件',
       fBranch: 'Git 分支名（選填）',
       fModel: '模型',
+      fTier: '檔位',
       fWt: '建立獨立 Git Worktree 隔離副本（純唯讀程式碼排查可取消勾選）',
       fWtDisabled: '目前專案未關聯 Git 儲存庫（僅支援無 Worktree 背景會話）',
       fPrompt: '任務說明',
@@ -692,16 +687,13 @@
       modelSwitchTip: '切換下則訊息使用的模型',
       modelPendingTip: '已選待生效 — 將在下則訊息套用',
       modelMenuTitle: '選擇模型',
+      modelBack: '返回',
       modelRunningHint: '執行緒正在執行 — 新模型將在下則訊息生效',
       modelNextMsgHint: '將在下則訊息生效',
       modelLoading: '正在載入模型清單…',
       modelEmpty: '暫無法取得即時模型清單',
       modelDefaultBadge: '預設',
-      modelGroupTiers: '預設層級',
       modelGroupModels: '可用模型',
-      tierPro: 'Pro',
-      tierFlash: 'Flash',
-      tierFlashLite: 'Flash Lite',
       roleWorker: '工作執行緒',
       roleReadOnly: '唯讀排查',
       readOnlyMode: '共享會話',
@@ -743,7 +735,6 @@
       settingsTierDefault: '預設',
       settingsTierStandard: '標準',
       settingsTierNone: '—',
-      settingsTierAutoGroup: '智慧層級',
       settingsInheritOption: '跟隨主會話模型 (inherit)',
       settingsInheritWithModel: (lbl) => `跟隨主會話模型 (${lbl})`,
       settingsInheritShort: '跟隨主會話模型',
@@ -760,6 +751,7 @@
     chevronUp: '<svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>',
     chevronDown: '<svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>',
     chevronRight: '<svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>',
+    chevronLeft: '<svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>',
     check: '<svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
     plus: '<svg class="ico ico-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
     arrowUp:
@@ -813,13 +805,16 @@
   let selectableModelsLoading = false;
   let selectableModelsPromise = null;
   let modelMenuOpen = false;
+  let modelMenuFamilyKey = '';
   const pendingModelByThread = new Map(); // threadId -> selected model object
   let settingsScreenOpen = false;
   let settingsScope = 'global'; // 'global' | 'project'
   let loadedSettingsData = null; // { settings, effective, scopeKey, coordinatorModelDisplayName, coordinatorModel }
   let settingsSaving = false;
+  let settingsDirtyByUser = false;
   let settingsWorktreeGroups = [];
   let settingsReadOnlyGroups = [];
+  let dispatchModelGroups = [];
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
@@ -834,6 +829,8 @@
   const elSetWorktreeTier = document.getElementById('set-worktree-tier');
   const elSetReadOnly = document.getElementById('set-readonly-model');
   const elSetReadOnlyTier = document.getElementById('set-readonly-tier');
+  const elFModel = document.getElementById('f-model');
+  const elFTier = document.getElementById('f-tier');
   const elBtnSettingsSave = document.getElementById('btn-settings-save');
   const elBtnSettingsReset = document.getElementById('btn-settings-reset');
   const elBtnSettingsRefreshModels = document.getElementById('btn-settings-refresh-models');
@@ -1068,6 +1065,8 @@
     document.getElementById('f-title').placeholder = t.fTitlePh;
     document.getElementById('lbl-f-branch').textContent = t.fBranch;
     document.getElementById('lbl-f-model').textContent = t.fModel;
+    const lblFTier = document.getElementById('lbl-f-tier');
+    if (lblFTier) lblFTier.textContent = t.fTier;
     const wtChk = document.getElementById('f-wt');
     document.getElementById('lbl-f-wt').textContent = wtChk.disabled ? t.fWtDisabled : t.fWt;
     document.getElementById('lbl-f-prompt').textContent = t.fPrompt;
@@ -1487,9 +1486,6 @@
       includeInherit = true,
       inheritLabel = 'Follow Coordinator (inherit)',
       inheritTierLabel = '—',
-      includeTierAliases = true,
-      tierAliasGroupLabel = 'Auto Tier',
-      tierLabels = { pro: 'Pro', flash: 'Flash', flash_lite: 'Flash Lite' },
       defaultTierLabel = 'Default',
       standardTierLabel = 'Standard',
     } = options || {};
@@ -1532,45 +1528,6 @@
             modelId: '',
             modelEnum: '',
             modelAlias: '',
-            isDefault: false,
-          },
-        ],
-      });
-    }
-
-    if (includeTierAliases) {
-      groups.push({
-        key: '__tier__',
-        label: tierAliasGroupLabel,
-        kind: 'tier',
-        hasTiers: true,
-        defaultValue: 'pro',
-        tiers: [
-          {
-            value: 'pro',
-            label: tierLabels.pro || 'Pro',
-            rawLabel: 'Gemini Pro',
-            modelId: '',
-            modelEnum: '',
-            modelAlias: 'pro',
-            isDefault: false,
-          },
-          {
-            value: 'flash',
-            label: tierLabels.flash || 'Flash',
-            rawLabel: 'Gemini Flash',
-            modelId: '',
-            modelEnum: '',
-            modelAlias: 'flash',
-            isDefault: false,
-          },
-          {
-            value: 'flash_lite',
-            label: tierLabels.flash_lite || 'Flash Lite',
-            rawLabel: 'Gemini Flash Lite',
-            modelId: '',
-            modelEnum: '',
-            modelAlias: 'flash_lite',
             isDefault: false,
           },
         ],
@@ -1626,6 +1583,10 @@
         modelEnum: String(m.modelEnum || '').trim(),
         modelAlias: String(m.modelAlias || '').trim(),
         isDefault: Boolean(m.isDefault),
+        tagTitle: String(m.tagTitle || '').trim(),
+        tagDescription: String(m.tagDescription || '').trim(),
+        description: String(m.description || '').trim(),
+        quotaInfo: m.quotaInfo && typeof m.quotaInfo === 'object' ? m.quotaInfo : null,
         idx: bucket.items.length,
       });
     }
@@ -1648,6 +1609,10 @@
               modelEnum: only.modelEnum,
               modelAlias: only.modelAlias,
               isDefault: only.isDefault,
+              tagTitle: only.tagTitle,
+              tagDescription: only.tagDescription,
+              description: only.description,
+              quotaInfo: only.quotaInfo,
             },
           ],
         });
@@ -1669,6 +1634,10 @@
         modelEnum: it.modelEnum,
         modelAlias: it.modelAlias,
         isDefault: it.isDefault,
+        tagTitle: it.tagTitle,
+        tagDescription: it.tagDescription,
+        description: it.description,
+        quotaInfo: it.quotaInfo,
       }));
       const defaultValue =
         tiers.find((t) => t.isDefault)?.value ||
@@ -1688,8 +1657,61 @@
     return groups;
   }
 
+  function pickPreferredTierForLegacyAlias(group, matchedTier = null) {
+    const tiers = Array.isArray(group?.tiers) ? group.tiers : [];
+    return (
+      tiers.find((t) => t.isDefault) ||
+      tiers.find((t) => t.value === group?.defaultValue) ||
+      matchedTier ||
+      tiers[0] ||
+      null
+    );
+  }
+
+  function findConcreteModelForLegacyAlias(tierKey, familyGroups = []) {
+    const list = Array.isArray(familyGroups) ? familyGroups : [];
+    if (!list.length) return null;
+
+    const pickMatch = (predicate) => {
+      for (const g of list) {
+        for (const t of g.tiers || []) {
+          const text = `${g.label || ''} ${t.rawLabel || ''} ${t.modelId || ''} ${t.value || ''}`.toLowerCase();
+          if (predicate(g, t, text)) {
+            const tier = pickPreferredTierForLegacyAlias(g, t);
+            if (tier) return { group: g, tier };
+          }
+        }
+      }
+      return null;
+    };
+
+    if (tierKey === 'flash_lite') {
+      const lite = pickMatch((_g, _t, text) => /\bflash[-_\s]*lite\b|\blite\b/.test(text));
+      if (lite) return lite;
+    }
+    if (tierKey === 'flash_lite' || tierKey === 'flash') {
+      const flash = pickMatch(
+        (_g, _t, text) => /\bflash\b/.test(text) && !/\b(?:flash[-_\s]*lite|lite)\b/.test(text),
+      );
+      if (flash) return flash;
+    }
+
+    const catalogDefault = pickMatch((_g, t) => Boolean(t.isDefault));
+    if (catalogDefault) return catalogDefault;
+    const geminiConcrete = pickMatch(
+      (g, _t, text) => /\bgemini\b/.test(String(g.label || text).toLowerCase()) && !/\b(?:flash|lite)\b/.test(text),
+    );
+    if (geminiConcrete) return geminiConcrete;
+    const namedPro = pickMatch((_g, _t, text) => /\bpro\b/.test(text));
+    if (namedPro) return namedPro;
+
+    const firstGroup = list[0];
+    const firstTier = pickPreferredTierForLegacyAlias(firstGroup, firstGroup?.tiers?.[0] || null);
+    return firstGroup && firstTier ? { group: firstGroup, tier: firstTier } : null;
+  }
+
   function resolveModelFamilySelection(rawValue, groups = [], options = {}) {
-    const { savedLabels = {}, defaultTierLabel = 'Default', fallbackValue = 'pro' } = options || {};
+    const { savedLabels = {}, defaultTierLabel = 'Default', fallbackValue = 'inherit' } = options || {};
     const list = Array.isArray(groups) ? groups : [];
     const raw = String(rawValue || '').trim();
     const low = raw.toLowerCase();
@@ -1725,23 +1747,56 @@
       }
     }
 
+    const familyGroups = list.filter((g) => g.kind === 'family');
     const tierKey = canonicalizeTierAliasKey(raw);
     if (tierKey) {
-      const tierGroup = list.find((g) => g.kind === 'tier');
-      const matchedTier = tierGroup?.tiers?.find((t) => t.value === tierKey);
-      if (tierGroup && matchedTier) {
+      const concreteMatch = findConcreteModelForLegacyAlias(tierKey, familyGroups);
+      if (concreteMatch) {
         return {
           groups: list,
-          groupKey: tierGroup.key,
-          value: matchedTier.value,
-          group: tierGroup,
-          tier: matchedTier,
+          groupKey: concreteMatch.group.key,
+          value: concreteMatch.tier.value,
+          group: concreteMatch.group,
+          tier: concreteMatch.tier,
           isFallback: false,
         };
       }
+      if (fallbackValue === '') {
+        const followGlobalGroup = list.find((g) => g.kind === 'follow_global');
+        if (followGlobalGroup) {
+          return {
+            groups: list,
+            groupKey: followGlobalGroup.key,
+            value: '',
+            group: followGlobalGroup,
+            tier: followGlobalGroup.tiers[0] || null,
+            isFallback: true,
+          };
+        }
+      }
+      const inheritGroup = list.find((g) => g.kind === 'inherit');
+      if (inheritGroup) {
+        return {
+          groups: list,
+          groupKey: inheritGroup.key,
+          value: 'inherit',
+          group: inheritGroup,
+          tier: inheritGroup.tiers[0] || null,
+          isFallback: true,
+        };
+      }
+      const firstGroup = list[0] || null;
+      const firstTier = firstGroup?.tiers?.[0] || null;
+      return {
+        groups: list,
+        groupKey: firstGroup?.key || '',
+        value: firstGroup?.defaultValue ?? firstTier?.value ?? '',
+        group: firstGroup,
+        tier: firstTier,
+        isFallback: true,
+      };
     }
 
-    const familyGroups = list.filter((g) => g.kind === 'family');
     if (raw) {
       for (const g of familyGroups) {
         for (const t of g.tiers || []) {
@@ -1828,6 +1883,70 @@
       tier: firstTier,
       isFallback: true,
     };
+  }
+
+  function buildComposerModelMenuData(catalogModels = [], activeMatch = null, options = {}) {
+    const {
+      defaultTierLabel = 'Default',
+      standardTierLabel = 'Standard',
+    } = options || {};
+
+    const groups = buildModelFamilyGroups(catalogModels, {
+      includeFollowGlobal: false,
+      includeInherit: false,
+      defaultTierLabel,
+      standardTierLabel,
+    });
+
+    const isTierMatch = (tier) => {
+      if (!activeMatch || !tier) return false;
+      if (typeof activeMatch === 'function') return Boolean(activeMatch(tier));
+      if (activeMatch.modelEnum && tier.modelEnum && tier.modelEnum === activeMatch.modelEnum) {
+        return true;
+      }
+      if (activeMatch.id && tier.value === activeMatch.id) return true;
+      if (activeMatch.modelId && tier.modelId && tier.modelId === activeMatch.modelId) return true;
+      return Boolean(activeMatch.label && tier.rawLabel === activeMatch.label);
+    };
+
+    return groups.map((g) => {
+      const tiers = (g.tiers || []).map((tier) => ({
+        ...tier,
+        active: isTierMatch(tier),
+      }));
+      const activeTier = tiers.find((x) => x.active) || null;
+      const defaultTier =
+        tiers.find((x) => x.value === g.defaultValue) ||
+        tiers.find((x) => x.isDefault) ||
+        tiers[0] ||
+        null;
+      const repTier = activeTier || defaultTier;
+      const firstTagged = tiers.find((x) => x.tagTitle) || null;
+      const firstQuota = tiers.find(
+        (x) => x.quotaInfo && typeof x.quotaInfo.remainingFraction === 'number',
+      );
+      const tagTitle = repTier?.tagTitle || firstTagged?.tagTitle || '';
+      const quotaInfo = repTier?.quotaInfo || firstQuota?.quotaInfo || null;
+      const tipParts = [
+        g.label,
+        repTier?.tagDescription || repTier?.description || '',
+      ].filter(Boolean);
+
+      return {
+        key: g.key,
+        label: g.label,
+        hasTiers: Boolean(g.hasTiers && tiers.length > 1),
+        active: Boolean(activeTier),
+        activeEffortLabel: g.hasTiers ? (activeTier || defaultTier)?.label || '' : '',
+        defaultValue: g.defaultValue,
+        singleModelKey: !g.hasTiers ? tiers[0]?.value || '' : '',
+        tagTitle,
+        hasDefaultBadge: !tagTitle && tiers.some((x) => x.isDefault),
+        quotaInfo,
+        title: tipParts.join(' — '),
+        tiers,
+      };
+    });
   }
 
   function normalizeActivityText(raw) {
@@ -2998,17 +3117,17 @@
       coordinatorId: '',
       coordinatorModel: '',
       coordinatorModelDisplayName: '',
-      worktreeModel: 'pro',
-      readOnlyModel: 'pro',
-      worktreeModelLabel: 'Gemini Pro',
-      readOnlyModelLabel: 'Gemini Pro',
+      worktreeModel: 'inherit',
+      readOnlyModel: 'inherit',
+      worktreeModelLabel: L().settingsInheritOption,
+      readOnlyModelLabel: L().settingsInheritOption,
       worktreeSource: 'global',
       readOnlySource: 'global',
       global: {
-        worktreeModel: 'pro',
-        readOnlyModel: 'pro',
-        worktreeModelLabel: 'Gemini Pro',
-        readOnlyModelLabel: 'Gemini Pro',
+        worktreeModel: 'inherit',
+        readOnlyModel: 'inherit',
+        worktreeModelLabel: L().settingsInheritOption,
+        readOnlyModelLabel: L().settingsInheritOption,
       },
       project: {
         worktreeModel: '',
@@ -3042,8 +3161,7 @@
 
   function resolveSettingsModelDisplay(rawVal, { compactInherit = false } = {}) {
     const val = String(rawVal || '').trim();
-    if (!val) return 'Gemini Pro';
-    if (val.toLowerCase() === 'inherit') {
+    if (!val || val.toLowerCase() === 'inherit') {
       const t = L();
       const coordName = getCoordinatorModelDisplayName();
       if (compactInherit) {
@@ -3058,53 +3176,37 @@
     return formatModelDisplay(val);
   }
 
-  function buildModelSelectOptions(topOption = null) {
-    const t = L();
-    const validValues = new Set();
-    let html = '';
-    if (topOption) {
-      validValues.add(topOption.value);
-      html += `<option value="${esc(topOption.value)}">${esc(topOption.label)}</option>`;
+  function readDispatchModelValue() {
+    if (!elFModel) return '';
+    if (elFModel.value === '__follow_global__') return '';
+    if (elFModel.value === '__inherit__' || elFModel.value === 'inherit') return 'inherit';
+    if (elFTier && elFTier.options.length > 0) return elFTier.value;
+    return resolveSettingsOptionValue(elFModel.value);
+  }
+
+  function resetDispatchModelSelect() {
+    if (!elFModel) return;
+    if ([...elFModel.options].some((o) => o.value === '__follow_global__')) {
+      elFModel.value = '__follow_global__';
+    } else if (elFModel.options[0]) {
+      elFModel.selectedIndex = 0;
     }
-    const coordName = getCoordinatorModelDisplayName();
-    const inheritLabel = coordName
-      ? t.settingsInheritWithModel(coordName)
-      : t.settingsInheritOption;
-    validValues.add('inherit');
-    html += `<option value="inherit">${esc(inheritLabel)}</option>`;
-
-    const tiers = [
-      { value: 'pro', label: t.tierPro },
-      { value: 'flash', label: t.tierFlash },
-      { value: 'flash_lite', label: t.tierFlashLite },
-    ];
-    for (const x of tiers) validValues.add(x.value);
-    html += `<optgroup label="${esc(t.modelGroupTiers)}">${tiers
-      .map((x) => `<option value="${esc(x.value)}">${esc(x.label)}</option>`)
-      .join('')}</optgroup>`;
-
-    if (Array.isArray(selectableModels) && selectableModels.length > 0) {
-      const liveOpts = selectableModels
-        .map((m) => {
-          const val = String(m.id || m.modelId || m.modelEnum || '').trim();
-          if (!val) return '';
-          validValues.add(val);
-          return `<option value="${esc(val)}">${esc(m.label || formatModelDisplay(val))}</option>`;
-        })
-        .filter(Boolean)
-        .join('');
-      if (liveOpts) {
-        html += `<optgroup label="${esc(t.modelGroupModels)}">${liveOpts}</optgroup>`;
+    const grp = dispatchModelGroups.find((g) => g.key === elFModel.value) || null;
+    if (elFTier) {
+      if (grp) {
+        populateSettingsTierSelect(elFTier, grp, grp.defaultValue ?? '');
+      } else {
+        elFTier.innerHTML = `<option value="">${esc(L().settingsTierNone)}</option>`;
+        elFTier.value = '';
+        elFTier.disabled = true;
       }
     }
-    return { html, validValues };
   }
 
   function populateDispatchModelSelect() {
-    const sel = document.getElementById('f-model');
-    if (!sel) return;
+    if (!elFModel) return;
     const t = L();
-    const prevVal = sel.value || '';
+    const prevVal = elFModel.options.length ? readDispatchModelValue() : '';
     const wtChk = document.getElementById('f-wt');
     const isWt = wtChk ? !wtChk.disabled && wtChk.checked : true;
     const eff = getCurrentEffectiveSettings();
@@ -3116,13 +3218,28 @@
           ? eff.worktreeModelLabel || resolveSettingsModelDisplay(effModelId)
           : eff.readOnlyModelLabel || resolveSettingsModelDisplay(effModelId);
 
-    const { html, validValues } = buildModelSelectOptions({
-      value: '',
-      label: t.useSettingsDefault(effLabel || 'Gemini Pro'),
+    const coordName = getCoordinatorModelDisplayName();
+    const inheritLabel = coordName
+      ? t.settingsInheritWithModel(coordName)
+      : t.settingsInheritOption;
+    const baseGroups = buildModelFamilyGroups(selectableModels, {
+      includeFollowGlobal: true,
+      followGlobalLabel: t.useSettingsDefault(effLabel || t.settingsInheritShort),
+      followGlobalTierLabel: t.settingsTierNone,
+      includeInherit: true,
+      inheritLabel,
+      inheritTierLabel: t.settingsTierNone,
+      defaultTierLabel: t.settingsTierDefault,
+      standardTierLabel: t.settingsTierStandard,
     });
-    sel.innerHTML = html;
-    const resolvedPrev = prevVal ? resolveSettingsOptionValue(prevVal) : '';
-    sel.value = resolvedPrev && validValues.has(resolvedPrev) ? resolvedPrev : '';
+
+    dispatchModelGroups = populateSettingsModelPair(
+      elFModel,
+      elFTier,
+      baseGroups,
+      prevVal,
+      '',
+    );
   }
 
   function buildSettingsSlotGroups(scope, followGlobalLabel = '') {
@@ -3138,13 +3255,6 @@
       includeInherit: true,
       inheritLabel,
       inheritTierLabel: t.settingsTierNone,
-      includeTierAliases: true,
-      tierAliasGroupLabel: t.settingsTierAutoGroup,
-      tierLabels: {
-        pro: t.tierPro,
-        flash: t.tierFlash,
-        flash_lite: t.tierFlashLite,
-      },
       defaultTierLabel: t.settingsTierDefault,
       standardTierLabel: t.settingsTierStandard,
     });
@@ -3167,13 +3277,19 @@
     elTier.disabled = !group || !group.hasTiers || tiers.length <= 1;
   }
 
-  function populateSettingsModelPair(elModel, elTier, groups, targetValue = '') {
+  function populateSettingsModelPair(
+    elModel,
+    elTier,
+    groups,
+    targetValue = '',
+    fallbackValue = settingsScope === 'project' ? '' : 'inherit',
+  ) {
     if (!elModel) return groups;
     const t = L();
     const sel = resolveModelFamilySelection(targetValue, groups, {
       savedLabels: loadedSettingsData?.settings?.labels,
       defaultTierLabel: t.settingsTierDefault,
-      fallbackValue: settingsScope === 'project' ? '' : 'pro',
+      fallbackValue,
     });
     const nextGroups = sel.groups;
     elModel.innerHTML = nextGroups
@@ -3187,11 +3303,11 @@
   function readSettingsSlotValue(kind) {
     const elModel = kind === 'worktree' ? elSetWorktree : elSetReadOnly;
     const elTier = kind === 'worktree' ? elSetWorktreeTier : elSetReadOnlyTier;
-    if (!elModel) return settingsScope === 'project' ? '' : 'pro';
+    if (!elModel) return settingsScope === 'project' ? '' : 'inherit';
     if (elModel.value === '__follow_global__') return '';
     if (elModel.value === '__inherit__') return 'inherit';
     if (elTier && elTier.options.length > 0) return elTier.value;
-    return settingsScope === 'project' ? '' : 'pro';
+    return settingsScope === 'project' ? '' : 'inherit';
   }
 
   function getSavedSettingForScope(kind, scope) {
@@ -3205,7 +3321,7 @@
     }
     const defs = settings.defaults || eff.global || {};
     const raw = kind === 'worktree' ? defs.worktreeModel : defs.readOnlyModel;
-    return resolveSettingsOptionValue(raw || 'pro') || 'pro';
+    return resolveSettingsOptionValue(raw || 'inherit') || 'inherit';
   }
 
   function isSettingsDraftDirty() {
@@ -3291,8 +3407,8 @@
       elBtnSettingsSave.textContent = t.settingsSave;
     }
 
-    const globalWtRaw = eff.global?.worktreeModel || 'pro';
-    const globalRoRaw = eff.global?.readOnlyModel || 'pro';
+    const globalWtRaw = eff.global?.worktreeModel || 'inherit';
+    const globalRoRaw = eff.global?.readOnlyModel || 'inherit';
     const globalWtLabel =
       String(globalWtRaw).toLowerCase() === 'inherit'
         ? resolveSettingsModelDisplay('inherit', { compactInherit: true })
@@ -3369,6 +3485,7 @@
     closeModelMenu({ restoreHeader: false });
     boardScrollTop = elBoardBody.scrollTop;
     settingsScreenOpen = true;
+    settingsDirtyByUser = false;
     if (elSettingsErr) {
       elSettingsErr.hidden = true;
       elSettingsErr.textContent = '';
@@ -3439,6 +3556,7 @@
           res.coordinatorModelDisplayName || res.effective?.coordinatorModelDisplayName || '',
         coordinatorModel: res.coordinatorModel || res.effective?.coordinatorModel || '',
       };
+      settingsDirtyByUser = false;
       populateDispatchModelSelect();
       renderSettingsScreen(true);
       flashToast(
@@ -3482,7 +3600,7 @@
           selectableModels = data.models;
           selectableModelsLoadedAt = Date.now();
           populateDispatchModelSelect();
-          if (settingsScreenOpen) renderSettingsScreen(false);
+          if (settingsScreenOpen) renderSettingsScreen(!settingsDirtyByUser);
         }
       } catch {
         // Keep fallback options if /api/models is temporarily unavailable
@@ -3552,11 +3670,32 @@
   function closeModelMenu({ restoreHeader = true } = {}) {
     if (!modelMenuOpen) return;
     modelMenuOpen = false;
+    modelMenuFamilyKey = '';
     if (elModelMenu) {
       elModelMenu.hidden = true;
       delete elModelMenu.dataset.renderKey;
+      delete elModelMenu.dataset.menuMode;
     }
     if (restoreHeader && openThreadObj) renderThreadHeader(openThreadObj);
+  }
+
+  function renderModelBadgeHtml(tagTitle, isDefault, quotaInfo, defaultBadgeText) {
+    const metaBadges = [];
+    if (tagTitle) {
+      const warnTag = /leaving|notice|deprecat/i.test(tagTitle);
+      metaBadges.push(
+        `<span class="pt-model-tag${warnTag ? ' warn' : ''}">${esc(tagTitle)}</span>`,
+      );
+    } else if (isDefault) {
+      metaBadges.push(`<span class="pt-model-tag">${esc(defaultBadgeText)}</span>`);
+    }
+    if (quotaInfo && typeof quotaInfo.remainingFraction === 'number') {
+      const pct = Math.max(0, Math.min(100, Math.round(quotaInfo.remainingFraction * 100)));
+      metaBadges.push(
+        `<span class="pt-model-quota${pct <= 20 ? ' low' : ''}">${pct}%</span>`,
+      );
+    }
+    return metaBadges.join('');
   }
 
   function renderModelMenu() {
@@ -3568,11 +3707,33 @@
     const activeKey = pending
       ? pending.modelEnum || pending.id || pending.label
       : th.modelEnum || th.resolvedModel || th.modelDisplayName || th.model || '';
+    const families =
+      selectableModels.length > 0
+        ? buildComposerModelMenuData(
+            selectableModels,
+            (tier) => {
+              const catModel = getModelByIdFromCatalog(tier.value);
+              return catModel ? isModelActiveForThread(catModel, th) : false;
+            },
+            {
+              defaultTierLabel: t.settingsTierDefault,
+              standardTierLabel: t.settingsTierStandard,
+            },
+          )
+        : [];
+    const activeFamily = modelMenuFamilyKey
+      ? families.find((f) => f.key === modelMenuFamilyKey && f.hasTiers) || null
+      : null;
+    if (modelMenuFamilyKey && !activeFamily && !selectableModelsLoading) {
+      modelMenuFamilyKey = '';
+    }
+
     const renderKey = [
       curLocale,
       th.threadId,
       isRunning ? 'run' : 'idle',
       activeKey,
+      activeFamily ? activeFamily.key : '',
       selectableModelsLoading ? 'loading' : 'ready',
       selectableModels.map((m) => `${m.id}:${m.quotaInfo?.remainingFraction ?? ''}`).join(','),
     ].join('|');
@@ -3580,49 +3741,83 @@
     if (elModelMenu.dataset.renderKey === renderKey && !elModelMenu.hidden) {
       return;
     }
+    const prevMode = elModelMenu.dataset.menuMode || '';
+    const nextMode = activeFamily ? `level2:${activeFamily.key}` : 'level1';
     const prevList = elModelMenu.querySelector('.pt-model-menu-list');
-    const prevScroll = prevList ? prevList.scrollTop : 0;
+    const prevScroll = prevList && prevMode === nextMode ? prevList.scrollTop : 0;
 
+    let hdrInnerHtml = '';
     let bodyHtml = '';
+    const hintText = isRunning ? t.modelRunningHint : t.modelNextMsgHint;
+
     if (selectableModelsLoading && selectableModels.length === 0) {
+      hdrInnerHtml = `
+        <span class="pt-model-menu-title">${esc(t.modelMenuTitle)}</span>
+        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+      `;
       bodyHtml = `<div class="pt-model-menu-empty">${esc(t.modelLoading)}</div>`;
     } else if (!selectableModels.length) {
+      hdrInnerHtml = `
+        <span class="pt-model-menu-title">${esc(t.modelMenuTitle)}</span>
+        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+      `;
       bodyHtml = `<div class="pt-model-menu-empty">${esc(t.modelEmpty)}</div>`;
+    } else if (activeFamily) {
+      const famTagHtml = activeFamily.tagTitle
+        ? `<span class="pt-model-tag${/leaving|notice|deprecat/i.test(activeFamily.tagTitle) ? ' warn' : ''}">${esc(activeFamily.tagTitle)}</span>`
+        : '';
+      hdrInnerHtml = `
+        <div class="pt-model-menu-nav">
+          <button type="button" class="pt-model-back" title="${esc(t.modelBack)}">${ICONS.chevronLeft}<span>${esc(t.modelBack)}</span></button>
+          <span class="pt-model-menu-family" title="${esc(activeFamily.label)}">${esc(activeFamily.label)}</span>
+          ${famTagHtml}
+        </div>
+        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+      `;
+      bodyHtml = `<div class="pt-model-menu-list">${activeFamily.tiers
+        .map((tier) => {
+          const badgesHtml = renderModelBadgeHtml(
+            tier.tagTitle,
+            tier.isDefault,
+            tier.quotaInfo,
+            t.modelDefaultBadge,
+          );
+          const tipParts = [tier.rawLabel, tier.tagDescription || tier.description || ''].filter(Boolean);
+          return `<button type="button" class="pt-model-opt${tier.active ? ' active' : ''}" role="option" aria-selected="${tier.active ? 'true' : 'false'}" data-model-key="${esc(tier.value)}" title="${esc(tipParts.join(' — '))}"><span class="pt-model-chk" aria-hidden="true">${tier.active ? ICONS.check : ''}</span><span class="pt-model-name">${esc(tier.label)}</span>${badgesHtml ? `<span class="pt-model-meta">${badgesHtml}</span>` : ''}</button>`;
+        })
+        .join('')}</div>`;
     } else {
-      bodyHtml = `<div class="pt-model-menu-list">${selectableModels
-        .map((m) => {
-          const isSelected = isModelActiveForThread(m, th);
-          const optKey = m.id || m.modelId || m.modelEnum || m.label;
-          const metaBadges = [];
-          if (m.tagTitle) {
-            const warnTag = /leaving|notice|deprecat/i.test(m.tagTitle);
-            metaBadges.push(
-              `<span class="pt-model-tag${warnTag ? ' warn' : ''}">${esc(m.tagTitle)}</span>`,
-            );
-          } else if (m.isDefault) {
-            metaBadges.push(`<span class="pt-model-tag">${esc(t.modelDefaultBadge)}</span>`);
+      hdrInnerHtml = `
+        <span class="pt-model-menu-title">${esc(t.modelMenuTitle)}</span>
+        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+      `;
+      bodyHtml = `<div class="pt-model-menu-list">${families
+        .map((fam) => {
+          const badgesHtml = renderModelBadgeHtml(
+            fam.tagTitle,
+            !fam.hasTiers && fam.hasDefaultBadge,
+            fam.quotaInfo,
+            t.modelDefaultBadge,
+          );
+          if (fam.hasTiers) {
+            const effortHtml = fam.activeEffortLabel
+              ? `<span class="pt-model-effort">${esc(fam.activeEffortLabel)}</span>`
+              : '';
+            return `<button type="button" class="pt-model-opt${fam.active ? ' active' : ''}" role="option" aria-selected="${fam.active ? 'true' : 'false'}" aria-haspopup="true" data-family-key="${esc(fam.key)}" title="${esc(fam.title)}"><span class="pt-model-chk" aria-hidden="true">${fam.active ? ICONS.check : ''}</span><span class="pt-model-name">${esc(fam.label)}</span><span class="pt-model-meta">${effortHtml}${badgesHtml}<span class="pt-model-chev" aria-hidden="true">${ICONS.chevronRight}</span></span></button>`;
           }
-          if (m.quotaInfo && typeof m.quotaInfo.remainingFraction === 'number') {
-            const pct = Math.max(0, Math.min(100, Math.round(m.quotaInfo.remainingFraction * 100)));
-            metaBadges.push(
-              `<span class="pt-model-quota${pct <= 20 ? ' low' : ''}">${pct}%</span>`,
-            );
-          }
-          const tipParts = [m.label, m.tagDescription || m.description || ''].filter(Boolean);
-          return `<button type="button" class="pt-model-opt${isSelected ? ' active' : ''}" role="option" aria-selected="${isSelected ? 'true' : 'false'}" data-model-key="${esc(optKey)}" title="${esc(tipParts.join(' — '))}"><span class="pt-model-chk" aria-hidden="true">${isSelected ? ICONS.check : ''}</span><span class="pt-model-name">${esc(m.label)}</span>${metaBadges.length ? `<span class="pt-model-meta">${metaBadges.join('')}</span>` : ''}</button>`;
+          return `<button type="button" class="pt-model-opt${fam.active ? ' active' : ''}" role="option" aria-selected="${fam.active ? 'true' : 'false'}" data-model-key="${esc(fam.singleModelKey)}" title="${esc(fam.title)}"><span class="pt-model-chk" aria-hidden="true">${fam.active ? ICONS.check : ''}</span><span class="pt-model-name">${esc(fam.label)}</span>${badgesHtml ? `<span class="pt-model-meta">${badgesHtml}</span>` : ''}</button>`;
         })
         .join('')}</div>`;
     }
 
-    const hintText = isRunning ? t.modelRunningHint : t.modelNextMsgHint;
     elModelMenu.innerHTML = `
       <div class="pt-model-menu-hdr">
-        <span class="pt-model-menu-title">${esc(t.modelMenuTitle)}</span>
-        <span class="pt-model-menu-hint${isRunning ? ' running' : ''}">${esc(hintText)}</span>
+        ${hdrInnerHtml}
       </div>
       ${bodyHtml}
     `;
     elModelMenu.dataset.renderKey = renderKey;
+    elModelMenu.dataset.menuMode = nextMode;
     elModelMenu.hidden = false;
 
     const nextList = elModelMenu.querySelector('.pt-model-menu-list');
@@ -3634,6 +3829,7 @@
   function openModelMenu() {
     if (!openThreadObj || openThreadObj.archived) return;
     modelMenuOpen = true;
+    modelMenuFamilyKey = '';
     renderThreadHeader(openThreadObj);
     renderModelMenu();
     if (!selectableModels.length || Date.now() - selectableModelsLoadedAt > 30_000) {
@@ -4170,7 +4366,9 @@
         !loadedSettingsData ||
         nextScopeKey !== String(loadedSettingsData.scopeKey || '')
       ) {
-        loadSettingsData({ syncInputs: settingsScreenOpen && !isSettingsDraftDirty() });
+        loadSettingsData({
+          syncInputs: settingsScreenOpen && !settingsDirtyByUser && !isSettingsDraftDirty(),
+        });
       }
 
       // Immediately close any open thread drawer that does not belong to the active project scope
@@ -4345,16 +4543,54 @@
     }
   });
 
+  function stepBackModelMenuToLevel1() {
+    const prevFamKey = modelMenuFamilyKey;
+    modelMenuFamilyKey = '';
+    renderModelMenu();
+    if (!elModelMenu) return;
+    const match = prevFamKey
+      ? [...elModelMenu.querySelectorAll('.pt-model-opt[data-family-key]')].find(
+          (el) => el.dataset.familyKey === prevFamKey,
+        )
+      : null;
+    (match || elModelMenu.querySelector('.pt-model-opt'))?.focus();
+  }
+
   if (elModelMenu) {
     elModelMenu.addEventListener('click', (e) => {
+      const backBtn = e.target.closest('.pt-model-back');
+      if (backBtn) {
+        e.stopPropagation();
+        stepBackModelMenuToLevel1();
+        return;
+      }
       const opt = e.target.closest('.pt-model-opt');
       if (!opt) return;
       e.stopPropagation();
+      const famKey = opt.dataset.familyKey || '';
+      if (famKey) {
+        modelMenuFamilyKey = famKey;
+        renderModelMenu();
+        const target =
+          elModelMenu.querySelector('.pt-model-opt.active') ||
+          elModelMenu.querySelector('.pt-model-opt');
+        if (target) {
+          target.focus();
+          target.scrollIntoView({ block: 'nearest' });
+        }
+        return;
+      }
       const chosen = getModelByIdFromCatalog(opt.dataset.modelKey || '');
       if (chosen) selectThreadModel(chosen);
     });
     elModelMenu.addEventListener('keydown', (e) => {
       if (!modelMenuOpen) return;
+      if ((e.key === 'ArrowLeft' || e.key === 'Backspace') && modelMenuFamilyKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        stepBackModelMenuToLevel1();
+        return;
+      }
       const opts = [...elModelMenu.querySelectorAll('.pt-model-opt')];
       if (!opts.length) return;
       const idx = opts.indexOf(document.activeElement);
@@ -4364,6 +4600,9 @@
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         opts[(idx - 1 + opts.length) % opts.length].focus();
+      } else if (e.key === 'ArrowRight' && idx >= 0 && opts[idx].dataset.familyKey) {
+        e.preventDefault();
+        opts[idx].click();
       } else if (e.key === 'Enter' && idx >= 0) {
         e.preventDefault();
         opts[idx].click();
@@ -4387,8 +4626,12 @@
       if (modelMenuOpen) {
         e.preventDefault();
         e.stopPropagation();
-        closeModelMenu();
-        document.getElementById('btn-comp-model')?.focus();
+        if (modelMenuFamilyKey) {
+          stepBackModelMenuToLevel1();
+        } else {
+          closeModelMenu();
+          document.getElementById('btn-comp-model')?.focus();
+        }
         return;
       }
       if (activeModalCtx && !activeModalCtx.busy) {
@@ -4488,6 +4731,12 @@
   document.getElementById('f-wt').addEventListener('change', () => {
     populateDispatchModelSelect();
   });
+  if (elFModel) {
+    elFModel.addEventListener('change', () => {
+      const grp = dispatchModelGroups.find((g) => g.key === elFModel.value) || null;
+      populateSettingsTierSelect(elFTier, grp, grp?.defaultValue ?? '');
+    });
+  }
   document.getElementById('btn-close-drawer').addEventListener('click', () => {
     setDrawerOpen(false);
   });
@@ -4506,6 +4755,7 @@
     elBtnScopeGlobal.addEventListener('click', () => {
       if (settingsScope === 'global') return;
       settingsScope = 'global';
+      settingsDirtyByUser = false;
       renderSettingsScreen(true);
     });
   }
@@ -4515,28 +4765,37 @@
         loadedSettingsData?.scopeKey || loadedSettingsData?.effective?.scopeKey || activeScopeKey || '';
       if (!scopeKey || settingsScope === 'project') return;
       settingsScope = 'project';
+      settingsDirtyByUser = false;
       renderSettingsScreen(true);
     });
   }
   if (elSetWorktree) {
     elSetWorktree.addEventListener('change', () => {
+      settingsDirtyByUser = true;
       const grp = settingsWorktreeGroups.find((g) => g.key === elSetWorktree.value) || null;
       populateSettingsTierSelect(elSetWorktreeTier, grp, grp?.defaultValue ?? '');
       syncSettingsActionState();
     });
   }
   if (elSetWorktreeTier) {
-    elSetWorktreeTier.addEventListener('change', syncSettingsActionState);
+    elSetWorktreeTier.addEventListener('change', () => {
+      settingsDirtyByUser = true;
+      syncSettingsActionState();
+    });
   }
   if (elSetReadOnly) {
     elSetReadOnly.addEventListener('change', () => {
+      settingsDirtyByUser = true;
       const grp = settingsReadOnlyGroups.find((g) => g.key === elSetReadOnly.value) || null;
       populateSettingsTierSelect(elSetReadOnlyTier, grp, grp?.defaultValue ?? '');
       syncSettingsActionState();
     });
   }
   if (elSetReadOnlyTier) {
-    elSetReadOnlyTier.addEventListener('change', syncSettingsActionState);
+    elSetReadOnlyTier.addEventListener('change', () => {
+      settingsDirtyByUser = true;
+      syncSettingsActionState();
+    });
   }
   if (elBtnSettingsRefreshModels) {
     elBtnSettingsRefreshModels.addEventListener('click', () => {
@@ -4570,7 +4829,7 @@
     const title = document.getElementById('f-title').value.trim();
     const taskPrompt = document.getElementById('f-prompt').value.trim();
     const branch = document.getElementById('f-branch').value.trim();
-    const model = document.getElementById('f-model').value;
+    const model = readDispatchModelValue();
     const wtChk = document.getElementById('f-wt');
     const createWorktree = !wtChk.disabled && wtChk.checked;
     const errEl = document.getElementById('dispatch-msg');
@@ -4601,7 +4860,7 @@
         document.getElementById('f-title').value = '';
         document.getElementById('f-branch').value = '';
         document.getElementById('f-prompt').value = '';
-        document.getElementById('f-model').value = '';
+        resetDispatchModelSelect();
         setDrawerOpen(false);
         lastBoardKey = '';
         await refreshBoard(true);
