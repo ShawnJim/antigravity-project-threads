@@ -130,6 +130,9 @@ async function main() {
           if (!comp.waitingOnBackgroundTask) {
             if (comp.cardSummary) thread.lastSummary = comp.cardSummary;
             thread.runState = 'RUN_STATE_IDLE';
+            thread.hasPendingBgTask = false;
+            thread.activeTool = '';
+            thread.activeToolObj = null;
             thread.lastCompletedAt = new Date().toISOString();
             thread.updatedAt = thread.lastCompletedAt;
             if (thread.worktreePath) {
