@@ -3,7 +3,7 @@
 
   const BOARD_POLL_MS = 2200;
   const CHAT_POLL_MS = 1200;
-  const EXPECTED_SERVER_API_REVISION = 7;
+  const EXPECTED_SERVER_API_REVISION = 8;
   const MAX_DECISION_CUSTOM_MESSAGE_LEN = 2000;
   const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
   const API_READ_TIMEOUT_MS = 10_000;
@@ -2858,14 +2858,17 @@
     elModalTitle.textContent = mode === 'cleanup' ? t.modalCleanTitle : t.modalArchiveTitle;
     elModalClose.title = t.closeTip;
     elModalCancel.textContent = t.fCancel;
-    const modalDisplayId =
-      thread.localId || (Number(thread.projectSeq) > 0 ? `#${Number(thread.projectSeq)}` : '');
-    elModalThread.textContent =
-      modalDisplayId && thread.threadId && modalDisplayId !== thread.threadId
-        ? `[${modalDisplayId} / ${thread.threadId}] ${thread.title || ''}`
-        : thread.threadId
-          ? `[${thread.threadId}] ${thread.title || ''}`
-          : thread.title || '';
+    const rawModalLocalId = String(thread.localId || thread.displayId || '').trim();
+    const modalDisplayId = /^thr-\d+$/i.test(rawModalLocalId)
+      ? rawModalLocalId.toLowerCase()
+      : thread.threadId && !/^pt-[a-f0-9]+-/i.test(String(thread.threadId))
+        ? String(thread.threadId)
+        : Number(thread.projectSeq) > 0
+          ? `thr-${String(Number(thread.projectSeq)).padStart(3, '0')}`
+          : rawModalLocalId || String(thread.threadId || '');
+    elModalThread.textContent = modalDisplayId
+      ? `[${modalDisplayId}] ${thread.title || ''}`
+      : thread.title || '';
 
     const pills = [];
     if (branchName) {
@@ -4396,13 +4399,15 @@
     else if (isWorking) leftIco = ICONS.rowSpinner;
     else if (isWaiting) leftIco = ICONS.waitAlert;
 
-    const displayId =
-      th.localId || (Number(th.projectSeq) > 0 ? `#${Number(th.projectSeq)}` : th.threadId || '');
-    const idTip =
-      displayId && th.threadId && displayId !== th.threadId
-        ? `${displayId} (${th.threadId})`
-        : th.threadId || displayId;
-    const tidPillHtml = `<span class="tid-pill" title="${esc(idTip)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`;
+    const rawLocalId = String(th.localId || th.displayId || '').trim();
+    const displayId = /^thr-\d+$/i.test(rawLocalId)
+      ? rawLocalId.toLowerCase()
+      : th.threadId && !/^pt-[a-f0-9]+-/i.test(String(th.threadId))
+        ? String(th.threadId)
+        : Number(th.projectSeq) > 0
+          ? `thr-${String(Number(th.projectSeq)).padStart(3, '0')}`
+          : rawLocalId || String(th.threadId || '');
+    const tidPillHtml = `<span class="tid-pill" title="${esc(displayId)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`;
 
     let restRight = '';
     if (isWorking) {
@@ -4452,7 +4457,7 @@
     const subCls = isWorking ? 'qrow-sub animate-shimmer-text' : 'qrow-sub';
     const rowCls = `qrow two-line${isActiveMain ? ' active-main' : ''}${isArchived && th.worktreePath ? ' arch-has-wt' : ''}`;
 
-    const rowTitleTip = idTip ? `[${idTip}] ${th.title || ''}` : th.displayTitle || th.title;
+    const rowTitleTip = displayId ? `[${displayId}] ${th.title || ''}` : th.displayTitle || th.title;
     return `
       <div class="${rowCls}" data-tid="${esc(th.threadId)}" title="${esc(rowTitleTip)}">
         <div class="qrow-left">
@@ -4782,13 +4787,15 @@
             ${ICONS.close}
           </button>
         `;
-        const decDisplayTid =
-          dec.threadLocalId ||
-          (Number(dec.threadProjectSeq) > 0 ? `#${Number(dec.threadProjectSeq)}` : dec.threadId || '');
-        const decTidTip =
-          decDisplayTid && dec.threadId && decDisplayTid !== dec.threadId
-            ? `${t.decisionThreadTip(decDisplayTid)} (${dec.threadId})`
-            : t.decisionThreadTip(dec.threadId);
+        const rawDecLocal = String(dec.threadLocalId || '').trim();
+        const decDisplayTid = /^thr-\d+$/i.test(rawDecLocal)
+          ? rawDecLocal.toLowerCase()
+          : dec.threadId && !/^pt-[a-f0-9]+-/i.test(String(dec.threadId))
+            ? String(dec.threadId)
+            : Number(dec.threadProjectSeq) > 0
+              ? `thr-${String(Number(dec.threadProjectSeq)).padStart(3, '0')}`
+              : rawDecLocal || String(dec.threadId || '');
+        const decTidTip = t.decisionThreadTip(decDisplayTid);
         const topHtml = hasMetaRow
           ? `
             <div class="decision-top">
@@ -5363,15 +5370,17 @@
     const sp = th.stepsProgress;
     const ago = relTime(th.updatedAt || th.createdAt);
     const mbarHtml = renderSegmentedMbar(th, isWorking);
-    const displayId =
-      th.localId || (Number(th.projectSeq) > 0 ? `#${Number(th.projectSeq)}` : th.threadId || '');
-    const idTip =
-      displayId && th.threadId && displayId !== th.threadId
-        ? `${displayId} (${th.threadId})`
-        : th.threadId || displayId;
-    const cardTitleTip = idTip ? `[${idTip}] ${th.title || ''}` : th.displayTitle || th.title;
+    const rawLocalId = String(th.localId || th.displayId || '').trim();
+    const displayId = /^thr-\d+$/i.test(rawLocalId)
+      ? rawLocalId.toLowerCase()
+      : th.threadId && !/^pt-[a-f0-9]+-/i.test(String(th.threadId))
+        ? String(th.threadId)
+        : Number(th.projectSeq) > 0
+          ? `thr-${String(Number(th.projectSeq)).padStart(3, '0')}`
+          : rawLocalId || String(th.threadId || '');
+    const cardTitleTip = displayId ? `[${displayId}] ${th.title || ''}` : th.displayTitle || th.title;
     const o2TidHtml = displayId
-      ? `<span class="o2-tid" title="${esc(idTip)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`
+      ? `<span class="o2-tid" title="${esc(displayId)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`
       : '';
     let rightMetaHtml = '';
     if (sp && sp.total > 0) {
@@ -5708,16 +5717,18 @@
 
   function renderWorktreeCard(th) {
     const t = L();
-    const displayId =
-      th.localId || (Number(th.projectSeq) > 0 ? `#${Number(th.projectSeq)}` : th.threadId || '');
-    const idTip =
-      displayId && th.threadId && displayId !== th.threadId
-        ? `${displayId} (${th.threadId})`
-        : th.threadId || displayId;
+    const rawLocalId = String(th.localId || th.displayId || '').trim();
+    const displayId = /^thr-\d+$/i.test(rawLocalId)
+      ? rawLocalId.toLowerCase()
+      : th.threadId && !/^pt-[a-f0-9]+-/i.test(String(th.threadId))
+        ? String(th.threadId)
+        : Number(th.projectSeq) > 0
+          ? `thr-${String(Number(th.projectSeq)).padStart(3, '0')}`
+          : rawLocalId || String(th.threadId || '');
     const branchText = th.git?.branch || th.branch || 'worktree';
     const pills = [
       ...(displayId
-        ? [`<span class="tid-pill" title="${esc(idTip)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`]
+        ? [`<span class="tid-pill" title="${esc(displayId)}" data-thread-id="${esc(th.threadId || '')}">${esc(displayId)}</span>`]
         : []),
       `<span class="branch-pill">${ICONS.branch} <span>${esc(branchText)}</span></span>`,
     ];
@@ -7448,18 +7459,20 @@
     const t = L();
     openThreadObj = th;
     const chatTidEl = document.getElementById('chat-tid');
-    const displayId =
-      th.localId || (Number(th.projectSeq) > 0 ? `#${Number(th.projectSeq)}` : th.threadId || '');
-    const idTip =
-      displayId && th.threadId && displayId !== th.threadId
-        ? `${displayId} (${th.threadId})`
-        : th.threadId || displayId;
-    chatTidEl.textContent = idTip || '';
-    chatTidEl.title = idTip || '';
+    const rawLocalId = String(th.localId || th.displayId || '').trim();
+    const displayId = /^thr-\d+$/i.test(rawLocalId)
+      ? rawLocalId.toLowerCase()
+      : th.threadId && !/^pt-[a-f0-9]+-/i.test(String(th.threadId))
+        ? String(th.threadId)
+        : Number(th.projectSeq) > 0
+          ? `thr-${String(Number(th.projectSeq)).padStart(3, '0')}`
+          : rawLocalId || String(th.threadId || '');
+    chatTidEl.textContent = displayId || '';
+    chatTidEl.title = displayId || '';
     if (chatTidEl.dataset) chatTidEl.dataset.threadId = th.threadId || '';
     const titleEl = document.getElementById('chat-title-text');
     titleEl.textContent = th.title || '';
-    titleEl.title = idTip ? `[${idTip}] ${th.title || ''}` : th.title || '';
+    titleEl.title = displayId ? `[${displayId}] ${th.title || ''}` : th.title || '';
 
     const isRunning = !th.archived && th.runState === 'RUN_STATE_RUNNING';
     const isWaiting = !th.archived && th.bucket === 'waiting';

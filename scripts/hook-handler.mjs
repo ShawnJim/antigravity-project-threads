@@ -1,6 +1,7 @@
 import { resolveLsEndpoint } from '../lib/ls-client.mjs';
 import {
   findRetiredCoordinatorOwner,
+  getThreadDisplayId,
   initCoordinator,
   inspectWorktreeGit,
   loadRegistry,
@@ -10,7 +11,7 @@ import {
 import { extractThreadCompletion } from '../lib/transcript.mjs';
 import { consumePendingWatchdogAlertsForPreInvocation } from '../lib/watchdog.mjs';
 
-const DIRECTIVE_VERSION = 17;
+const DIRECTIVE_VERSION = 18;
 const LEADING_SLASH_COORD_RE = /^\s*\/coord(?=$|[\s:：，,。!?！？])/i;
 
 function readStdin() {
@@ -47,19 +48,19 @@ function buildCoordinatorDirective(coord) {
     `[Project Coordinator Standing Protocol — Bound Scope: ${scopeLabel}]`,
     'This conversation is permanently bound as the ongoing Project Coordinator. Even when subsequent user messages omit the `/coord` prefix, you MUST continue operating strictly in Coordinator mode (always reply to the user in the language they use):',
     '1. **NEVER call `invoke_subagent` (e.g. `research` / `self`) or `run_workflow`** for project tasks — ephemeral subagents do not appear on the Project Threads board! Likewise, do NOT read large source files or edit application code directly inside this Coordinator session.',
-    '2. **Dispatch EVERY new task as a Project Thread**: Whether the user asks for code changes, bug fixes, or a read-only code/logic investigation, call `call_mcp_tool` with `ServerName: "project-threads_coordinator"`, `ToolName: "dispatch_thread"` to create a tracked `thr-xxx` thread:',
-    `   - **Read-only investigation / logic check / non-repo project task**: Pass \`createWorktree: false\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (starts instantly with zero Git worktree copy overhead while creating a tracked \`thr-xxx\` card on the Project Threads board; omit \`model\` by default so the user's Settings default applies, and pass \`model\` only when explicitly requested).`,
+    '2. **Dispatch EVERY new task as a Project Thread**: Whether the user asks for code changes, bug fixes, or a read-only code/logic investigation, call `call_mcp_tool` with `ServerName: "project-threads_coordinator"`, `ToolName: "dispatch_thread"` to create a tracked project-local `thr-NNN` thread:',
+    `   - **Read-only investigation / logic check / non-repo project task**: Pass \`createWorktree: false\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (starts instantly with zero Git worktree copy overhead while creating a tracked \`thr-NNN\` card on the Project Threads board; omit \`model\` by default so the user's Settings default applies, and pass \`model\` only when explicitly requested).`,
     `   - **Code review / cross-review**: Pass \`createWorktree: false\`, \`threadType: "review"\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (omit \`model\` by default so the user's configured Review default model in Settings applies automatically; pass \`model\` only when explicitly requested).`,
     hasRepo
       ? `   - **Code changes / scripts / bug fixes**: Pass \`createWorktree: true\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (automatically creates an isolated Git worktree and branch; omit \`model\` by default so the user's Settings default applies).`
       : `   - **Note**: No local Git repository is bound to this scope; keep \`createWorktree: false\` and always pass \`coordinatorId: ${JSON.stringify(cid)}\`.`,
     '   - **Match the user\'s language**: Write `title` and `taskPrompt` in the user\'s active conversation language (e.g. Chinese when the user speaks Chinese, English when the user speaks English), and instruct the Worker Thread to write its analysis and final summary in that same language.',
     '3. **Format `[THREAD_COMPLETION_SYNC]` callbacks as segmented summary cards**: When a background worker thread finishes, the system delivers a `[THREAD_COMPLETION_SYNC]` message to this session. Keep multiple callbacks cleanly separated by following this exact card layout (localized to the user\'s language):',
-    '   - **Blockquote header banner**: `> **✅ [thr-xxx] <Task Title> · Completed** ([View Thread](conversation://<threadConvId>))`',
+    '   - **Blockquote header banner**: `> **✅ [thr-NNN] <Task Title> — Completed** ([View Thread](conversation://<threadConvId>))`',
     '   - **3–5 concise takeaway bullets**: Summarize only root cause, key changes/findings, and any decision needed from the user. Do NOT dump long logs or large tables into the Coordinator session.',
     `   - **Trailing divider**: End the card with \`---\` (and if reusable project conventions emerged, curate Shared Project Memory via \`update_project_memory\` passing \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`: keep \`.agents/rules/project-memory.md\` as a thin index \`<= 60\` lines, store module-specific details in \`.agents/memory/<topic>.md\` using \`topic\`, and when conventions change or bloat appears, call \`mode: "read"\` first then consolidate via \`mode: "replace"\` or split into topics rather than endlessly appending).`,
     '   - If a callback duplicates an already-reported conclusion, acknowledge briefly in one line or stay concise without exposing internal dedup metadata. **NEVER call `dispatch_thread` again in response to a completion sync!**',
-    `4. **Thread management & archiving policy**: To check thread status, steer an existing thread, or archive finished work, call \`list_threads\`, \`get_thread_detail\`, \`send_thread_message\`, or \`archive_thread\` — ALWAYS pass \`coordinatorId: ${JSON.stringify(cid)}\` and \`workspacePath: ${JSON.stringify(repo)}\` on every call so strict fail-closed cross-project isolation and project-local \`#N\` sequence lookup are enforced (single-thread calls without scope are rejected fail-closed). Follow strict mode-based archiving rules once a Worker Thread has completed and been reported: (a) **Read-only investigation / check threads (\`createWorktree: false\`)**: you may **autonomously decide** to call \`archive_thread\` directly after reporting results without asking the user each time; (b) **Feature development / code-change Worktree threads (\`createWorktree: true\`)**: do **NOT** auto-archive before user acceptance (even after changes are merged into a branch, keep the thread open for verification or follow-up iterations); however, **once the user confirms acceptance / sign-off** (e.g. "looks good", "ok", "accepted" / "ok了", "没问题", "验收通过") or explicitly requests archiving, **automatically call \`archive_thread\` directly** without waiting for a separate "archive" command.`,
+    `4. **Thread management & archiving policy**: To check thread status, steer an existing thread, or archive finished work, call \`list_threads\`, \`get_thread_detail\`, \`send_thread_message\`, or \`archive_thread\` — ALWAYS pass \`coordinatorId: ${JSON.stringify(cid)}\` and \`workspacePath: ${JSON.stringify(repo)}\` on every call so strict fail-closed cross-project isolation and project-local \`thr-NNN\` (plus legacy \`#N\`) lookup are enforced (single-thread calls without scope are rejected fail-closed). Follow strict mode-based archiving rules once a Worker Thread has completed and been reported: (a) **Read-only investigation / check threads (\`createWorktree: false\`)**: you may **autonomously decide** to call \`archive_thread\` directly after reporting results without asking the user each time; (b) **Feature development / code-change Worktree threads (\`createWorktree: true\`)**: do **NOT** auto-archive before user acceptance (even after changes are merged into a branch, keep the thread open for verification or follow-up iterations); however, **once the user confirms acceptance / sign-off** (e.g. "looks good", "ok", "accepted" / "ok了", "没问题", "验收通过") or explicitly requests archiving, **automatically call \`archive_thread\` directly** without waiting for a separate "archive" command.`,
     `5. **Pending Decisions board (\`manage_decisions\`)**: Not limited to Worker Thread completion callbacks — whenever ANY reply from you asks the user to make a call or answer a binary/multi-choice/confirmation question (including everyday planning discussions, architecture/design trade-offs, whether to open an Issue first vs. implement directly, scheduling/priority choices, whether to merge a branch, whether to release, or whether to archive/clean up), you MUST synchronously call \`manage_decisions\` with \`action: "add"\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`, optional \`threadId\`, concise \`title\`, optional \`summary\`, and 1–3 quick-action \`options\` (\`send_coordinator\` / \`archive_thread\` / \`dismiss\`) so it pins in the right-hand **Pending Decisions** panel (users can also submit custom instructions directly on any card). Whenever the user replies directly in chat to decide, promptly call \`manage_decisions\` with \`action: "resolve"\` and \`decisionId\` to clear it so resolved items never linger on the board.`,
   ].join('\n');
 }
@@ -118,7 +119,7 @@ async function main() {
           decision: 'deny',
           reason:
             `This conversation is bound as the Project Coordinator; do not use ${toolName} to delegate project tasks (ephemeral subagents are invisible on the Project Threads board). ` +
-            `Instead, call call_mcp_tool with ServerName="project-threads_coordinator", ToolName="dispatch_thread" to create a tracked thr-xxx thread ` +
+            `Instead, call call_mcp_tool with ServerName="project-threads_coordinator", ToolName="dispatch_thread" to create a tracked thr-NNN thread ` +
             `(pass createWorktree: false, coordinatorId: ${JSON.stringify(cid)}, workspacePath: ${JSON.stringify(repo)} for read-only checks, or createWorktree: true for Git repository code changes).`,
         })}\n`,
       );
@@ -329,9 +330,10 @@ async function main() {
     if (newlyFinished.length > 0) {
       const bullets = newlyFinished.map((t) => {
         notifiedIds.push(t.threadId);
+        const displayId = getThreadDisplayId(t) || t.threadId;
         const gitNote = t.git?.lastCommit ? ` | Latest commit: \`${t.git.lastCommit}\`` : '';
         const sum = t.lastSummary ? `\n  > ${t.lastSummary.replace(/\r?\n+/g, ' ').slice(0, 260)}` : '';
-        return `- **\`${t.threadId}\`** ${t.title} (\`${t.branch || 'read-only'}\`)${gitNote}${sum}`;
+        return `- **\`${displayId}\`** ${t.title} (\`${t.branch || 'read-only'}\`)${gitNote}${sum}`;
       });
       messages.push(
         [

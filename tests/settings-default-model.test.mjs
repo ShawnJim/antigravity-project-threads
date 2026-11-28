@@ -809,7 +809,7 @@ test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier mo
 
   const groupOpts = {
     includeFollowGlobal: true,
-    followGlobalLabel: 'Follow Global Default (Follow Coordinator · Gemini 4 Neon (High))',
+    followGlobalLabel: 'Follow Global Default (Follow Coordinator - Gemini 4 Neon (High))',
     includeInherit: true,
     inheritLabel: 'Follow Coordinator (Gemini 4 Neon (High))',
   };
@@ -944,11 +944,11 @@ test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier mo
   // Verify + New Thread two-level (#f-model + #f-tier) dispatch modal groups & default fallback
   const dispatchGroups = buildModelFamilyGroups(richCatalog, {
     includeFollowGlobal: true,
-    followGlobalLabel: 'Use Settings Default (Follow Coordinator · Gemini 4 Neon (High))',
+    followGlobalLabel: 'Use Settings Default (Follow Coordinator - Gemini 4 Neon (High))',
     includeInherit: true,
     inheritLabel: 'Follow Coordinator (Gemini 4 Neon (High))',
   });
-  assert.equal(dispatchGroups[0].label, 'Use Settings Default (Follow Coordinator · Gemini 4 Neon (High))');
+  assert.equal(dispatchGroups[0].label, 'Use Settings Default (Follow Coordinator - Gemini 4 Neon (High))');
   assert.equal(dispatchGroups[0].hasTiers, false);
   assert.equal(dispatchGroups[1].key, '__inherit__');
   assert.equal(dispatchGroups[2].kind, 'family');
@@ -962,7 +962,7 @@ test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier mo
   assert.equal(dispatchHydroSel.group?.hasTiers, true);
 });
 
-test('static and protocol checks: hook DIRECTIVE_VERSION=17, skill, MCP, Sidecar API/UI, I18N, and LF endings', (t) => {
+test('static and protocol checks: hook DIRECTIVE_VERSION=18, skill, MCP, Sidecar API/UI, I18N, and LF endings', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
@@ -971,8 +971,8 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=17, skill, MCP, Sidecar
   const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
   const themeCss = readFileSync(new URL('../sidecars/threads/theme.css', import.meta.url), 'utf8');
 
-  // 1. Hook directive version bumped to 17 and no hardcoded model: "pro"
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
+  // 1. Hook directive version bumped to 18 and no hardcoded model: "pro"
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*18\s*;/);
   assert.equal(/model:\s*["']pro["']/.test(hookHandler), false);
 
   // 2. SKILL.md no longer hardcodes model: "pro"
@@ -1108,7 +1108,7 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=17, skill, MCP, Sidecar
   assert.match(injectedDirective, /manage_decisions/);
   assert.match(injectedDirective, /threadType:\s*"review"/);
   assert.equal(/model:\s*["']pro["']/.test(injectedDirective), false);
-  assert.equal(loadRegistry().coordinators['__hook_test__'].directiveVersion, 17);
+  assert.equal(loadRegistry().coordinators['__hook_test__'].directiveVersion, 18);
 
   // 8. LF line endings on all modified/added .mjs files
   for (const rel of [

@@ -43,7 +43,7 @@ import {
 const THIS_FILE = fileURLToPath(import.meta.url);
 const HERE = dirname(THIS_FILE);
 const PLUGIN_ROOT = join(HERE, '..', '..');
-const SERVER_API_REVISION = 7;
+const SERVER_API_REVISION = 8;
 const SERVER_CAPABILITIES = [
   'settings',
   'settings_save_fast',
@@ -57,6 +57,7 @@ const SERVER_CAPABILITIES = [
   'review_model',
   'topic_memory',
   'watchdog_patrol',
+  'unified_local_thread_id',
 ];
 const app = new SidecarApp();
 const watchdogScheduler = createWatchdogScheduler();

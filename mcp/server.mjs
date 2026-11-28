@@ -6,6 +6,7 @@ import {
   dismissDecision,
   dispatchThread,
   getThreadDetail,
+  getThreadDisplayId,
   initCoordinator,
   listDecisions,
   resolveDecision,
@@ -159,14 +160,14 @@ const TOOLS = [
   {
     name: 'get_thread_detail',
     description:
-      'Inspect full metadata, Git status, and latest completion summary of a specific Worker Thread by global threadId (e.g. "thr-001"), project-local sequence (e.g. "#1"), or conversationId. Enforces strict fail-closed cross-project isolation: callers must pass project scope parameters (workspacePath / coordinatorId / conversationId / projectId), or explicitly pass scope="*" for unscoped global threadId access. Refreshes only the target thread.',
+      'Inspect full metadata, Git status, and latest completion summary of a specific Worker Thread by project-local ID (e.g. "thr-001"), legacy sequence (e.g. "#1"), internal threadId, or conversationId. Enforces strict fail-closed cross-project isolation: callers must pass project scope parameters (workspacePath / coordinatorId / conversationId / projectId), or explicitly pass scope="*" for unscoped global threadId access. Refreshes only the target thread.',
     inputSchema: {
       type: 'object',
       properties: {
         threadId: {
           type: 'string',
           description:
-            'Global Thread ID (e.g., "thr-001"), project-local display sequence (e.g., "#1" — must include leading "#"), or Antigravity conversation UUID.',
+            'Project-local Thread ID (e.g., "thr-001"), legacy project-local sequence (e.g., "#1" — must include leading "#"), internal/global threadId, or Antigravity conversation UUID.',
         },
         workspacePath: {
           type: 'string',
@@ -270,7 +271,7 @@ const TOOLS = [
         threadId: {
           type: 'string',
           description:
-            'Target global Thread ID (e.g., "thr-001"), project-local sequence (e.g., "#1" — must include leading "#"), or conversation UUID.',
+            'Target project-local Thread ID (e.g., "thr-001"), legacy sequence (e.g., "#1" — must include leading "#"), internal/global threadId, or conversation UUID.',
         },
         message: {
           type: 'string',
@@ -314,7 +315,7 @@ const TOOLS = [
         threadId: {
           type: 'string',
           description:
-            'Global Thread ID (e.g., "thr-001"), project-local sequence (e.g., "#1" — must include leading "#"), or conversation UUID.',
+            'Project-local Thread ID (e.g., "thr-001"), legacy sequence (e.g., "#1" — must include leading "#"), internal/global threadId, or conversation UUID.',
         },
         workspacePath: {
           type: 'string',
@@ -450,9 +451,8 @@ const TOOLS = [
 
 function formatThreadIdLabel(t) {
   if (!t) return '';
-  if (t.localId && t.threadId) return `\`${t.localId}\` (\`${t.threadId}\`)`;
-  if (t.threadId) return `\`${t.threadId}\``;
-  return t.localId ? `\`${t.localId}\`` : '';
+  const displayId = getThreadDisplayId(t);
+  return displayId ? `\`${displayId}\`` : '';
 }
 
 function formatThreadsMarkdown(snapshot) {
@@ -518,7 +518,8 @@ async function handleToolCall(name, args = {}) {
       const dispatchArgs = { ...args };
       if (!dispatchArgs.model) delete dispatchArgs.model;
       const t = await dispatchThread(dispatchArgs);
-      const idHeading = t.localId ? `**\`${t.localId}\`** (\`${t.threadId}\`)` : `**\`${t.threadId}\`**`;
+      const displayId = getThreadDisplayId(t) || t.threadId;
+      const idHeading = `**\`${displayId}\`**`;
       const threadTypeLabel = t.threadType || (t.worktreePath ? 'worktree' : 'readonly');
       const text = [
         `Dispatched Worker Thread ${idHeading}: [${t.title}](conversation://${t.conversationId})`,
@@ -687,9 +688,8 @@ async function handleToolCall(name, args = {}) {
         ...args,
         requireScope: !allowUnscoped,
       });
-      const idLabel = res.thread.localId
-        ? `**\`${res.thread.localId}\`** (\`${res.thread.threadId}\`)`
-        : `**\`${res.thread.threadId}\`**`;
+      const displayId = getThreadDisplayId(res.thread) || res.thread.threadId;
+      const idLabel = `**\`${displayId}\`**`;
       return {
         content: [
           {
@@ -715,9 +715,8 @@ async function handleToolCall(name, args = {}) {
       });
       const removedPath = res.removedWorktreePath || res.thread?.worktreePath || '';
       const branchName = res.deletedBranch || res.thread?.branch || '';
-      const idLabel = res.thread?.localId
-        ? `\`${res.thread.localId}\` (\`${res.thread.threadId}\`)`
-        : `\`${res.thread.threadId}\``;
+      const displayId = getThreadDisplayId(res.thread) || res.thread?.threadId || '';
+      const idLabel = `\`${displayId}\``;
       const lines = [
         `Archived thread ${idLabel} ([${res.thread.title}](conversation://${res.thread.conversationId})).`,
         `- Worktree removed: \`${res.worktreeRemoved}\`${res.worktreeRemoved && removedPath ? ` (\`${removedPath}\`)` : ''}`,
@@ -775,9 +774,10 @@ async function handleToolCall(name, args = {}) {
           options: args.options,
         });
         const optLabels = (created.options || []).map((o) => `\`${o.label}\` (${o.action})`).join(', ');
+        const linkedDisplayId = created.threadLocalId || created.threadId;
         const text = [
           `Pinned Pending Decision **\`${created.id}\`**: ${created.title}`,
-          created.threadId ? `- Linked Thread: \`${created.threadId}\`` : '',
+          created.threadId ? `- Linked Thread: \`${linkedDisplayId}\`` : '',
           created.summary ? `- Summary: ${created.summary}` : '',
           optLabels ? `- Quick Actions: ${optLabels}` : '',
         ]
@@ -818,7 +818,7 @@ async function handleToolCall(name, args = {}) {
               '|---|---|---|---|---|',
               ...items.map(
                 (d) =>
-                  `| \`${d.id}\` | ${d.source || 'explicit'} | ${d.status || 'pending'} | ${d.threadId ? `\`${d.threadId}\`` : '-'} | ${String(d.title || '').replace(/\|/g, '\\|')} |`,
+                  `| \`${d.id}\` | ${d.source || 'explicit'} | ${d.status || 'pending'} | ${d.threadId ? `\`${d.threadLocalId || d.threadId}\`` : '-'} | ${String(d.title || '').replace(/\|/g, '\\|')} |`,
               ),
             ]
           : ['No pending decisions found for this project scope.'];
