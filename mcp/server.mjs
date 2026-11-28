@@ -106,11 +106,18 @@ const TOOLS = [
         model: {
           type: 'string',
           description:
-            'Optional model override: tier alias ("pro", "flash", "flash_lite") or concrete model ID / enum. Omit by default to use the user\'s configured default model in Settings (worktree vs read-only); pass only when overriding.',
+            'Optional model override: tier alias ("pro", "flash", "flash_lite") or concrete model ID / enum. Omit by default to use the user\'s configured default model in Settings (worktree vs read-only vs review based on threadType / createWorktree); pass only when overriding.',
+        },
+        threadType: {
+          type: 'string',
+          enum: ['worktree', 'readonly', 'review'],
+          description:
+            'Optional thread type / purpose: "worktree" (code editing in isolated Git worktree), "readonly" (fast read-only investigation), or "review" (code review / cross-review; uses the user\'s configured Review default model in Settings and defaults createWorktree to false when omitted). If omitted, inferred from createWorktree (true -> "worktree", false -> "readonly").',
         },
         createWorktree: {
           type: 'boolean',
-          description: 'Whether to create an isolated Git worktree for this thread (default: true).',
+          description:
+            'Whether to create an isolated Git worktree for this thread (defaults to false when threadType is "review" or "readonly", otherwise true).',
         },
       },
       required: ['title', 'taskPrompt'],
@@ -488,11 +495,12 @@ async function handleToolCall(name, args = {}) {
       if (!dispatchArgs.model) delete dispatchArgs.model;
       const t = await dispatchThread(dispatchArgs);
       const idHeading = t.localId ? `**\`${t.localId}\`** (\`${t.threadId}\`)` : `**\`${t.threadId}\`**`;
+      const threadTypeLabel = t.threadType || (t.worktreePath ? 'worktree' : 'readonly');
       const text = [
         `Dispatched Worker Thread ${idHeading}: [${t.title}](conversation://${t.conversationId})`,
         `- Conversation ID: \`${t.conversationId}\``,
         `- Project Scope: \`${t.workspaceKey}\`${t.projectId ? ` (projectId: \`${t.projectId}\`)` : ''}`,
-        `- Model: \`${t.modelDisplayName || t.model}\` | Initial State: \`${t.runState}\``,
+        `- Model: \`${t.modelDisplayName || t.model}\` | Type: \`${threadTypeLabel}\` | Initial State: \`${t.runState}\``,
         t.worktreePath ? `- Isolated Git Worktree: \`${t.worktreePath}\`` : '- Git Worktree: (disabled or non-git workspace)',
         t.branch ? `- Assigned Branch: \`${t.branch}\` (from \`${t.baseRef}\`)` : '',
       ]

@@ -3,7 +3,7 @@
 
   const BOARD_POLL_MS = 2200;
   const CHAT_POLL_MS = 1200;
-  const EXPECTED_SERVER_API_REVISION = 3;
+  const EXPECTED_SERVER_API_REVISION = 4;
   const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
   const API_READ_TIMEOUT_MS = 10_000;
   const API_WRITE_TIMEOUT_MS = 12_000;
@@ -206,6 +206,15 @@
       emptyWt: 'No isolated Git worktrees active.',
       fTitle: 'Thread title',
       fTitlePh: 'e.g., Fix OAuth token refresh race',
+      fMode: 'Thread mode',
+      fModeWorktree: 'Worktree',
+      fModeReadOnly: 'Read-only',
+      fModeReview: 'Code Review',
+      fModeHintWorktree: (lbl) => `Creates an isolated Git worktree branch. Default model: ${lbl}`,
+      fModeHintReadOnly: (lbl) => `Fast read-only check without Git worktree. Default model: ${lbl}`,
+      fModeHintReview: (lbl) =>
+        `Code review mode (createWorktree: false, threadType: "review"). Review default model: ${lbl}`,
+      fModeHintNoGit: 'No Git repository detected — Worktree mode is unavailable.',
       fBranch: 'Git branch (optional)',
       fModel: 'Model',
       fTier: 'Effort',
@@ -270,6 +279,7 @@
       modelGroupModels: 'Available Models',
       roleWorker: 'Worker',
       roleReadOnly: 'Read-only',
+      roleReview: 'Code Review',
       readOnlyMode: 'Shared session',
       justNow: 'now',
       justNowAgo: 'just now',
@@ -350,6 +360,9 @@
       settingsWorktreeDesc: 'Used when creating isolated Git worktree branches (createWorktree: true).',
       settingsReadOnlyLabel: 'Read-Only / Investigation Threads',
       settingsReadOnlyDesc: 'Used for fast read-only checks or non-Git workspaces (createWorktree: false).',
+      settingsReviewLabel: 'Code Review Threads',
+      settingsReviewDesc:
+        'Used for code review and cross-review threads (threadType: "review", createWorktree: false).',
       settingsFollowGlobal: (lbl) => `Follow Global Default (${lbl})`,
       settingsSave: 'Save',
       settingsSaving: 'Saving…',
@@ -562,6 +575,15 @@
       emptyWt: '当前暂无独立 Git Worktree 目录。',
       fTitle: '线程标题',
       fTitlePh: '例如：排查提前建单未触发自动清关的前置条件',
+      fMode: '线程模式',
+      fModeWorktree: '代码编辑',
+      fModeReadOnly: '只读排查',
+      fModeReview: '代码审查',
+      fModeHintWorktree: (lbl) => `创建独立 Git Worktree 隔离分支。当前默认模型：${lbl}`,
+      fModeHintReadOnly: (lbl) => `快速只读排查（无 Git Worktree 开销）。当前默认模型：${lbl}`,
+      fModeHintReview: (lbl) =>
+        `代码审查模式（无 Worktree，threadType: "review"）。当前 Review 默认模型：${lbl}`,
+      fModeHintNoGit: '当前项目未关联 Git 仓库，代码编辑（Worktree）模式不可用。',
       fBranch: 'Git 分支名（可选）',
       fModel: '模型',
       fTier: '档位',
@@ -625,6 +647,7 @@
       modelGroupModels: '可选模型',
       roleWorker: '工作线程',
       roleReadOnly: '只读排查',
+      roleReview: '代码审查',
       readOnlyMode: '共享会话',
       justNow: '刚刚',
       justNowAgo: '刚刚',
@@ -708,6 +731,9 @@
       settingsWorktreeDesc: '用于创建独立 Git Worktree 分支并修改代码的任务（createWorktree: true）。',
       settingsReadOnlyLabel: '只读排查 / 无 Worktree 线程默认模型',
       settingsReadOnlyDesc: '用于快速只读排查或非 Git 项目任务（createWorktree: false）。',
+      settingsReviewLabel: '代码审查 / Review 线程默认模型',
+      settingsReviewDesc:
+        '用于代码审查与交叉评审线程（threadType: "review"，createWorktree: false）。',
       settingsFollowGlobal: (lbl) => `跟随全局默认 (${lbl})`,
       settingsSave: '保存设置',
       settingsSaving: '保存中…',
@@ -920,6 +946,15 @@
       emptyWt: '目前尚無獨立 Git Worktree 目錄。',
       fTitle: '執行緒標題',
       fTitlePh: '例如：排查提前建單未觸發自動清關的前置條件',
+      fMode: '執行緒模式',
+      fModeWorktree: '程式碼編輯',
+      fModeReadOnly: '唯讀排查',
+      fModeReview: '程式碼審查',
+      fModeHintWorktree: (lbl) => `建立獨立 Git Worktree 隔離分支。目前預設模型：${lbl}`,
+      fModeHintReadOnly: (lbl) => `快速唯讀排查（無 Git Worktree 開銷）。目前預設模型：${lbl}`,
+      fModeHintReview: (lbl) =>
+        `程式碼審查模式（無 Worktree，threadType: "review"）。目前 Review 預設模型：${lbl}`,
+      fModeHintNoGit: '目前專案未關聯 Git 儲存庫，程式碼編輯（Worktree）模式不可用。',
       fBranch: 'Git 分支名（選填）',
       fModel: '模型',
       fTier: '檔位',
@@ -983,6 +1018,7 @@
       modelGroupModels: '可用模型',
       roleWorker: '工作執行緒',
       roleReadOnly: '唯讀排查',
+      roleReview: '程式碼審查',
       readOnlyMode: '共享會話',
       justNow: '剛剛',
       justNowAgo: '剛剛',
@@ -1066,6 +1102,9 @@
       settingsWorktreeDesc: '用於建立獨立 Git Worktree 分支並修改程式碼的任務（createWorktree: true）。',
       settingsReadOnlyLabel: '唯讀排查 / 無 Worktree 執行緒預設模型',
       settingsReadOnlyDesc: '用於快速唯讀排查或非 Git 專案任務（createWorktree: false）。',
+      settingsReviewLabel: '程式碼審查 / Review 執行緒預設模型',
+      settingsReviewDesc:
+        '用於程式碼審查與交叉評審執行緒（threadType: "review"，createWorktree: false）。',
       settingsFollowGlobal: (lbl) => `跟隨全域預設 (${lbl})`,
       settingsSave: '儲存設定',
       settingsSaving: '儲存中…',
@@ -1197,7 +1236,9 @@
   let sidecarFetchSupportsSignal = null;
   let settingsWorktreeGroups = [];
   let settingsReadOnlyGroups = [];
+  let settingsReviewGroups = [];
   let dispatchModelGroups = [];
+  let dispatchThreadMode = 'worktree'; // 'worktree' | 'readonly' | 'review'
   let pluginUpdateState = null;
   let pluginUpdateChecking = false;
   let pluginUpdateApplying = false;
@@ -1222,8 +1263,16 @@
   const elSetWorktreeTier = document.getElementById('set-worktree-tier');
   const elSetReadOnly = document.getElementById('set-readonly-model');
   const elSetReadOnlyTier = document.getElementById('set-readonly-tier');
+  const elSetReview = document.getElementById('set-review-model');
+  const elSetReviewTier = document.getElementById('set-review-tier');
   const elFModel = document.getElementById('f-model');
   const elFTier = document.getElementById('f-tier');
+  const elFBranchField = document.getElementById('f-branch-field');
+  const elFModeSeg = document.getElementById('f-mode-seg');
+  const elBtnModeWorktree = document.getElementById('btn-mode-worktree');
+  const elBtnModeReadOnly = document.getElementById('btn-mode-readonly');
+  const elBtnModeReview = document.getElementById('btn-mode-review');
+  const elLblFModeHint = document.getElementById('lbl-f-mode-hint');
   const elBtnSettingsSave = document.getElementById('btn-settings-save');
   const elBtnSettingsReset = document.getElementById('btn-settings-reset');
   const elBtnSettingsRefreshModels = document.getElementById('btn-settings-refresh-models');
@@ -1622,12 +1671,12 @@
     document.getElementById('btn-close-drawer').title = t.closeTip;
     document.getElementById('lbl-f-title').textContent = t.fTitle;
     document.getElementById('f-title').placeholder = t.fTitlePh;
+    const lblFMode = document.getElementById('lbl-f-mode');
+    if (lblFMode) lblFMode.textContent = t.fMode;
     document.getElementById('lbl-f-branch').textContent = t.fBranch;
     document.getElementById('lbl-f-model').textContent = t.fModel;
     const lblFTier = document.getElementById('lbl-f-tier');
     if (lblFTier) lblFTier.textContent = t.fTier;
-    const wtChk = document.getElementById('f-wt');
-    document.getElementById('lbl-f-wt').textContent = wtChk.disabled ? t.fWtDisabled : t.fWt;
     document.getElementById('lbl-f-prompt').textContent = t.fPrompt;
     document.getElementById('f-prompt').placeholder = t.fPromptPh;
     const submitBtn = document.getElementById('btn-submit-dispatch');
@@ -4433,24 +4482,18 @@
 
     const headerMeta = resolveBoardHeaderDisplay(snap);
 
-    // Sync worktree checkbox availability based on snap.hasGitRepo
-    const wtChk = document.getElementById('f-wt');
+    // Sync dispatch thread mode availability based on snap.hasGitRepo
     const branchIn = document.getElementById('f-branch');
     const hasGit = snap.hasGitRepo !== false;
     if (!hasGit) {
-      wtChk.checked = false;
-      wtChk.disabled = true;
-      branchIn.value = '';
-      branchIn.disabled = true;
-    } else {
-      wtChk.disabled = false;
-      branchIn.disabled = false;
-      if (lastHasGitRepo !== true) {
-        wtChk.checked = true;
+      if (dispatchThreadMode === 'worktree') {
+        dispatchThreadMode = 'readonly';
       }
+      if (branchIn) branchIn.value = '';
+    } else if (lastHasGitRepo !== true && dispatchThreadMode !== 'review') {
+      dispatchThreadMode = 'worktree';
     }
     lastHasGitRepo = hasGit;
-    document.getElementById('lbl-f-wt').textContent = hasGit ? t.fWt : t.fWtDisabled;
     populateDispatchModelSelect();
 
     const allThreads = snap.threads || [];
@@ -4678,21 +4721,28 @@
       coordinatorModelDisplayName: '',
       worktreeModel: 'inherit',
       readOnlyModel: 'inherit',
+      reviewModel: 'inherit',
       worktreeModelLabel: L().settingsInheritOption,
       readOnlyModelLabel: L().settingsInheritOption,
+      reviewModelLabel: L().settingsInheritOption,
       worktreeSource: 'global',
       readOnlySource: 'global',
+      reviewSource: 'global',
       global: {
         worktreeModel: 'inherit',
         readOnlyModel: 'inherit',
+        reviewModel: 'inherit',
         worktreeModelLabel: L().settingsInheritOption,
         readOnlyModelLabel: L().settingsInheritOption,
+        reviewModelLabel: L().settingsInheritOption,
       },
       project: {
         worktreeModel: '',
         readOnlyModel: '',
+        reviewModel: '',
         worktreeModelLabel: '',
         readOnlyModelLabel: '',
+        reviewModelLabel: '',
       },
     };
   }
@@ -4754,6 +4804,82 @@
     return formatModelDisplay(val);
   }
 
+  function getDispatchThreadMode() {
+    if (dispatchThreadMode === 'worktree' && lastHasGitRepo === false) return 'readonly';
+    if (dispatchThreadMode === 'readonly' || dispatchThreadMode === 'review') {
+      return dispatchThreadMode;
+    }
+    return 'worktree';
+  }
+
+  function getEffectiveDefaultDisplayForMode(mode) {
+    const t = L();
+    const eff = getCurrentEffectiveSettings();
+    const m = mode === 'review' ? 'review' : mode === 'readonly' ? 'readonly' : 'worktree';
+    const effModelId =
+      (m === 'review'
+        ? eff.reviewModel
+        : m === 'readonly'
+          ? eff.readOnlyModel
+          : eff.worktreeModel) || 'inherit';
+    if (String(effModelId).toLowerCase() === 'inherit') {
+      return resolveSettingsModelDisplay('inherit', { compactInherit: true });
+    }
+    const presetLabel =
+      m === 'review'
+        ? eff.reviewModelLabel
+        : m === 'readonly'
+          ? eff.readOnlyModelLabel
+          : eff.worktreeModelLabel;
+    return presetLabel || resolveSettingsModelDisplay(effModelId) || t.settingsInheritShort;
+  }
+
+  function syncDispatchModeUi() {
+    const t = L();
+    const mode = getDispatchThreadMode();
+    const hasGit = lastHasGitRepo !== false;
+    const modeButtons = [
+      [elBtnModeWorktree, 'worktree', t.fModeWorktree],
+      [elBtnModeReadOnly, 'readonly', t.fModeReadOnly],
+      [elBtnModeReview, 'review', t.fModeReview],
+    ];
+    for (const [btn, key, label] of modeButtons) {
+      if (!btn) continue;
+      btn.textContent = label;
+      const active = mode === key;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    }
+    if (elBtnModeWorktree) {
+      elBtnModeWorktree.disabled = !hasGit;
+      elBtnModeWorktree.title = hasGit ? '' : t.fWtDisabled;
+    }
+    const showBranch = mode === 'worktree' && hasGit;
+    if (elFBranchField) elFBranchField.hidden = !showBranch;
+    const branchIn = document.getElementById('f-branch');
+    if (branchIn) branchIn.disabled = !showBranch;
+    if (elLblFModeHint) {
+      const effLabel = getEffectiveDefaultDisplayForMode(mode);
+      if (mode === 'review') {
+        elLblFModeHint.textContent = t.fModeHintReview(effLabel);
+      } else if (!hasGit) {
+        elLblFModeHint.textContent = `${t.fModeHintNoGit} ${t.fModeHintReadOnly(effLabel)}`;
+      } else if (mode === 'readonly') {
+        elLblFModeHint.textContent = t.fModeHintReadOnly(effLabel);
+      } else {
+        elLblFModeHint.textContent = t.fModeHintWorktree(effLabel);
+      }
+    }
+  }
+
+  function setDispatchThreadMode(nextMode) {
+    const hasGit = lastHasGitRepo !== false;
+    let target = nextMode === 'review' || nextMode === 'readonly' ? nextMode : 'worktree';
+    if (target === 'worktree' && !hasGit) target = 'readonly';
+    dispatchThreadMode = target;
+    populateDispatchModelSelect();
+  }
+
   function readDispatchModelValue() {
     if (!elFModel) return '';
     if (elFModel.value === '__follow_global__') return '';
@@ -4782,19 +4908,14 @@
   }
 
   function populateDispatchModelSelect() {
-    if (!elFModel) return;
+    if (!elFModel) {
+      syncDispatchModeUi();
+      return;
+    }
     const t = L();
     const prevVal = elFModel.options.length ? readDispatchModelValue() : '';
-    const wtChk = document.getElementById('f-wt');
-    const isWt = wtChk ? !wtChk.disabled && wtChk.checked : true;
-    const eff = getCurrentEffectiveSettings();
-    const effModelId = isWt ? eff.worktreeModel : eff.readOnlyModel;
-    const effLabel =
-      String(effModelId || '').toLowerCase() === 'inherit'
-        ? resolveSettingsModelDisplay('inherit', { compactInherit: true })
-        : isWt
-          ? eff.worktreeModelLabel || resolveSettingsModelDisplay(effModelId)
-          : eff.readOnlyModelLabel || resolveSettingsModelDisplay(effModelId);
+    const mode = getDispatchThreadMode();
+    const effLabel = getEffectiveDefaultDisplayForMode(mode);
 
     const inheritLabel = getSettingsInheritOptionLabel();
     const baseGroups = buildModelFamilyGroups(selectableModels, {
@@ -4815,6 +4936,7 @@
       prevVal,
       '',
     );
+    syncDispatchModeUi();
   }
 
   function buildSettingsSlotGroups(scope, followGlobalLabel = '') {
@@ -4879,8 +5001,14 @@
   }
 
   function readSettingsSlotValue(kind) {
-    const elModel = kind === 'worktree' ? elSetWorktree : elSetReadOnly;
-    const elTier = kind === 'worktree' ? elSetWorktreeTier : elSetReadOnlyTier;
+    const elModel =
+      kind === 'worktree' ? elSetWorktree : kind === 'review' ? elSetReview : elSetReadOnly;
+    const elTier =
+      kind === 'worktree'
+        ? elSetWorktreeTier
+        : kind === 'review'
+          ? elSetReviewTier
+          : elSetReadOnlyTier;
     if (!elModel) return settingsScope === 'project' ? '' : 'inherit';
     if (elModel.value === '__follow_global__') return '';
     if (elModel.value === '__inherit__') return 'inherit';
@@ -4894,11 +5022,21 @@
     const scopeKey = loadedSettingsData?.scopeKey || eff.scopeKey || activeScopeKey || '';
     if (scope === 'project') {
       const projEntry = (scopeKey && settings.projects?.[scopeKey]) || eff.project || {};
-      const raw = kind === 'worktree' ? projEntry.worktreeModel : projEntry.readOnlyModel;
+      const raw =
+        kind === 'worktree'
+          ? projEntry.worktreeModel
+          : kind === 'review'
+            ? projEntry.reviewModel
+            : projEntry.readOnlyModel;
       return resolveSettingsOptionValue(raw || '');
     }
     const defs = settings.defaults || eff.global || {};
-    const raw = kind === 'worktree' ? defs.worktreeModel : defs.readOnlyModel;
+    const raw =
+      kind === 'worktree'
+        ? defs.worktreeModel
+        : kind === 'review'
+          ? defs.reviewModel
+          : defs.readOnlyModel;
     return resolveSettingsOptionValue(raw || 'inherit') || 'inherit';
   }
 
@@ -4906,9 +5044,11 @@
     if (!settingsScreenOpen) return false;
     const savedWtScope = getSavedSettingForScope('worktree', settingsScope);
     const savedRoScope = getSavedSettingForScope('readOnly', settingsScope);
+    const savedRevScope = getSavedSettingForScope('review', settingsScope);
     return (
       readSettingsSlotValue('worktree') !== savedWtScope ||
-      readSettingsSlotValue('readOnly') !== savedRoScope
+      readSettingsSlotValue('readOnly') !== savedRoScope ||
+      readSettingsSlotValue('review') !== savedRevScope
     );
   }
 
@@ -4917,7 +5057,12 @@
     if (String(val || '').toLowerCase() === 'inherit') return true;
     if (settingsScope === 'project' && !val) {
       const eff = getCurrentEffectiveSettings();
-      const globalRaw = kind === 'worktree' ? eff.global?.worktreeModel : eff.global?.readOnlyModel;
+      const globalRaw =
+        kind === 'worktree'
+          ? eff.global?.worktreeModel
+          : kind === 'review'
+            ? eff.global?.reviewModel
+            : eff.global?.readOnlyModel;
       return !globalRaw || String(globalRaw).toLowerCase() === 'inherit';
     }
     return false;
@@ -4929,7 +5074,8 @@
     const coordName = getCoordinatorModelDisplayName();
     const wtFollows = isSettingsSlotFollowingCoordinator('worktree');
     const roFollows = isSettingsSlotFollowingCoordinator('readOnly');
-    const anyFollows = wtFollows || roFollows;
+    const revFollows = isSettingsSlotFollowingCoordinator('review');
+    const anyFollows = wtFollows || roFollows || revFollows;
     const isInitialLoading = !loadedSettingsData && !coordName;
     const noteText = coordName ? t.settingsInheritActiveNote(coordName) : t.settingsInheritDraftNote;
 
@@ -4938,6 +5084,9 @@
     }
     if (elSetReadOnly) {
       elSetReadOnly.title = roFollows && !isInitialLoading ? noteText : '';
+    }
+    if (elSetReview) {
+      elSetReview.title = revFollows && !isInitialLoading ? noteText : '';
     }
     if (elSettingsInheritNote) {
       const showNote = anyFollows && !isInitialLoading;
@@ -4953,11 +5102,12 @@
     const eff = getCurrentEffectiveSettings();
     const draftWt = readSettingsSlotValue('worktree');
     const draftRo = readSettingsSlotValue('readOnly');
+    const draftRev = readSettingsSlotValue('review');
     if (elBtnSettingsReset && !settingsSaving) {
       elBtnSettingsReset.textContent =
         settingsScope === 'project' ? t.settingsResetProject : t.settingsResetGlobal;
       elBtnSettingsReset.disabled =
-        settingsScope === 'project' && !eff.hasProjectOverride && !draftWt && !draftRo;
+        settingsScope === 'project' && !eff.hasProjectOverride && !draftWt && !draftRo && !draftRev;
     }
     syncSettingsInheritHint();
   }
@@ -5015,10 +5165,18 @@
     document.getElementById('desc-set-worktree').textContent = t.settingsWorktreeDesc;
     document.getElementById('lbl-set-readonly').textContent = t.settingsReadOnlyLabel;
     document.getElementById('desc-set-readonly').textContent = t.settingsReadOnlyDesc;
+    const lblSetReview = document.getElementById('lbl-set-review');
+    if (lblSetReview) lblSetReview.textContent = t.settingsReviewLabel;
+    const descSetReview = document.getElementById('desc-set-review');
+    if (descSetReview) descSetReview.textContent = t.settingsReviewDesc;
     document.getElementById('lbl-set-worktree-model').textContent = t.settingsModelColLabel;
     document.getElementById('lbl-set-worktree-tier').textContent = t.settingsTierColLabel;
     document.getElementById('lbl-set-readonly-model').textContent = t.settingsModelColLabel;
     document.getElementById('lbl-set-readonly-tier').textContent = t.settingsTierColLabel;
+    const lblSetReviewModel = document.getElementById('lbl-set-review-model');
+    if (lblSetReviewModel) lblSetReviewModel.textContent = t.settingsModelColLabel;
+    const lblSetReviewTier = document.getElementById('lbl-set-review-tier');
+    if (lblSetReviewTier) lblSetReviewTier.textContent = t.settingsTierColLabel;
 
     if (elBtnSettingsSave && !settingsSaving) {
       elBtnSettingsSave.textContent = t.settingsSave;
@@ -5026,6 +5184,7 @@
 
     const globalWtRaw = eff.global?.worktreeModel || 'inherit';
     const globalRoRaw = eff.global?.readOnlyModel || 'inherit';
+    const globalRevRaw = eff.global?.reviewModel || 'inherit';
     const globalWtLabel =
       String(globalWtRaw).toLowerCase() === 'inherit'
         ? resolveSettingsModelDisplay('inherit', { compactInherit: true })
@@ -5034,6 +5193,10 @@
       String(globalRoRaw).toLowerCase() === 'inherit'
         ? resolveSettingsModelDisplay('inherit', { compactInherit: true })
         : eff.global?.readOnlyModelLabel || resolveSettingsModelDisplay(globalRoRaw);
+    const globalRevLabel =
+      String(globalRevRaw).toLowerCase() === 'inherit'
+        ? resolveSettingsModelDisplay('inherit', { compactInherit: true })
+        : eff.global?.reviewModelLabel || resolveSettingsModelDisplay(globalRevRaw);
 
     const wtTarget = syncInputs
       ? getSavedSettingForScope('worktree', settingsScope)
@@ -5045,6 +5208,11 @@
       : elSetReadOnly?.options?.length
         ? readSettingsSlotValue('readOnly')
         : getSavedSettingForScope('readOnly', settingsScope);
+    const revTarget = syncInputs
+      ? getSavedSettingForScope('review', settingsScope)
+      : elSetReview?.options?.length
+        ? readSettingsSlotValue('review')
+        : getSavedSettingForScope('review', settingsScope);
 
     const wtBaseGroups = buildSettingsSlotGroups(
       settingsScope,
@@ -5053,6 +5221,10 @@
     const roBaseGroups = buildSettingsSlotGroups(
       settingsScope,
       settingsScope === 'project' ? t.settingsFollowGlobal(globalRoLabel) : '',
+    );
+    const revBaseGroups = buildSettingsSlotGroups(
+      settingsScope,
+      settingsScope === 'project' ? t.settingsFollowGlobal(globalRevLabel) : '',
     );
 
     settingsWorktreeGroups = populateSettingsModelPair(
@@ -5066,6 +5238,12 @@
       elSetReadOnlyTier,
       roBaseGroups,
       roTarget,
+    );
+    settingsReviewGroups = populateSettingsModelPair(
+      elSetReview,
+      elSetReviewTier,
+      revBaseGroups,
+      revTarget,
     );
 
     syncSettingsActionState();
@@ -5180,6 +5358,7 @@
       if (!reset) {
         payload.worktreeModel = readSettingsSlotValue('worktree');
         payload.readOnlyModel = readSettingsSlotValue('readOnly');
+        payload.reviewModel = readSettingsSlotValue('review');
       }
       const res = await postApi(
         '/api/settings_save',
@@ -5946,7 +6125,12 @@
       : liveModelLabel;
     const switchHint = pendingModel ? t.modelPendingTip : t.modelSwitchTip;
     const modelTitle = th.archived ? modelLabel : `${modelLabel} — ${switchHint}`;
-    const roleLabel = th.worktreePath || th.branch ? t.roleWorker : t.roleReadOnly;
+    const roleLabel =
+      th.threadType === 'review'
+        ? t.roleReview
+        : th.worktreePath || th.branch
+          ? t.roleWorker
+          : t.roleReadOnly;
     const stepsHtml =
       th.toolStepCount > 0
         ? `<span class="comp-steps-pill">◌ ${esc(t.stepsUnit(th.toolStepCount))}</span>`
@@ -6533,6 +6717,7 @@
       if (currentTab !== 'threads') {
         document.getElementById('tab-threads').click();
       }
+      populateDispatchModelSelect();
       loadSelectableModels(false);
       loadSettingsData();
       document.getElementById('f-title').focus();
@@ -7092,9 +7277,17 @@
   elNewBtn.addEventListener('click', () => {
     setDrawerOpen(!elDrawer.classList.contains('open'));
   });
-  document.getElementById('f-wt').addEventListener('change', () => {
-    populateDispatchModelSelect();
-  });
+  for (const [btn, mode] of [
+    [elBtnModeWorktree, 'worktree'],
+    [elBtnModeReadOnly, 'readonly'],
+    [elBtnModeReview, 'review'],
+  ]) {
+    if (!btn) continue;
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      setDispatchThreadMode(mode);
+    });
+  }
   if (elFModel) {
     elFModel.addEventListener('change', () => {
       const grp = dispatchModelGroups.find((g) => g.key === elFModel.value) || null;
@@ -7161,6 +7354,20 @@
       syncSettingsActionState();
     });
   }
+  if (elSetReview) {
+    elSetReview.addEventListener('change', () => {
+      settingsDirtyByUser = true;
+      const grp = settingsReviewGroups.find((g) => g.key === elSetReview.value) || null;
+      populateSettingsTierSelect(elSetReviewTier, grp, grp?.defaultValue ?? '');
+      syncSettingsActionState();
+    });
+  }
+  if (elSetReviewTier) {
+    elSetReviewTier.addEventListener('change', () => {
+      settingsDirtyByUser = true;
+      syncSettingsActionState();
+    });
+  }
   if (elBtnSettingsRefreshModels) {
     elBtnSettingsRefreshModels.addEventListener('click', async () => {
       if (settingsRefreshing) return;
@@ -7206,10 +7413,10 @@
     const btn = ev.currentTarget;
     const title = document.getElementById('f-title').value.trim();
     const taskPrompt = document.getElementById('f-prompt').value.trim();
-    const branch = document.getElementById('f-branch').value.trim();
+    const threadType = getDispatchThreadMode();
+    const createWorktree = threadType === 'worktree' && lastHasGitRepo !== false;
+    const branch = createWorktree ? document.getElementById('f-branch').value.trim() : '';
     const model = readDispatchModelValue();
-    const wtChk = document.getElementById('f-wt');
-    const createWorktree = !wtChk.disabled && wtChk.checked;
     const errEl = document.getElementById('dispatch-msg');
     errEl.textContent = '';
 
@@ -7229,6 +7436,7 @@
           taskPrompt,
           branch,
           model,
+          threadType,
           createWorktree,
         }),
       );
@@ -7238,7 +7446,9 @@
         document.getElementById('f-title').value = '';
         document.getElementById('f-branch').value = '';
         document.getElementById('f-prompt').value = '';
+        dispatchThreadMode = lastHasGitRepo !== false ? 'worktree' : 'readonly';
         resetDispatchModelSelect();
+        populateDispatchModelSelect();
         setDrawerOpen(false);
         lastBoardKey = '';
         await refreshBoard(true);

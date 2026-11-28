@@ -64,6 +64,15 @@
           <input id="f-title" type="text" autocomplete="off">
         </div>
         <div class="field">
+          <label id="lbl-f-mode">Thread mode</label>
+          <div id="f-mode-seg" class="seg-group dispatch-mode-seg" role="tablist">
+            <button type="button" role="tab" class="seg-btn active" data-mode="worktree" id="btn-mode-worktree" aria-selected="true">Worktree</button>
+            <button type="button" role="tab" class="seg-btn" data-mode="readonly" id="btn-mode-readonly" aria-selected="false">Read-only</button>
+            <button type="button" role="tab" class="seg-btn" data-mode="review" id="btn-mode-review" aria-selected="false">Code Review</button>
+          </div>
+          <div id="lbl-f-mode-hint" class="settings-field-hint dispatch-mode-hint"></div>
+        </div>
+        <div id="f-branch-field" class="field">
           <label id="lbl-f-branch" for="f-branch">Git branch (optional)</label>
           <input id="f-branch" type="text" placeholder="thread/thr-xxx-..." autocomplete="off">
         </div>
@@ -84,10 +93,6 @@
             </div>
           </div>
         </div>
-        <label class="chk">
-          <input id="f-wt" type="checkbox" checked>
-          <span id="lbl-f-wt"></span>
-        </label>
         <div class="field">
           <label id="lbl-f-prompt" for="f-prompt">Task instructions</label>
           <textarea id="f-prompt" rows="3"></textarea>
@@ -264,6 +269,21 @@
             </div>
           </div>
           <div id="desc-set-readonly" class="settings-field-hint"></div>
+        </div>
+
+        <div class="field settings-model-group">
+          <div id="lbl-set-review" class="settings-group-label">Code Review Threads</div>
+          <div class="settings-model-row">
+            <div class="settings-col-model">
+              <label id="lbl-set-review-model" for="set-review-model" class="settings-sublabel">Model</label>
+              <select id="set-review-model"></select>
+            </div>
+            <div class="settings-col-tier">
+              <label id="lbl-set-review-tier" for="set-review-tier" class="settings-sublabel">Effort</label>
+              <select id="set-review-tier"></select>
+            </div>
+          </div>
+          <div id="desc-set-review" class="settings-field-hint"></div>
         </div>
 
         <div id="settings-inherit-note" class="settings-inherit-note" hidden></div>

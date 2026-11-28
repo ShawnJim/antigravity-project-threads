@@ -185,15 +185,23 @@ function startMockLs(
 test('loadSettings / saveSettings persist global defaults, project overrides, inherit mode, corrupt fallbacks, and clears cleanly', (t) => {
   const { stateDir } = createTempEnv(t, 'pt-set-persist-');
 
-  // 1. Missing settings.json falls back cleanly to inherit/inherit
+  // 1. Missing settings.json falls back cleanly to inherit/inherit/inherit
   const initial = loadSettings();
-  assert.deepEqual(initial.defaults, { worktreeModel: 'inherit', readOnlyModel: 'inherit' });
+  assert.deepEqual(initial.defaults, {
+    worktreeModel: 'inherit',
+    readOnlyModel: 'inherit',
+    reviewModel: 'inherit',
+  });
   assert.deepEqual(initial.projects, {});
 
   // 2. Corrupt settings.json falls back cleanly without throwing
   writeFileSync(join(stateDir, 'settings.json'), '{not-valid-json', 'utf8');
   const recovered = loadSettings();
-  assert.deepEqual(recovered.defaults, { worktreeModel: 'inherit', readOnlyModel: 'inherit' });
+  assert.deepEqual(recovered.defaults, {
+    worktreeModel: 'inherit',
+    readOnlyModel: 'inherit',
+    reviewModel: 'inherit',
+  });
 
   // 3. Save global defaults via patch (including 'inherit')
   const savedGlobal = saveSettings({
@@ -268,13 +276,21 @@ test('loadSettings / saveSettings persist global defaults, project overrides, in
   assert.equal(loadSettings().projects[wk], undefined);
 
   saveSettings({ scope: 'global', reset: true });
-  assert.deepEqual(loadSettings().defaults, { worktreeModel: 'inherit', readOnlyModel: 'inherit' });
+  assert.deepEqual(loadSettings().defaults, {
+    worktreeModel: 'inherit',
+    readOnlyModel: 'inherit',
+    reviewModel: 'inherit',
+  });
 
   // Backend still accepts and preserves legacy 'pro' / 'flash' / 'flash_lite' if stored directly
   const legacySaved = saveSettings({
     defaults: { worktreeModel: 'pro', readOnlyModel: 'flash-lite' },
   });
-  assert.deepEqual(legacySaved.defaults, { worktreeModel: 'pro', readOnlyModel: 'flash_lite' });
+  assert.deepEqual(legacySaved.defaults, {
+    worktreeModel: 'pro',
+    readOnlyModel: 'flash_lite',
+    reviewModel: 'inherit',
+  });
 });
 
 test('getEffectiveSettings and resolveDefaultDispatchModel enforce project precedence, expose coordinator model, and resolve inherit', async (t) => {
@@ -946,7 +962,7 @@ test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier mo
   assert.equal(dispatchHydroSel.group?.hasTiers, true);
 });
 
-test('static and protocol checks: hook DIRECTIVE_VERSION=14, skill, MCP, Sidecar API/UI, I18N, and LF endings', (t) => {
+test('static and protocol checks: hook DIRECTIVE_VERSION=15, skill, MCP, Sidecar API/UI, I18N, and LF endings', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
@@ -955,8 +971,8 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=14, skill, MCP, Sidecar
   const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
   const themeCss = readFileSync(new URL('../sidecars/threads/theme.css', import.meta.url), 'utf8');
 
-  // 1. Hook directive version bumped to 14 and no hardcoded model: "pro"
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*14\s*;/);
+  // 1. Hook directive version bumped to 15 and no hardcoded model: "pro"
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*15\s*;/);
   assert.equal(/model:\s*["']pro["']/.test(hookHandler), false);
 
   // 2. SKILL.md no longer hardcodes model: "pro"
@@ -1048,7 +1064,7 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=14, skill, MCP, Sidecar
   assert.ok(dispatchTool);
   assert.match(dispatchTool.inputSchema.properties.model.description, /Settings/i);
 
-  // 7. Verify hook-handler PreInvocation emits updated v14 directive without hardcoded model: "pro"
+  // 7. Verify hook-handler PreInvocation emits updated v15 directive without hardcoded model: "pro"
   const hookEnv = createTempEnv(t, 'pt-set-hook-');
   const hookWorkspace = join(hookEnv.tempRoot, 'hook-workspace');
   const hookReg = loadRegistry();
@@ -1058,7 +1074,7 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=14, skill, MCP, Sidecar
     workspacePath: hookWorkspace,
     repoRoot: hookWorkspace,
     title: '[Coordinator] HookTest',
-    directiveVersion: 13,
+    directiveVersion: 14,
   };
   saveRegistry(hookReg);
 
@@ -1083,15 +1099,16 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=14, skill, MCP, Sidecar
   assert.equal(hookRes.status, 0);
   const hookOut = JSON.parse(hookRes.stdout.trim());
   const injectedDirective = hookOut?.injectSteps?.[0]?.systemMessage?.systemMessage || '';
-  assert.ok(injectedDirective.includes('dispatch_thread'), 'upgraded v13 -> v14 coordinator receives new directive');
+  assert.ok(injectedDirective.includes('dispatch_thread'), 'upgraded v14 -> v15 coordinator receives new directive');
   assert.match(injectedDirective, /Read-only.*`createWorktree: false`.*autonomously decide.*`archive_thread`/i);
   assert.match(
     injectedDirective,
     /Worktree threads.*`createWorktree: true`.*NOT.*auto-archive before user acceptance.*once the user confirms acceptance.*automatically call `archive_thread`/i,
   );
   assert.match(injectedDirective, /manage_decisions/);
+  assert.match(injectedDirective, /threadType:\s*"review"/);
   assert.equal(/model:\s*["']pro["']/.test(injectedDirective), false);
-  assert.equal(loadRegistry().coordinators['__hook_test__'].directiveVersion, 14);
+  assert.equal(loadRegistry().coordinators['__hook_test__'].directiveVersion, 15);
 
   // 8. LF line endings on all modified/added .mjs files
   for (const rel of [

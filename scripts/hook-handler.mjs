@@ -9,7 +9,7 @@ import {
 } from '../lib/store.mjs';
 import { extractThreadCompletion } from '../lib/transcript.mjs';
 
-const DIRECTIVE_VERSION = 14;
+const DIRECTIVE_VERSION = 15;
 const LEADING_SLASH_COORD_RE = /^\s*\/coord(?=$|[\s:：，,。!?！？])/i;
 
 function readStdin() {
@@ -48,6 +48,7 @@ function buildCoordinatorDirective(coord) {
     '1. **NEVER call `invoke_subagent` (e.g. `research` / `self`) or `run_workflow`** for project tasks — ephemeral subagents do not appear on the Project Threads board! Likewise, do NOT read large source files or edit application code directly inside this Coordinator session.',
     '2. **Dispatch EVERY new task as a Project Thread**: Whether the user asks for code changes, bug fixes, or a read-only code/logic investigation, call `call_mcp_tool` with `ServerName: "project-threads_coordinator"`, `ToolName: "dispatch_thread"` to create a tracked `thr-xxx` thread:',
     `   - **Read-only investigation / logic check / non-repo project task**: Pass \`createWorktree: false\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (starts instantly with zero Git worktree copy overhead while creating a tracked \`thr-xxx\` card on the Project Threads board; omit \`model\` by default so the user's Settings default applies, and pass \`model\` only when explicitly requested).`,
+    `   - **Code review / cross-review**: Pass \`createWorktree: false\`, \`threadType: "review"\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (omit \`model\` by default so the user's configured Review default model in Settings applies automatically; pass \`model\` only when explicitly requested).`,
     hasRepo
       ? `   - **Code changes / scripts / bug fixes**: Pass \`createWorktree: true\`, \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\` (automatically creates an isolated Git worktree and branch; omit \`model\` by default so the user's Settings default applies).`
       : `   - **Note**: No local Git repository is bound to this scope; keep \`createWorktree: false\` and always pass \`coordinatorId: ${JSON.stringify(cid)}\`.`,

@@ -2032,6 +2032,25 @@ select option {
   font-weight: 600;
   box-shadow: var(--pt-shadow-sm);
 }
+.seg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.dispatch-mode-seg .seg-btn {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dispatch-mode-hint {
+  margin-top: 5px;
+}
+@media (max-width: 320px) {
+  .dispatch-mode-seg .seg-btn {
+    font-size: 10.5px;
+    padding: 4px 4px;
+  }
+}
 
 .chk {
   display: inline-flex;

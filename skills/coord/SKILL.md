@@ -24,10 +24,12 @@ When activated (or whenever the current session is bound as `[Coordinator]`), yo
    - Surface the side panel shortcut pill once so the user can open the live Thread board in the right-hand auxiliary pane:
      `[Project Threads](sidecar://project-threads/threads/)`
 
-3. **Choose Worktree Mode vs Read-Only Mode in `dispatch_thread`**:
+3. **Choose Worktree Mode vs Read-Only Mode vs Code Review Mode in `dispatch_thread`**:
    - **Read-Only Check / Code Investigation** (e.g., "检查一下某处逻辑是否会拦截", "排查某个报错原因"):
      - Call `dispatch_thread` with `createWorktree: false`, `workspacePath: "<repoRoot>"`. Omit `model` by default so the user's configured Read-Only default model in Settings applies (only pass `model` when explicitly overriding).
      - Starts instantaneously with zero Git worktree copy overhead while still creating a tracked `thr-xxx` thread card in `Project Threads`!
+   - **Code Review / Cross-Review** (e.g., "审查这个分支改动", "做一次跨模型交叉代码评审"):
+     - Call `dispatch_thread` with `createWorktree: false`, `threadType: "review"`, `coordinatorId: "<coordId>"`, `workspacePath: "<repoRoot>"`. Omit `model` by default so the user's configured Review default model (`reviewModel`) in Settings applies automatically (only pass `model` when explicitly overriding).
    - **Code Modification / Bugfix / SQL / Unit Tests**:
      - Call `dispatch_thread` with `createWorktree: true`, `workspacePath: "<repoRoot>"`. Omit `model` by default so the user's configured Worktree default model in Settings applies.
      - Automatically creates an isolated Git worktree (`../.worktrees/<repo>/<threadId>-<slug>`) and branch (`thread/<threadId>-<slug>`) so parallel tasks never collide.

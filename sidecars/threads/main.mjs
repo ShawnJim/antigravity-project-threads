@@ -34,7 +34,7 @@ import {
 const THIS_FILE = fileURLToPath(import.meta.url);
 const HERE = dirname(THIS_FILE);
 const PLUGIN_ROOT = join(HERE, '..', '..');
-const SERVER_API_REVISION = 3;
+const SERVER_API_REVISION = 4;
 const SERVER_CAPABILITIES = [
   'settings',
   'settings_save_fast',
@@ -44,6 +44,7 @@ const SERVER_CAPABILITIES = [
   'decisions',
   'rebind_coordinator',
   'coordinator_candidates',
+  'review_model',
 ];
 const app = new SidecarApp();
 
@@ -344,6 +345,8 @@ registerDualApi('/api/coordinator_candidates', handleCoordinatorCandidates);
 
 async function handleDispatch(data = {}) {
   try {
+    const hasExplicitCreateWt =
+      data.createWorktree !== undefined && data.createWorktree !== null && data.createWorktree !== '';
     const thread = await dispatchThread({
       workspacePath: data.workspace || '',
       coordinatorId: data.coordinatorId || data.conversationId || '',
@@ -355,7 +358,8 @@ async function handleDispatch(data = {}) {
       baseRef: data.baseRef || '',
       worktreePath: data.worktreePath || '',
       model: data.model || '',
-      createWorktree: data.createWorktree !== false && data.createWorktree !== 'false' && data.createWorktree !== '0',
+      threadType: data.threadType || '',
+      ...(hasExplicitCreateWt ? { createWorktree: parseBool(data.createWorktree, true) } : {}),
     });
     return { ok: true, locale: resolveAppLocale(), thread };
   } catch (err) {
