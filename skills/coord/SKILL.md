@@ -35,9 +35,10 @@ When activated (or whenever the current session is bound as `[Coordinator]`), yo
      - Always write `title` and `taskPrompt` in the user's active conversation language (e.g., Chinese when the user speaks Chinese, English when the user speaks English), and instruct the Worker Thread to write its analysis, replies, and final summary in that same language.
 
 4. **Check Active Threads & Steer Existing Threads Without Navigating Away**:
-   - Call `list_threads` before creating code-editing threads so you don't create overlapping branches on the same files.
+   - Call `list_threads` (passing `coordinatorId` and `workspacePath`) before creating code-editing threads so you don't create overlapping branches on the same files.
    - The user keeps this Coordinator session pinned in the center and opens/chats with individual threads **inline inside the right-hand `Project Threads` sidebar** without leaving this window.
-   - When the user asks you (the Coordinator) to send a follow-up question or extra instruction to an existing `thr-xxx` thread, call `send_thread_message(threadId="thr-xxx", message="...")` directly instead of creating a duplicate thread.
+   - **Strict Single-Thread Scope Isolation**: Whenever calling `get_thread_detail`, `send_thread_message`, or `archive_thread`, **always pass `coordinatorId` and `workspacePath`** so fail-closed cross-project isolation is enforced (unscoped single-thread MCP calls are rejected fail-closed). You may reference a thread by its global ID (`thr-xxx`) or project-local `#N` sequence (leading `#` required).
+   - When the user asks you (the Coordinator) to send a follow-up question or extra instruction to an existing `thr-xxx` (or `#N`) thread, call `send_thread_message(threadId="thr-xxx", coordinatorId="...", workspacePath="...", message="...")` directly instead of creating a duplicate thread.
 
 5. **Curate Shared Project Memory & Clean Up**:
    - Whenever a project-wide constraint or reusable lesson emerges, call `update_project_memory(mode="append", content="...")`.

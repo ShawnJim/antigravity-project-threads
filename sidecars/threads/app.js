@@ -1634,10 +1634,14 @@
     if (!th.worktreePath) {
       if (triggerBtn) triggerBtn.disabled = true;
       try {
-        const res = await postApi('/api/archive', '/api/archive_get', {
-          threadId: th.threadId,
-          removeWorktree: false,
-        });
+        const res = await postApi(
+          '/api/archive',
+          '/api/archive_get',
+          buildScopePayload({
+            threadId: th.threadId,
+            removeWorktree: false,
+          }),
+        );
         lastBoardKey = '';
         if (res?.ok && typeof onArchived === 'function') await onArchived(res);
         await refreshBoard(true);
@@ -2402,7 +2406,11 @@
     if (!th) return;
     if (th.bucket === 'waiting') {
       optimisticallyMarkThreadIdle(threadId);
-      postApi('/api/thread_mark_read', '/api/thread_mark_read_get', { threadId }).catch(() => {});
+      postApi(
+        '/api/thread_mark_read',
+        '/api/thread_mark_read_get',
+        buildScopePayload({ threadId }),
+      ).catch(() => {});
     }
     if (th.conversationId) {
       popoutToMainCanvas(th.conversationId);
@@ -3835,7 +3843,11 @@
         btn.disabled = true;
         optimisticallyMarkThreadIdle(tid);
         flashToast(L().markedReadToast);
-        await postApi('/api/thread_mark_read', '/api/thread_mark_read_get', { threadId: tid });
+        await postApi(
+          '/api/thread_mark_read',
+          '/api/thread_mark_read_get',
+          buildScopePayload({ threadId: tid }),
+        );
         lastBoardKey = '';
         refreshBoard(true);
       });
@@ -5801,7 +5813,11 @@
 
     elChatStream.innerHTML = renderSkeletonLoader();
     if (wasWaiting) {
-      postApi('/api/thread_mark_read', '/api/thread_mark_read_get', { threadId }).catch(() => {});
+      postApi(
+        '/api/thread_mark_read',
+        '/api/thread_mark_read_get',
+        buildScopePayload({ threadId }),
+      ).catch(() => {});
     }
     await refreshOpenThread(true, true);
     autoResizeInput();
@@ -5827,11 +5843,13 @@
   async function refreshOpenThread(forceBottom = false, markRead = false) {
     if (!openThreadId || (isPanelHidden() && !forceBottom)) return;
     try {
-      const qs = new URLSearchParams({
-        threadId: openThreadId,
-        stamp: forceBottom ? '' : lastThreadStamp,
-        markRead: markRead ? '1' : '0',
-      });
+      const qs = new URLSearchParams(
+        buildScopePayload({
+          threadId: openThreadId,
+          stamp: forceBottom ? '' : lastThreadStamp,
+          markRead: markRead ? '1' : '0',
+        }),
+      );
       const url = `/api/thread_messages?${qs}`;
       const { data } = await fetchJsonWithTimeout(
         url,
@@ -5890,10 +5908,10 @@
     elLiveBar.hidden = true;
 
     try {
-      const sendPayload = {
+      const sendPayload = buildScopePayload({
         threadId: targetThreadId,
         message: text,
-      };
+      });
       if (chosenModel) {
         sendPayload.model = chosenModel.id || chosenModel.modelId || chosenModel.modelEnum || '';
         sendPayload.modelEnum = chosenModel.modelEnum || '';
@@ -6447,12 +6465,16 @@
       if (ctx.mode === 'archive') {
         const removeWorktree = elModalRemoveWt.checked;
         const forceWorktree = removeWorktree && elModalForceWt.checked;
-        const res = await postApi('/api/archive', '/api/archive_get', {
-          threadId: th.threadId,
-          removeWorktree,
-          forceWorktree,
-          deleteBranch: true,
-        });
+        const res = await postApi(
+          '/api/archive',
+          '/api/archive_get',
+          buildScopePayload({
+            threadId: th.threadId,
+            removeWorktree,
+            forceWorktree,
+            deleteBranch: true,
+          }),
+        );
         closePtModal(true);
         lastBoardKey = '';
         if (res?.ok && typeof ctx.onDone === 'function') await ctx.onDone(res);
@@ -6461,11 +6483,15 @@
       } else {
         const forceWorktree = elModalForceWt.checked;
         const deleteBranch = elModalDelBranch.checked;
-        const res = await postApi('/api/cleanup_worktree', '/api/cleanup_worktree_get', {
-          threadId: th.threadId,
-          forceWorktree,
-          deleteBranch,
-        });
+        const res = await postApi(
+          '/api/cleanup_worktree',
+          '/api/cleanup_worktree_get',
+          buildScopePayload({
+            threadId: th.threadId,
+            forceWorktree,
+            deleteBranch,
+          }),
+        );
         closePtModal(true);
         lastBoardKey = '';
         if (typeof ctx.onDone === 'function') await ctx.onDone(res);

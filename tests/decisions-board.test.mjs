@@ -701,12 +701,12 @@ test('MCP server registers manage_decisions and handles add/list/resolve/dismiss
   assert.equal(errOut?.isError, true, 'add without title returns isError');
 });
 
-test('hook-handler DIRECTIVE_VERSION=13 upgrades v12 coordinators and syncs SKILL.md + rules/AGENTS.md', (t) => {
+test('hook-handler DIRECTIVE_VERSION=14 upgrades v13 coordinators and syncs SKILL.md + rules/AGENTS.md', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
 
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*13\s*;/);
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*14\s*;/);
   assert.match(skillMd, /manage_decisions/);
   assert.match(skillMd, /Pending Decisions/i);
   assert.match(rulesMd, /manage_decisions/);
@@ -720,8 +720,8 @@ test('hook-handler DIRECTIVE_VERSION=13 upgrades v12 coordinators and syncs SKIL
     conversationId: 'conv-v12-coord',
     workspacePath: ws,
     repoRoot: ws,
-    title: '[Coordinator] UpgradeV13',
-    directiveVersion: 12,
+    title: '[Coordinator] UpgradeV14',
+    directiveVersion: 13,
   };
   saveRegistry(reg);
 
@@ -748,7 +748,7 @@ test('hook-handler DIRECTIVE_VERSION=13 upgrades v12 coordinators and syncs SKIL
   assert.match(injected, /Pending Decisions/i);
   assert.match(injected, /action:\s*"add"/);
   assert.match(injected, /action:\s*"resolve"/);
-  assert.equal(loadRegistry().coordinators['__v12_upgrade__'].directiveVersion, 13);
+  assert.equal(loadRegistry().coordinators['__v12_upgrade__'].directiveVersion, 14);
 });
 
 test('Sidecar backend/frontend static and UI rendering checks for Pending Decisions panel, card badge, 3-locale I18N, no middle dot, no native dialogs, and LF endings', () => {

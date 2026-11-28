@@ -153,32 +153,38 @@ const TOOLS = [
   {
     name: 'get_thread_detail',
     description:
-      'Inspect full metadata, Git status, and latest completion summary of a specific Worker Thread by threadId (e.g. "thr-001"), project-local sequence (e.g. "#1" or "1" when project scope is provided), or conversationId. When project scope parameters are provided, enforces strict fail-closed cross-project isolation and refreshes only the target thread.',
+      'Inspect full metadata, Git status, and latest completion summary of a specific Worker Thread by global threadId (e.g. "thr-001"), project-local sequence (e.g. "#1"), or conversationId. Enforces strict fail-closed cross-project isolation: callers must pass project scope parameters (workspacePath / coordinatorId / conversationId / projectId), or explicitly pass scope="*" for unscoped global threadId access. Refreshes only the target thread.',
     inputSchema: {
       type: 'object',
       properties: {
         threadId: {
           type: 'string',
           description:
-            'Global Thread ID (e.g., "thr-001"), project-local display sequence (e.g., "#1" or "1" with project scope), or Antigravity conversation UUID.',
+            'Global Thread ID (e.g., "thr-001"), project-local display sequence (e.g., "#1" — must include leading "#"), or Antigravity conversation UUID.',
         },
         workspacePath: {
           type: 'string',
           description:
-            'Optional absolute path of the project repository to enforce strict project scope isolation and enable project-local sequence lookup.',
+            'Absolute path of the project repository (required with or instead of coordinatorId/projectId for fail-closed project isolation and "#N" lookup).',
         },
         coordinatorId: {
           type: 'string',
           description:
-            'Optional Coordinator conversation ID to enforce strict project scope isolation and enable project-local sequence lookup.',
+            'Coordinator conversation ID (required with or instead of workspacePath/projectId for fail-closed project isolation and "#N" lookup).',
         },
         conversationId: {
           type: 'string',
-          description: 'Optional current conversation ID to resolve project scope.',
+          description: 'Current conversation ID to resolve project scope.',
         },
         projectId: {
           type: 'string',
-          description: 'Optional Antigravity Project ID for strict project isolation.',
+          description: 'Antigravity Project ID for strict project isolation.',
+        },
+        scope: {
+          type: 'string',
+          enum: ['*'],
+          description:
+            'Explicit opt-out ("*") to allow unscoped global threadId/conversationId lookup when no project scope parameters are provided (never permits "#N" local lookup).',
         },
       },
       required: ['threadId'],
@@ -226,14 +232,14 @@ const TOOLS = [
   {
     name: 'send_thread_message',
     description:
-      'Send a follow-up instruction or question to an existing Worker Thread in the background without navigating away from the center Coordinator session. When project scope parameters are provided, enforces strict fail-closed cross-project isolation.',
+      'Send a follow-up instruction or question to an existing Worker Thread in the background without navigating away from the center Coordinator session. Enforces strict fail-closed cross-project isolation: callers must pass project scope parameters (workspacePath / coordinatorId / conversationId / projectId), or explicitly pass scope="*" for unscoped global threadId access.',
     inputSchema: {
       type: 'object',
       properties: {
         threadId: {
           type: 'string',
           description:
-            'Target global Thread ID (e.g., "thr-001"), project-local sequence (e.g., "#1" or "1" with project scope), or conversation UUID.',
+            'Target global Thread ID (e.g., "thr-001"), project-local sequence (e.g., "#1" — must include leading "#"), or conversation UUID.',
         },
         message: {
           type: 'string',
@@ -242,20 +248,26 @@ const TOOLS = [
         workspacePath: {
           type: 'string',
           description:
-            'Optional absolute path of the project repository to enforce strict project scope isolation and enable project-local sequence lookup.',
+            'Absolute path of the project repository (required with or instead of coordinatorId/projectId for fail-closed project isolation and "#N" lookup).',
         },
         coordinatorId: {
           type: 'string',
           description:
-            'Optional Coordinator conversation ID to enforce strict project scope isolation and enable project-local sequence lookup.',
+            'Coordinator conversation ID (required with or instead of workspacePath/projectId for fail-closed project isolation and "#N" lookup).',
         },
         conversationId: {
           type: 'string',
-          description: 'Optional current conversation ID to resolve project scope.',
+          description: 'Current conversation ID to resolve project scope.',
         },
         projectId: {
           type: 'string',
-          description: 'Optional Antigravity Project ID for strict project isolation.',
+          description: 'Antigravity Project ID for strict project isolation.',
+        },
+        scope: {
+          type: 'string',
+          enum: ['*'],
+          description:
+            'Explicit opt-out ("*") to allow unscoped global threadId/conversationId messaging when no project scope parameters are provided.',
         },
       },
       required: ['threadId', 'message'],
@@ -264,32 +276,38 @@ const TOOLS = [
   {
     name: 'archive_thread',
     description:
-      'Archive a completed or obsolete Worker Thread conversation (hides it from active lists while preserving its transcript) and safely remove its clean, merged Git worktree & branch (unless dirty or unmerged). When project scope parameters are provided, enforces strict fail-closed cross-project isolation.',
+      'Archive a completed or obsolete Worker Thread conversation (hides it from active lists while preserving its transcript) and safely remove its clean, merged Git worktree & branch (unless dirty or unmerged). Enforces strict fail-closed cross-project isolation: callers must pass project scope parameters (workspacePath / coordinatorId / conversationId / projectId), or explicitly pass scope="*" for unscoped global threadId access.',
     inputSchema: {
       type: 'object',
       properties: {
         threadId: {
           type: 'string',
           description:
-            'Global Thread ID (e.g., "thr-001"), project-local sequence (e.g., "#1" or "1" with project scope), or conversation UUID.',
+            'Global Thread ID (e.g., "thr-001"), project-local sequence (e.g., "#1" — must include leading "#"), or conversation UUID.',
         },
         workspacePath: {
           type: 'string',
           description:
-            'Optional absolute path of the project repository to enforce strict project scope isolation and enable project-local sequence lookup.',
+            'Absolute path of the project repository (required with or instead of coordinatorId/projectId for fail-closed project isolation and "#N" lookup).',
         },
         coordinatorId: {
           type: 'string',
           description:
-            'Optional Coordinator conversation ID to enforce strict project scope isolation and enable project-local sequence lookup.',
+            'Coordinator conversation ID (required with or instead of workspacePath/projectId for fail-closed project isolation and "#N" lookup).',
         },
         conversationId: {
           type: 'string',
-          description: 'Optional current conversation ID to resolve project scope.',
+          description: 'Current conversation ID to resolve project scope.',
         },
         projectId: {
           type: 'string',
-          description: 'Optional Antigravity Project ID for strict project isolation.',
+          description: 'Antigravity Project ID for strict project isolation.',
+        },
+        scope: {
+          type: 'string',
+          enum: ['*'],
+          description:
+            'Explicit opt-out ("*") to allow unscoped global threadId/conversationId archiving when no project scope parameters are provided.',
         },
         removeWorktree: {
           type: 'boolean',
@@ -493,12 +511,14 @@ async function handleToolCall(name, args = {}) {
 
     case 'get_thread_detail': {
       try {
+        const allowUnscoped = String(args.scope || '').trim() === '*';
         const t = await getThreadDetail({
           threadId: args.threadId || '',
           workspacePath: args.workspacePath || '',
           coordinatorId: args.coordinatorId || '',
           conversationId: args.conversationId || '',
           projectId: args.projectId || '',
+          requireScope: !allowUnscoped,
         });
         return {
           content: [{ type: 'text', text: JSON.stringify(t, null, 2) }],
@@ -559,7 +579,11 @@ async function handleToolCall(name, args = {}) {
     }
 
     case 'send_thread_message': {
-      const res = await sendThreadMessage(args);
+      const allowUnscoped = String(args.scope || '').trim() === '*';
+      const res = await sendThreadMessage({
+        ...args,
+        requireScope: !allowUnscoped,
+      });
       const idLabel = res.thread.localId
         ? `**\`${res.thread.localId}\`** (\`${res.thread.threadId}\`)`
         : `**\`${res.thread.threadId}\`**`;
@@ -575,11 +599,13 @@ async function handleToolCall(name, args = {}) {
     }
 
     case 'archive_thread': {
+      const allowUnscoped = String(args.scope || '').trim() === '*';
       const res = await archiveThread(args.threadId, {
         workspacePath: args.workspacePath || '',
         coordinatorId: args.coordinatorId || '',
         conversationId: args.conversationId || '',
         projectId: args.projectId || '',
+        requireScope: !allowUnscoped,
         removeWorktree: args.removeWorktree !== undefined ? Boolean(args.removeWorktree) : true,
         forceWorktree: Boolean(args.forceWorktree),
         deleteBranch: args.deleteBranch !== undefined ? Boolean(args.deleteBranch) : true,

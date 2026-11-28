@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
@@ -14,12 +14,15 @@ import {
   archiveThread,
   buildBoardDecisions,
   cleanupThreadWorktree,
+  dismissDecision,
   dispatchThread,
+  executeDecisionAction,
   formatLocalThreadId,
   getThreadDetail,
   getThreadMessages,
   listDecisions,
   loadRegistry,
+  markThreadRead,
   normalizeKey,
   parseLocalThreadSeqRef,
   resolveScopedThreadTarget,
@@ -314,8 +317,12 @@ test('Plan A: per-project independent continuous projectSeq/localId keeps global
   assert.equal(afterMerge.threads['thr-006'].projectSeq, 3);
   assert.equal(afterMerge.threads['thr-006'].localId, '#3');
   assert.equal(formatLocalThreadId(4), '#4');
+  // P1-3: strictly require leading "#" for project-local sequence; bare numbers are NEVER parsed as local seq
+  assert.equal(parseLocalThreadSeqRef('#1'), 1);
   assert.equal(parseLocalThreadSeqRef('#03'), 3);
-  assert.equal(parseLocalThreadSeqRef('12'), 12);
+  assert.equal(parseLocalThreadSeqRef('1'), 0);
+  assert.equal(parseLocalThreadSeqRef('012'), 0);
+  assert.equal(parseLocalThreadSeqRef('12'), 0);
   assert.equal(parseLocalThreadSeqRef('thr-003'), 0);
 });
 
@@ -709,9 +716,23 @@ test('Phase 1 & Plan A: single-thread store APIs enforce fail-closed cross-proje
     () => resolveScopedThreadTarget({ threadId: '#1' }),
     /Project scope.*required/i,
   );
+  // P1-3: bare numeric strings ("1", "012") are NEVER resolved as project-local sequence
   await assert.rejects(
-    () => getThreadDetail({ threadId: '1' }),
-    /Project scope.*required/i,
+    () => getThreadDetail({ threadId: '1', workspacePath: repoA }),
+    /Thread not found: 1/,
+  );
+  await assert.rejects(
+    () => archiveThread('012', { workspacePath: repoA }),
+    /Thread not found: 012/,
+  );
+  // P1-1 & P2: requireScope=true rejects unscoped calls; "outside-of-project" alone never bypasses fail-closed
+  await assert.rejects(
+    () => resolveScopedThreadTarget({ threadId: 'thr-001', requireScope: true }),
+    /Project scope is required \(fail-closed\)/,
+  );
+  await assert.rejects(
+    () => resolveScopedThreadTarget({ threadId: 'thr-001', projectId: 'outside-of-project' }),
+    /Unable to resolve project scope.*fail-closed/,
   );
 
   // Local sequence #1 resolves independently per project
@@ -725,6 +746,62 @@ test('Phase 1 & Plan A: single-thread store APIs enforce fail-closed cross-proje
     () => resolveScopedThreadTarget({ threadId: '#2', workspacePath: repoB }),
     /Thread not found in project scope/,
   );
+
+  // P1-2: Decision board blocks cross-project thread association AND cross-project archive_thread actions
+  assert.throws(
+    () =>
+      addDecision({
+        workspacePath: repoB,
+        threadId: 'thr-001',
+        title: 'Cross-project decision attempt',
+      }),
+    /Cross-project access denied/,
+  );
+  assert.throws(
+    () =>
+      addDecision({
+        workspacePath: repoB,
+        threadId: '#2',
+        title: 'Out-of-range local seq in decision',
+      }),
+    /Thread not found in project scope/,
+  );
+
+  const decA1 = addDecision({
+    workspacePath: repoA,
+    threadId: '#1',
+    title: 'Confirm Alpha #1',
+    options: [{ id: 'arch', label: 'Archive', action: 'archive_thread', style: 'primary' }],
+  });
+  assert.equal(decA1.threadId, 'thr-001');
+  const decList = listDecisions({ workspacePath: repoA });
+  assert.equal(decList[0]?.threadLocalId, '#1');
+  assert.equal(decList[0]?.threadProjectSeq, 1);
+  const boardDecs = buildBoardDecisions({ workspacePath: repoA });
+  assert.equal(boardDecs[0]?.threadLocalId, '#1');
+
+  // Executing Alpha decision from Beta scope (or direct archive_thread action for Alpha thread from Beta scope) must fail closed
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        decisionId: decA1.id,
+        optionId: 'arch',
+        action: 'archive_thread',
+        workspacePath: repoB,
+      }),
+    /Cross-project access denied/,
+  );
+  await assert.rejects(
+    () =>
+      executeDecisionAction({
+        action: 'archive_thread',
+        threadId: 'thr-001',
+        workspacePath: repoB,
+      }),
+    /Cross-project access denied/,
+  );
+  assert.equal(loadRegistry().threads['thr-001'].archived, false, 'cross-project decision archive must not archive thr-001');
+  assert.equal(listDecisions({ workspacePath: repoA }).length, 1, 'blocked decision must remain pending');
 
   // Same-project send & archive via local sequence succeed
   const sendOk = await sendThreadMessage({
@@ -743,23 +820,10 @@ test('Phase 1 & Plan A: single-thread store APIs enforce fail-closed cross-proje
   assert.equal(archOk.localId, '#1');
   assert.equal(loadRegistry().threads['thr-003'].archived, true);
 
-  // Unscoped global threadId remains 100% backward compatible
+  // Direct store API without requireScope stays backward compatible for global threadId
   const unscopedDetail = await getThreadDetail('thr-001');
   assert.equal(unscopedDetail.threadId, 'thr-001');
   assert.equal(unscopedDetail.localId, '#1');
-
-  // Decisions resolve local #N thread reference and decorate threadLocalId
-  const dec = addDecision({
-    workspacePath: repoA,
-    threadId: '#1',
-    title: 'Confirm Alpha #1',
-  });
-  assert.equal(dec.threadId, 'thr-001');
-  const decList = listDecisions({ workspacePath: repoA });
-  assert.equal(decList[0]?.threadLocalId, '#1');
-  assert.equal(decList[0]?.threadProjectSeq, 1);
-  const boardDecs = buildBoardDecisions({ workspacePath: repoA });
-  assert.equal(boardDecs[0]?.threadLocalId, '#1');
 });
 
 function runMcpStdio(repoRoot, env, requests) {
@@ -938,6 +1002,63 @@ test('MCP stdio server: schema scope params, fail-closed cross-project rejection
         arguments: { threadId: '#1', workspacePath: repoA },
       },
     },
+    // P1-1: Unscoped single-thread MCP calls MUST fail closed by default
+    {
+      jsonrpc: '2.0',
+      id: 10,
+      method: 'tools/call',
+      params: {
+        name: 'get_thread_detail',
+        arguments: { threadId: 'thr-005' },
+      },
+    },
+    {
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'tools/call',
+      params: {
+        name: 'send_thread_message',
+        arguments: { threadId: 'thr-005', message: 'unscoped must fail' },
+      },
+    },
+    {
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'tools/call',
+      params: {
+        name: 'archive_thread',
+        arguments: { threadId: 'thr-005' },
+      },
+    },
+    // P1-1: Explicit scope="*" opt-out permits unscoped global threadId lookup, but STILL blocks "#1"
+    {
+      jsonrpc: '2.0',
+      id: 13,
+      method: 'tools/call',
+      params: {
+        name: 'get_thread_detail',
+        arguments: { threadId: 'thr-005', scope: '*' },
+      },
+    },
+    {
+      jsonrpc: '2.0',
+      id: 14,
+      method: 'tools/call',
+      params: {
+        name: 'get_thread_detail',
+        arguments: { threadId: '#1', scope: '*' },
+      },
+    },
+    // P1-3: Bare numeric "1" with scope must NOT match #1
+    {
+      jsonrpc: '2.0',
+      id: 15,
+      method: 'tools/call',
+      params: {
+        name: 'get_thread_detail',
+        arguments: { threadId: '1', workspacePath: repoA },
+      },
+    },
   ];
 
   const proc = await runMcpStdio(
@@ -962,7 +1083,7 @@ test('MCP stdio server: schema scope params, fail-closed cross-project rejection
   for (const toolName of ['get_thread_detail', 'send_thread_message', 'archive_thread']) {
     const tool = tools.find((x) => x.name === toolName);
     assert.ok(tool, `${toolName} must be registered`);
-    for (const prop of ['workspacePath', 'coordinatorId', 'conversationId', 'projectId']) {
+    for (const prop of ['workspacePath', 'coordinatorId', 'conversationId', 'projectId', 'scope']) {
       assert.ok(tool.inputSchema?.properties?.[prop], `${toolName} schema must accept ${prop}`);
     }
   }
@@ -979,16 +1100,16 @@ test('MCP stdio server: schema scope params, fail-closed cross-project rejection
   assert.equal(detailRes?.structuredContent?.projectSeq, 1);
   assert.equal(detailRes?.structuredContent?.localId, '#1');
 
-  // Verify conv-mcp-a1 WAS refreshed locally while conv-mcp-b1 was NEVER touched
+  // Verify conv-mcp-a1 WAS refreshed locally; conv-mcp-b1 is only refreshed once (by explicit scope="*" in #13)
   assert.equal(
     mockLs.getConvCalls.includes('conv-mcp-a1'),
     true,
     'target thread must be refreshed locally via Mock LS',
   );
   assert.equal(
-    mockLs.getConvCalls.includes('conv-mcp-b1'),
-    false,
-    'other project thread must never be polled by get_thread_detail or scoped list_threads',
+    mockLs.getConvCalls.filter((id) => id === 'conv-mcp-b1').length,
+    1,
+    'conv-mcp-b1 must only be queried by explicit scope="*" request #13, never by #6/#7/#10/#11/#12',
   );
 
   const listRes = msgs.find((m) => m.id === 7)?.result;
@@ -1005,6 +1126,194 @@ test('MCP stdio server: schema scope params, fail-closed cross-project rejection
   assert.match(archRes?.content?.[0]?.text || '', /`#1` \(`thr-004`\)/);
   assert.equal(loadRegistry().threads['thr-004'].archived, true);
   assert.equal(loadRegistry().threads['thr-005'].archived, false);
+
+  // Verify P1-1 unscoped MCP calls fail closed
+  for (const errId of [10, 11, 12]) {
+    const r = msgs.find((m) => m.id === errId)?.result;
+    assert.equal(r?.isError, true, `unscoped request #${errId} must fail closed`);
+    assert.match(r?.content?.[0]?.text || '', /Project scope is required \(fail-closed\)/);
+  }
+  assert.equal(loadRegistry().threads['thr-005'].archived, false, 'unscoped archive_thread must not archive thr-005');
+
+  // Verify explicit scope="*" allows global thr-005 lookup, but blocks "#1"
+  const optOutGlobal = msgs.find((m) => m.id === 13)?.result;
+  assert.equal(optOutGlobal?.isError, undefined);
+  assert.equal(optOutGlobal?.structuredContent?.threadId, 'thr-005');
+
+  const optOutLocal = msgs.find((m) => m.id === 14)?.result;
+  assert.equal(optOutLocal?.isError, true);
+  assert.match(optOutLocal?.content?.[0]?.text || '', /Project scope.*required/i);
+
+  // Verify P1-3 bare number "1" is not treated as #1
+  const bareNumRes = msgs.find((m) => m.id === 15)?.result;
+  assert.equal(bareNumRes?.isError, true);
+  assert.match(bareNumRes?.content?.[0]?.text || '', /Thread not found: 1/);
+});
+
+test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=14 enforces scope params, syncThreads reads fresh registry for decisions (no flicker), and single-thread writes avoid stale full-table overwrites', async (t) => {
+  // 1. P1-1: DIRECTIVE_VERSION=14 + SKILL.md + rules/AGENTS.md enforce passing coordinatorId & workspacePath
+  const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
+  const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
+  const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*14\s*;/);
+  assert.match(skillMd, /get_thread_detail.*send_thread_message.*archive_thread/i);
+  assert.match(skillMd, /coordinatorId.*workspacePath/i);
+  assert.match(rulesMd, /Single-Thread Scope Isolation/i);
+  assert.match(rulesMd, /get_thread_detail.*send_thread_message.*archive_thread/);
+
+  const env = createTempEnv(t, 'pt-opus-p1-');
+  const repoA = join(env.tempRoot, 'fresh-reg-repo');
+  mkdirSync(repoA, { recursive: true });
+  const keyA = normalizeKey(repoA);
+
+  const reg = loadRegistry();
+  reg.coordinators[keyA] = {
+    key: keyA,
+    conversationId: 'coord-v14-test',
+    workspacePath: repoA,
+    repoRoot: repoA,
+    title: '[Coordinator] FreshReg',
+    directiveVersion: 13,
+  };
+  reg.projectSeqs = { [keyA]: 2 };
+  reg.threads = {
+    'thr-001': {
+      threadId: 'thr-001',
+      projectSeq: 1,
+      localId: '#1',
+      conversationId: 'conv-fresh-1',
+      coordinatorId: 'coord-v14-test',
+      workspaceKey: keyA,
+      title: 'Thread 1',
+      runState: 'RUN_STATE_IDLE',
+      bucket: 'waiting',
+      lastCompletedAt: '2026-11-28T08:00:00.000Z',
+      archived: false,
+      createdAt: '2026-11-28T07:00:00.000Z',
+      updatedAt: '2026-11-28T08:00:00.000Z',
+    },
+    'thr-002': {
+      threadId: 'thr-002',
+      projectSeq: 2,
+      localId: '#2',
+      conversationId: 'conv-fresh-2',
+      coordinatorId: 'coord-v14-test',
+      workspaceKey: keyA,
+      title: 'Thread 2',
+      runState: 'RUN_STATE_IDLE',
+      bucket: 'idle',
+      archived: false,
+      createdAt: '2026-11-28T07:01:00.000Z',
+      updatedAt: '2026-11-28T08:01:00.000Z',
+    },
+  };
+  saveRegistry(reg);
+
+  const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+  const hookProc = spawnSync(process.execPath, ['scripts/hook-handler.mjs', 'PreInvocation'], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      ANTIGRAVITY_GEMINI_DIR: env.geminiDir,
+      ANTIGRAVITY_APP_DATA_DIR: env.appDataDir,
+    },
+    input: JSON.stringify({
+      hookEventName: 'PreInvocation',
+      conversationId: 'coord-v14-test',
+      initialNumSteps: 5,
+    }),
+    encoding: 'utf8',
+  });
+  assert.equal(hookProc.status, 0);
+  const hookOut = JSON.parse(hookProc.stdout.trim());
+  const injected = hookOut?.injectSteps?.[0]?.systemMessage?.systemMessage || '';
+  assert.match(injected, /`get_thread_detail`, `send_thread_message`, or `archive_thread`.*ALWAYS pass `coordinatorId:/);
+  assert.equal(loadRegistry().coordinators[keyA].directiveVersion, 14);
+
+  // 2. P1-4: Decision dismissed mid-syncThreads (when dirty===false) must NOT flicker back in snapshot
+  const dec = addDecision({ workspacePath: repoA, threadId: 'thr-001', title: 'Flicker test decision' });
+  let dismissedDuringSync = false;
+  let concurrentSiblingUpdated = false;
+
+  const customServer = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => {
+      body += c;
+    });
+    req.on('end', () => {
+      const payload = body ? JSON.parse(body) : {};
+      res.setHeader('Content-Type', 'application/json');
+      if (req.url === '/product.v1.ConversationService/GetConversation') {
+        if (!dismissedDuringSync && payload.conversationId === 'conv-fresh-1') {
+          dismissedDuringSync = true;
+          dismissDecision(dec.id);
+        }
+        if (payload.conversationId === 'conv-fresh-1' && !concurrentSiblingUpdated) {
+          concurrentSiblingUpdated = true;
+          const r = loadRegistry();
+          r.threads['thr-002'].title = 'Concurrently Updated Sibling';
+          saveRegistry(r);
+        }
+        res.end(
+          JSON.stringify({
+            conversation: {
+              id: payload.conversationId,
+              state: { runState: 'RUN_STATE_IDLE' },
+              annotations: { archived: false },
+            },
+          }),
+        );
+        return;
+      }
+      if (req.url === '/product.v1.ConversationService/UpdateConversation') {
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeTrajectoryGeneratorMetadata') {
+        res.end(JSON.stringify({ generatorMetadata: [] }));
+        return;
+      }
+      if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData') {
+        res.end(JSON.stringify({ clientModelConfigs: [] }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end('{}');
+    });
+  });
+
+  await new Promise((r) => customServer.listen(0, '127.0.0.1', r));
+  t.after(() => new Promise((r) => customServer.close(r)));
+  process.env.ANTIGRAVITY_LS_ADDRESS = `127.0.0.1:${customServer.address().port}`;
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'csrf-fresh-reg';
+
+  const snap = await syncThreads({ workspacePath: repoA });
+  assert.equal(dismissedDuringSync, true);
+  assert.equal(
+    snap.decisions.some((d) => d.id === dec.id),
+    false,
+    'P1-4: dismissed decision must not reappear in syncThreads snapshot even when thread list was clean',
+  );
+
+  // 3. P1-5: markThreadRead and archiveThread use mutateRegistry and never revert concurrent updates to sibling threads
+  const markRes = await markThreadRead({ threadId: 'thr-001', workspacePath: repoA });
+  assert.equal(markRes.ok, true);
+  assert.equal(markRes.thread.localId, '#1');
+  assert.equal(
+    loadRegistry().threads['thr-002'].title,
+    'Concurrently Updated Sibling',
+    'P1-5: markThreadRead must not overwrite concurrent sibling thread edits',
+  );
+
+  const archRes = await archiveThread('thr-001', { workspacePath: repoA, removeWorktree: false });
+  assert.equal(archRes.ok, true);
+  assert.equal(archRes.thread.archived, true);
+  assert.equal(archRes.thread.localId, '#1');
+  assert.equal(
+    loadRegistry().threads['thr-002'].title,
+    'Concurrently Updated Sibling',
+    'P1-5: archiveThread must not overwrite concurrent sibling thread edits',
+  );
 });
 
 test('Sidecar UI & backend static assertions: project-local #N display with thr-xxx tooltip, no middle dot, no native dialogs, and LF endings', () => {
@@ -1014,8 +1323,16 @@ test('Sidecar UI & backend static assertions: project-local #N display with thr-
 
   // Zero native dialogs
   assert.equal(/\b(?:window\.)?(?:confirm|alert|prompt)\s*\(/.test(appSource), false);
-  // CSS has .o2-tid styling
+  // CSS has .o2-tid styling and .o2-time uses defined --pt-dim token (not undefined --pt-muted)
   assert.match(cssSource, /\.o2-tid\s*\{/);
+  assert.match(cssSource, /\.o2-time\s*\{\s*color:\s*var\(--pt-dim\);/);
+  assert.equal(cssSource.includes('--pt-muted'), false, 'must not reference undefined --pt-muted CSS token');
+  // Sidecar app.js forwards scope via buildScopePayload on all single-thread calls
+  assert.match(appSource, /postApi\(\s*['"]\/api\/archive['"],[\s\S]{0,60}buildScopePayload\(/);
+  assert.match(appSource, /postApi\(\s*['"]\/api\/cleanup_worktree['"],[\s\S]{0,80}buildScopePayload\(/);
+  assert.match(appSource, /postApi\(\s*['"]\/api\/thread_mark_read['"],[\s\S]{0,80}buildScopePayload\(/);
+  assert.match(appSource, /buildScopePayload\(\{\s*threadId:\s*openThreadId/);
+  assert.match(appSource, /const sendPayload = buildScopePayload\(\{\s*threadId:\s*targetThreadId/);
   // Sidecar main.mjs forwards scope parameters on single-thread routes
   assert.match(mainSource, /\/api\/thread_messages[\s\S]*workspacePath:/);
   assert.match(mainSource, /handleThreadSend[\s\S]*workspacePath:/);
@@ -1175,8 +1492,12 @@ test('Sidecar UI & backend static assertions: project-local #N display with thr-
   for (const rel of [
     '../lib/store.mjs',
     '../mcp/server.mjs',
+    '../scripts/hook-handler.mjs',
     '../sidecars/threads/main.mjs',
     '../tests/project-scope-seq.test.mjs',
+    '../tests/decisions-board.test.mjs',
+    '../tests/settings-default-model.test.mjs',
+    '../tests/worker-language.test.mjs',
   ]) {
     const raw = readFileSync(new URL(rel, import.meta.url));
     assert.ok(!raw.includes(Buffer.from('\r')), `${rel} must use LF line endings`);

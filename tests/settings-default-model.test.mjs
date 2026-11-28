@@ -946,7 +946,7 @@ test('buildModelFamilyGroups and resolveModelFamilySelection group multi-tier mo
   assert.equal(dispatchHydroSel.group?.hasTiers, true);
 });
 
-test('static and protocol checks: hook DIRECTIVE_VERSION=13, skill, MCP, Sidecar API/UI, I18N, and LF endings', (t) => {
+test('static and protocol checks: hook DIRECTIVE_VERSION=14, skill, MCP, Sidecar API/UI, I18N, and LF endings', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
@@ -955,8 +955,8 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=13, skill, MCP, Sidecar
   const appJs = readFileSync(new URL('../sidecars/threads/app.js', import.meta.url), 'utf8');
   const themeCss = readFileSync(new URL('../sidecars/threads/theme.css', import.meta.url), 'utf8');
 
-  // 1. Hook directive version bumped to 13 and no hardcoded model: "pro"
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*13\s*;/);
+  // 1. Hook directive version bumped to 14 and no hardcoded model: "pro"
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*14\s*;/);
   assert.equal(/model:\s*["']pro["']/.test(hookHandler), false);
 
   // 2. SKILL.md no longer hardcodes model: "pro"
@@ -1048,7 +1048,7 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=13, skill, MCP, Sidecar
   assert.ok(dispatchTool);
   assert.match(dispatchTool.inputSchema.properties.model.description, /Settings/i);
 
-  // 7. Verify hook-handler PreInvocation emits updated v13 directive without hardcoded model: "pro"
+  // 7. Verify hook-handler PreInvocation emits updated v14 directive without hardcoded model: "pro"
   const hookEnv = createTempEnv(t, 'pt-set-hook-');
   const hookWorkspace = join(hookEnv.tempRoot, 'hook-workspace');
   const hookReg = loadRegistry();
@@ -1058,7 +1058,7 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=13, skill, MCP, Sidecar
     workspacePath: hookWorkspace,
     repoRoot: hookWorkspace,
     title: '[Coordinator] HookTest',
-    directiveVersion: 12,
+    directiveVersion: 13,
   };
   saveRegistry(hookReg);
 
@@ -1083,7 +1083,7 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=13, skill, MCP, Sidecar
   assert.equal(hookRes.status, 0);
   const hookOut = JSON.parse(hookRes.stdout.trim());
   const injectedDirective = hookOut?.injectSteps?.[0]?.systemMessage?.systemMessage || '';
-  assert.ok(injectedDirective.includes('dispatch_thread'), 'upgraded v12 -> v13 coordinator receives new directive');
+  assert.ok(injectedDirective.includes('dispatch_thread'), 'upgraded v13 -> v14 coordinator receives new directive');
   assert.match(injectedDirective, /Read-only.*`createWorktree: false`.*autonomously decide.*`archive_thread`/i);
   assert.match(
     injectedDirective,
@@ -1091,7 +1091,7 @@ test('static and protocol checks: hook DIRECTIVE_VERSION=13, skill, MCP, Sidecar
   );
   assert.match(injectedDirective, /manage_decisions/);
   assert.equal(/model:\s*["']pro["']/.test(injectedDirective), false);
-  assert.equal(loadRegistry().coordinators['__hook_test__'].directiveVersion, 13);
+  assert.equal(loadRegistry().coordinators['__hook_test__'].directiveVersion, 14);
 
   // 8. LF line endings on all modified/added .mjs files
   for (const rel of [
