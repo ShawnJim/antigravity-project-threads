@@ -127,21 +127,78 @@
         <div id="threads-cards"></div>
       </div>
 
-      <!-- Tab 2: Library (Shared Project Memory & Active Git Worktrees) -->
+      <!-- Tab 2: Library (Two-Tier Shared Project Memory & Active Git Worktrees) -->
       <div id="library-pane" hidden>
-        <div class="lib-card">
+        <div id="mem-migrate-banner" class="mem-migrate-banner" hidden>
+          <div class="mem-migrate-head">
+            <span id="lbl-mem-migrate-title" class="mem-migrate-title">Upgrade to Two-Tier Knowledge</span>
+            <span id="mem-migrate-badge" class="mem-size-pill is-warn tabular"></span>
+          </div>
+          <p id="lbl-mem-migrate-desc" class="mem-migrate-desc"></p>
+          <div class="mem-migrate-actions">
+            <button type="button" id="btn-mem-split-coord" class="btn-solid btn-xs"></button>
+            <button type="button" id="btn-mem-archive-legacy" class="btn-secondary btn-xs"></button>
+          </div>
+        </div>
+
+        <div class="lib-card mem-editor-card">
           <div class="lib-card-hdr">
             <span class="lib-card-title">
               <svg class="ico" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
               <span id="lbl-lib-mem">Shared Project Memory</span>
             </span>
-            <span id="mem-path" class="lib-path-pill"></span>
+            <div class="mem-hdr-pills">
+              <span id="mem-budget-badge" class="mem-size-pill tabular" hidden></span>
+              <span id="mem-path" class="lib-path-pill"></span>
+            </div>
           </div>
+
+          <div id="mem-view-bar" class="mem-view-bar" hidden>
+            <button type="button" id="btn-mem-back-index" class="row-act"></button>
+            <span id="mem-view-badge" class="mem-view-badge"></span>
+            <button type="button" id="btn-mem-del-topic" class="row-act act-danger" hidden></button>
+          </div>
+
+          <div id="mem-topic-meta-fields" class="mem-topic-meta-fields" hidden>
+            <div class="mem-meta-row">
+              <div class="mem-meta-col">
+                <label id="lbl-mem-topic-id" for="mem-topic-id">Topic ID</label>
+                <input id="mem-topic-id" type="text" autocomplete="off" spellcheck="false" placeholder="ls-rpc">
+              </div>
+              <div class="mem-meta-col">
+                <label id="lbl-mem-topic-title" for="mem-topic-title">Title</label>
+                <input id="mem-topic-title" type="text" autocomplete="off" placeholder="LS RPC &amp; Models">
+              </div>
+            </div>
+            <div class="field mem-meta-field">
+              <label id="lbl-mem-topic-keywords" for="mem-topic-keywords">Keywords / Paths</label>
+              <input id="mem-topic-keywords" type="text" autocomplete="off" spellcheck="false" placeholder="ls-client, agentapi, model">
+            </div>
+            <div class="field mem-meta-field">
+              <label id="lbl-mem-topic-summary" for="mem-topic-summary">Summary</label>
+              <input id="mem-topic-summary" type="text" autocomplete="off">
+            </div>
+          </div>
+
           <textarea id="mem-editor" spellcheck="false"></textarea>
+          <div id="mem-budget-warn" class="mem-budget-warn" hidden></div>
+          <div id="mem-err" class="err" hidden></div>
           <div class="lib-card-foot">
             <button type="button" id="btn-save-mem" class="btn-solid"></button>
             <button type="button" id="btn-reload-mem" class="btn-secondary"></button>
+            <span id="mem-dirty-pill" class="mem-dirty-pill" hidden></span>
           </div>
+        </div>
+
+        <div id="mem-topics-section" class="mem-topics-section" hidden>
+          <div class="lib-sec-title">
+            <span id="lbl-mem-topics">On-Demand Topics</span>
+            <div class="mem-topics-hdr-right">
+              <span id="mem-topics-count" class="mono tabular"></span>
+              <button type="button" id="btn-mem-new-topic" class="row-act"></button>
+            </div>
+          </div>
+          <div id="mem-topics-list" class="mem-topics-list"></div>
         </div>
 
         <div>

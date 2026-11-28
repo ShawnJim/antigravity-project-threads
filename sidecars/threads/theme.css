@@ -4675,3 +4675,285 @@ a.btn-link-primary:hover {
   border-color: var(--pt-warn);
   animation: ptDecisionPulse 0.9s var(--pt-ease) 2;
 }
+
+/* ==================== TWO-TIER MEMORY & TOPIC KNOWLEDGE BASE ==================== */
+.mem-migrate-banner {
+  background: color-mix(in srgb, var(--pt-warn-soft) 72%, var(--pt-surface-1));
+  border: 1px solid color-mix(in srgb, var(--pt-warn) 38%, var(--pt-line));
+  border-radius: var(--pt-r-lg);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mem-migrate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mem-migrate-title {
+  font-size: var(--pt-text-xs);
+  font-weight: 600;
+  color: var(--pt-fg);
+}
+.mem-migrate-desc {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pt-sub);
+}
+.mem-migrate-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.btn-xs {
+  height: 25px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+.mem-hdr-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 62%;
+  justify-content: flex-end;
+}
+.mem-hdr-pills .lib-path-pill {
+  max-width: 100%;
+}
+.mem-size-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--pt-mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1.5px 7px;
+  border-radius: var(--pt-r-pill);
+  background: var(--pt-surface-2);
+  color: var(--pt-sub);
+  border: 1px solid var(--pt-line);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.mem-size-pill.is-warn {
+  background: var(--pt-warn-soft);
+  border-color: color-mix(in srgb, var(--pt-warn) 42%, transparent);
+  color: var(--pt-warn);
+}
+.mem-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--pt-line);
+}
+.mem-view-badge {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pt-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-act.act-danger {
+  color: var(--pt-err, #e05d5d);
+}
+.row-act.act-danger:hover {
+  border-color: color-mix(in srgb, var(--pt-err, #e05d5d) 45%, transparent);
+  background: color-mix(in srgb, var(--pt-err, #e05d5d) 12%, transparent);
+}
+.mem-topic-meta-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 8px;
+}
+.mem-meta-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 8px;
+}
+.mem-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.mem-meta-col label,
+.mem-meta-field label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--pt-sub);
+}
+.mem-meta-col input,
+.mem-meta-field input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--pt-r-sm);
+  border: 1px solid var(--pt-line);
+  background: var(--pt-bg);
+  color: var(--pt-fg);
+  font-size: 11.5px;
+}
+.mem-meta-col input[readonly] {
+  opacity: 0.72;
+  cursor: default;
+}
+.mem-meta-field {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mem-budget-warn {
+  margin-top: 7px;
+  padding: 6px 8px;
+  border-radius: var(--pt-r-sm);
+  background: var(--pt-warn-soft);
+  border: 1px solid color-mix(in srgb, var(--pt-warn) 34%, transparent);
+  color: var(--pt-warn);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.mem-dirty-pill {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--pt-warn);
+}
+.mem-topics-section {
+  margin-bottom: 16px;
+}
+.mem-topics-hdr-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mem-topics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.mem-topic-card {
+  background: var(--pt-surface-1);
+  border: 1px solid var(--pt-line);
+  border-radius: var(--pt-r-lg);
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  transition: border-color 0.14s var(--pt-ease), background-color 0.14s var(--pt-ease);
+}
+.mem-topic-card:hover {
+  border-color: var(--pt-line-strong);
+  background: var(--pt-hover);
+}
+.mem-topic-card.is-active {
+  border-color: color-mix(in srgb, var(--pt-accent) 55%, var(--pt-line));
+  background: color-mix(in srgb, var(--pt-accent) 8%, var(--pt-surface-1));
+}
+.mem-topic-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mem-topic-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.mem-topic-title {
+  font-size: var(--pt-text-xs);
+  font-weight: 600;
+  color: var(--pt-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mem-topic-id-pill {
+  font-family: var(--pt-mono);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: var(--pt-r-pill);
+  background: var(--pt-surface-2);
+  color: var(--pt-sub);
+  border: 1px solid var(--pt-line);
+  flex-shrink: 0;
+}
+.mem-topic-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.mem-topic-summary {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--pt-sub);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.mem-topic-kw-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mem-kw-pill {
+  font-family: var(--pt-mono);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: var(--pt-r-sm);
+  background: var(--pt-surface-2);
+  color: var(--pt-sub);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mem-topics-empty {
+  padding: 12px 10px;
+  font-size: 11.5px;
+  color: var(--pt-sub);
+  background: var(--pt-surface-1);
+  border: 1px dashed var(--pt-line);
+  border-radius: var(--pt-r-lg);
+  text-align: center;
+}
+:root[data-theme="light"] .mem-migrate-banner {
+  background: #fffbeb;
+  border-color: color-mix(in srgb, var(--pt-warn) 42%, transparent);
+}
+:root[data-theme="light"] .mem-size-pill.is-warn,
+:root[data-theme="light"] .mem-budget-warn,
+:root[data-theme="light"] .mem-dirty-pill {
+  color: #92670a;
+}
+:root[data-theme="light"] .mem-meta-col input,
+:root[data-theme="light"] .mem-meta-field input {
+  background: #ffffff;
+  border-color: var(--pt-line-strong);
+}
+@media (max-width: 360px) {
+  .mem-meta-row {
+    grid-template-columns: 1fr;
+  }
+}

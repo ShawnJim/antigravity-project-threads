@@ -1315,13 +1315,13 @@ test('Opus P1-1/P1-2/P1-3 regressions: idempotent claim & rollback, merge_ready 
   assert.equal(resolveAgentApiShimTargetFile(shimCmd), fakeLsExe);
 });
 
-test('hook-handler DIRECTIVE_VERSION=16 upgrades v15 coordinators and preserves both #7 review mode and #9 everyday pending-decision registration across hook, SKILL.md, rules/AGENTS.md, and MCP', (t) => {
+test('hook-handler DIRECTIVE_VERSION=17 upgrades v15 coordinators and preserves both #7 review mode and #9 everyday pending-decision registration across hook, SKILL.md, rules/AGENTS.md, and MCP', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
   const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
 
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*16\s*;/);
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
   assert.match(hookHandler, /threadType:\s*"review"/);
   assert.match(skillMd, /threadType:\s*"review"/);
   assert.match(skillMd, /manage_decisions/);
@@ -1374,10 +1374,10 @@ test('hook-handler DIRECTIVE_VERSION=16 upgrades v15 coordinators and preserves 
   assert.match(injected, /everyday planning discussions/i);
   assert.match(injected, /action:\s*"add"/);
   assert.match(injected, /action:\s*"resolve"/);
-  assert.equal(loadRegistry().coordinators['__v15_upgrade__'].directiveVersion, 16);
+  assert.equal(loadRegistry().coordinators['__v15_upgrade__'].directiveVersion, 17);
 });
 
-test('Sidecar backend/frontend static and UI rendering checks for Pending Decisions panel, custom instruction input, API revision 5, capability gating, IME/draft guards, 3-locale I18N, no middle dot, no native dialogs, and LF endings', () => {
+test('Sidecar backend/frontend static and UI rendering checks for Pending Decisions panel, custom instruction input, API revision 6, capability gating, IME/draft guards, 3-locale I18N, no middle dot, no native dialogs, and LF endings', () => {
   const mainMjs = readFileSync(new URL('../sidecars/threads/main.mjs', import.meta.url), 'utf8');
   const {
     appSource,
@@ -1389,17 +1389,18 @@ test('Sidecar backend/frontend static and UI rendering checks for Pending Decisi
     renderO2ThreadCard,
   } = loadUiDecisionHelpers();
 
-  // Backend dual API registration, SERVER_API_REVISION=5, and both review_model + decision_custom_reply capabilities
-  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*5\s*;/);
+  // Backend dual API registration, SERVER_API_REVISION=6, and review_model + decision_custom_reply + topic_memory capabilities
+  assert.match(mainMjs, /const\s+SERVER_API_REVISION\s*=\s*6\s*;/);
   assert.match(mainMjs, /['"]review_model['"]/);
   assert.match(mainMjs, /['"]decision_custom_reply['"]/);
+  assert.match(mainMjs, /['"]topic_memory['"]/);
   assert.match(mainMjs, /registerDualApi\(['"]\/api\/decision_action['"]/);
   assert.match(mainMjs, /executeDecisionAction/);
   assert.match(mainMjs, /customMessage:\s*data\.customMessage/);
   assert.match(mainMjs, /handleDecisionAction[\s\S]*?serverInfo:\s*buildServerInfo\(\)/);
 
-  // Frontend API revision 5, capability gating, maxlength 2000, strict res.action check, no GET fallback & no short timeout
-  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*5\s*;/);
+  // Frontend API revision 6, capability gating, maxlength 2000, strict res.action check, no GET fallback & no short timeout
+  assert.match(appSource, /const\s+EXPECTED_SERVER_API_REVISION\s*=\s*6\s*;/);
   assert.match(appSource, /const\s+MAX_DECISION_CUSTOM_MESSAGE_LEN\s*=\s*2000\s*;/);
   assert.match(appSource, /function\s+supportsDecisionCustomReply\s*\(/);
   assert.match(appSource, /serverCapabilities\.has\(['"]decision_custom_reply['"]\)/);

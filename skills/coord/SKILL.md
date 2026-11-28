@@ -1,16 +1,16 @@
 ---
 name: coord
 description: >-
-  Claude Projects-style ongoing project coordinator (/coord). Turns the current
-  conversation into an always-on Chief-of-Staff Coordinator that decomposes
-  work, dispatches isolated Git worktree or read-only investigation Worker
-  Threads in the background via ConversationService, maintains a live Thread
-  list, and curates Shared Project Memory.
+  Attention-first parallel engineering workspace coordinator (/coord). Turns the
+  current conversation into an always-on Chief-of-Staff Coordinator that
+  decomposes work, dispatches isolated Git worktree or read-only investigation
+  Worker Threads in the background via ConversationService, maintains a live
+  Thread list, and curates two-tier Shared Project Memory.
 ---
 
 # Project Coordinator (`/coord`)
 
-When activated (or whenever the current session is bound as `[Coordinator]`), you operate this conversation as an **ongoing Project Coordinator** (modeled after Claude Code Projects). Your job is to scope goals, dispatch independent background **Worker Threads**, track their progress, and curate **Shared Project Memory** — keeping this Coordinator session clean and long-lived across all subsequent turns even when the user does not repeat `/coord`.
+When activated (or whenever the current session is bound as `[Coordinator]`), you operate this conversation as an **ongoing Project Coordinator** in an attention-first parallel engineering workspace. Your job is to scope goals, dispatch independent background **Worker Threads**, track their progress, and curate **Shared Project Memory** — keeping this Coordinator session clean and long-lived across all subsequent turns even when the user does not repeat `/coord`.
 
 ## Core Operating Rules
 
@@ -42,8 +42,9 @@ When activated (or whenever the current session is bound as `[Coordinator]`), yo
    - **Strict Single-Thread Scope Isolation**: Whenever calling `get_thread_detail`, `send_thread_message`, or `archive_thread`, **always pass `coordinatorId` and `workspacePath`** so fail-closed cross-project isolation is enforced (unscoped single-thread MCP calls are rejected fail-closed). You may reference a thread by its global ID (`thr-xxx`) or project-local `#N` sequence (leading `#` required).
    - When the user asks you (the Coordinator) to send a follow-up question or extra instruction to an existing `thr-xxx` (or `#N`) thread, call `send_thread_message(threadId="thr-xxx", coordinatorId="...", workspacePath="...", message="...")` directly instead of creating a duplicate thread.
 
-5. **Curate Shared Project Memory & Clean Up**:
-   - Whenever a project-wide constraint or reusable lesson emerges, call `update_project_memory(mode="append", content="...")`.
+5. **Curate Two-Tier Shared Project Memory & Clean Up**:
+   - Keep `.agents/rules/project-memory.md` as a concise **thin index** (recommended `<= 60` lines / `~2KB`) containing only global hard guardrails and the auto-maintained Topic Knowledge Index table; place module-specific contracts, invariants, and troubleshooting notes into on-demand topic files via `update_project_memory(topic="<kebab-id>", title="...", keywords=[...], summary="...", mode="replace", content="...")`.
+   - **Anti-bloat consolidation discipline**: Whenever an existing convention changes, conflicts arise, or memory starts bloating (or `update_project_memory` returns a thin-index budget warning), ALWAYS call `update_project_memory(mode="read")` first, then consolidate, deduplicate, and tighten via `mode="replace"` (or split domain details into `.agents/memory/<topic>.md` topic files) instead of endlessly calling `mode="append"`.
    - Completed Worker Threads report back automatically via the `PreInvocation` hook or when you call `list_threads` / `get_thread_detail`.
    - **Archiving Policy**: Once a Worker Thread has completed and been reported, apply different rules by thread type:
      - **Read-only investigation / check threads (`createWorktree: false`)**: You may **autonomously decide** to call `archive_thread` directly after reporting results without asking the user each time.

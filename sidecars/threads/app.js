@@ -3,7 +3,7 @@
 
   const BOARD_POLL_MS = 2200;
   const CHAT_POLL_MS = 1200;
-  const EXPECTED_SERVER_API_REVISION = 5;
+  const EXPECTED_SERVER_API_REVISION = 6;
   const MAX_DECISION_CUSTOM_MESSAGE_LEN = 2000;
   const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
   const API_READ_TIMEOUT_MS = 10_000;
@@ -420,6 +420,56 @@
       decisionCustomUnsupportedErr: 'Custom instruction requires reloading the Sidecar service',
       decisionCustomTooLongToast: (max) => `Custom instruction cannot exceed ${max} characters`,
       decisionAlreadyResolvedToast: 'This decision has already been handled',
+      memThinIndexTitle: 'Thin Index (Always Loaded)',
+      memTopicsTitle: 'On-Demand Topic Knowledge',
+      memNewTopicBtn: '+ New Topic',
+      memBackIndexBtn: '← Thin Index',
+      memDeleteTopicBtn: 'Delete',
+      memEditTopicBtn: 'Edit',
+      memTopicIdLabel: 'Topic ID (kebab-case)',
+      memTopicTitleLabel: 'Topic title',
+      memTopicKeywordsLabel: 'Trigger keywords / paths (comma-separated)',
+      memTopicSummaryLabel: 'One-line summary',
+      memTopicIdPh: 'e.g. ls-rpc, sidecar-ui',
+      memTopicTitlePh: 'e.g. Sidecar UI Constraints',
+      memTopicKeywordsPh: 'sidecars/threads/, app.js, DOM',
+      memTopicSummaryPh: 'Short summary shown in the thin index table',
+      memNewTopicBadge: 'New Topic',
+      memEditingTopicBadge: (id) => `Topic: ${id}`,
+      memDirtyTag: 'Unsaved',
+      memSaveTopicBtn: 'Save Topic & Sync Index',
+      memTopicSavedToast: (id) => `Saved topic ${id} & synced worktrees`,
+      memTopicDeletedToast: (id) => `Deleted topic ${id} & updated index`,
+      memTopicEmptyErr: 'Enter a valid lowercase kebab-case topic ID (e.g. "ls-rpc").',
+      memSaveErrToast: 'Failed to save memory',
+      memUnsupportedErr: 'Topic knowledge base requires reloading the Sidecar service.',
+      memTopicsEmpty: 'No on-demand topic files yet. Split module-specific notes into topics to keep the thin index lean.',
+      memSizeTag: (lines, bytes) => {
+        const kb = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${bytes}B`;
+        return `${lines}L / ${kb}`;
+      },
+      memBudgetWarnText: (lines, maxLines) =>
+        `Thin index is ${lines} lines (target <= ${maxLines}). Move domain details into topic files to keep worker prompts lean.`,
+      memMigrateTitle: 'Upgrade flat memory to two-tier knowledge',
+      memMigrateDesc: (lines, legacyId) =>
+        `project-memory.md has grown to ${lines} lines with no topic files yet. Split it semantically via Coordinator or losslessly archive it into "${legacyId}".`,
+      memMigrateSplitBtn: 'Ask Coordinator to Split',
+      memMigrateArchiveBtn: (legacyId) => `Archive to ${legacyId}`,
+      memModalDelTitle: 'Delete knowledge topic',
+      memModalDelWarn: (id) =>
+        `Permanently remove .agents/memory/${id}.md, remove its row from the thin index table, and clean it from active worktrees.`,
+      memModalDelConfirm: 'Delete topic',
+      memModalArchiveTitle: 'Archive flat memory to legacy topic',
+      memModalArchiveWarn: (legacyId) =>
+        `Your full current project-memory.md will be saved intact to .agents/memory/${legacyId}.md first (zero data loss, never overwrites existing topics), then project-memory.md will be reset to a lean thin index linking to it.`,
+      memModalArchiveConfirm: 'Archive & Rebuild Index',
+      memModalSplitTitle: 'Ask Coordinator to split memory',
+      memModalSplitWarn:
+        'Sends a structured refactoring instruction to the active Project Coordinator to split project-memory.md into semantic topic files and tighten the thin index.',
+      memModalSplitConfirm: 'Send to Coordinator',
+      memArchiveSuccessToast: (id) => `Archived full memory to ${id} & rebuilt thin index`,
+      memSplitSentToast: 'Sent semantic split request to Coordinator',
+      memMigrateErrToast: 'Memory upgrade failed',
     },
 
     'zh-CN': {
@@ -800,6 +850,56 @@
       decisionCustomUnsupportedErr: '当前侧边栏后台版本过旧，请重载后再发送自定义指令',
       decisionCustomTooLongToast: (max) => `自定义指令长度不能超过 ${max} 个字符`,
       decisionAlreadyResolvedToast: '该待决策项已被处理',
+      memThinIndexTitle: '常驻薄索引 (Thin Index)',
+      memTopicsTitle: '按需专题知识库',
+      memNewTopicBtn: '+ 新建专题',
+      memBackIndexBtn: '← 返回薄索引',
+      memDeleteTopicBtn: '删除',
+      memEditTopicBtn: '编辑',
+      memTopicIdLabel: '专题 ID (kebab-case)',
+      memTopicTitleLabel: '专题名称',
+      memTopicKeywordsLabel: '触发关键词 / 涉及路径（逗号分隔）',
+      memTopicSummaryLabel: '一句话摘要',
+      memTopicIdPh: '如 ls-rpc、sidecar-ui',
+      memTopicTitlePh: '如 Sidecar 看板与前端约束',
+      memTopicKeywordsPh: 'sidecars/threads/, app.js, DOM',
+      memTopicSummaryPh: '展示在薄索引表中的简明摘要',
+      memNewTopicBadge: '新建专题',
+      memEditingTopicBadge: (id) => `专题: ${id}`,
+      memDirtyTag: '未保存',
+      memSaveTopicBtn: '保存专题并同步索引',
+      memTopicSavedToast: (id) => `已保存专题 ${id} 并广播至活跃分支`,
+      memTopicDeletedToast: (id) => `已删除专题 ${id} 并更新薄索引`,
+      memTopicEmptyErr: '请输入合法的小写 kebab-case 专题 ID（例如 ls-rpc）',
+      memSaveErrToast: '保存记忆失败',
+      memUnsupportedErr: '当前侧边栏后台版本过旧，请重载后再管理专题知识库',
+      memTopicsEmpty: '暂无按需专题文件。将各模块细节拆分至专题，可保持薄索引精炼并降低子线程上下文开销。',
+      memSizeTag: (lines, bytes) => {
+        const kb = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${bytes}B`;
+        return `${lines}行 / ${kb}`;
+      },
+      memBudgetWarnText: (lines, maxLines) =>
+        `当前薄索引已达 ${lines} 行（建议 <= ${maxLines} 行），建议将模块细节拆分至专题知识库以减少上下文膨胀。`,
+      memMigrateTitle: '升级为双层知识库（无损）',
+      memMigrateDesc: (lines, legacyId) =>
+        `当前 project-memory.md 已达 ${lines} 行且尚未拆分专题。可让总控按模块语义拆分，或先 100% 无损归档至「${legacyId}」专题。`,
+      memMigrateSplitBtn: '发给总控智能拆分',
+      memMigrateArchiveBtn: (legacyId) => `无损归档至 ${legacyId} 专题`,
+      memModalDelTitle: '删除知识专题',
+      memModalDelWarn: (id) =>
+        `将永久删除 .agents/memory/${id}.md，自动移除薄索引表中对应行，并同步清理活跃 Worktree 副本。`,
+      memModalDelConfirm: '确认删除专题',
+      memModalArchiveTitle: '无损归档旧记忆至专题',
+      memModalArchiveWarn: (legacyId) =>
+        `系统会先将当前完整 project-memory.md 原样写入 .agents/memory/${legacyId}.md（不覆盖已有专题，100% 零丢失），校验落盘成功后再将 project-memory.md 重建为关联该专题的精简薄索引。`,
+      memModalArchiveConfirm: '归档并重建薄索引',
+      memModalSplitTitle: '发给总控智能拆分记忆',
+      memModalSplitWarn:
+        '将向当前活跃项目总控发送结构化整理指令，由总控按模块语义将超长 project-memory.md 拆分为专题文件并精简薄索引。',
+      memModalSplitConfirm: '发送给总控',
+      memArchiveSuccessToast: (id) => `已无损归档至专题 ${id} 并重建薄索引`,
+      memSplitSentToast: '已向总控发送智能拆分指令',
+      memMigrateErrToast: '记忆升级操作失败',
     },
 
     'zh-TW': {
@@ -1180,6 +1280,56 @@
       decisionCustomUnsupportedErr: '目前側邊欄後台版本過舊，請重新載入後再傳送自訂指令',
       decisionCustomTooLongToast: (max) => `自訂指令長度不能超過 ${max} 個字元`,
       decisionAlreadyResolvedToast: '該待決策項已被處理',
+      memThinIndexTitle: '常駐薄索引 (Thin Index)',
+      memTopicsTitle: '按需專題知識庫',
+      memNewTopicBtn: '+ 新增專題',
+      memBackIndexBtn: '← 返回薄索引',
+      memDeleteTopicBtn: '刪除',
+      memEditTopicBtn: '編輯',
+      memTopicIdLabel: '專題 ID (kebab-case)',
+      memTopicTitleLabel: '專題名稱',
+      memTopicKeywordsLabel: '觸發關鍵字 / 涉及路徑（逗號分隔）',
+      memTopicSummaryLabel: '一句話摘要',
+      memTopicIdPh: '如 ls-rpc、sidecar-ui',
+      memTopicTitlePh: '如 Sidecar 看板與前端約束',
+      memTopicKeywordsPh: 'sidecars/threads/, app.js, DOM',
+      memTopicSummaryPh: '顯示於薄索引表中的簡明摘要',
+      memNewTopicBadge: '新增專題',
+      memEditingTopicBadge: (id) => `專題: ${id}`,
+      memDirtyTag: '未儲存',
+      memSaveTopicBtn: '儲存專題並同步索引',
+      memTopicSavedToast: (id) => `已儲存專題 ${id} 並廣播至活躍分支`,
+      memTopicDeletedToast: (id) => `已刪除專題 ${id} 並更新薄索引`,
+      memTopicEmptyErr: '請輸入合法的小寫 kebab-case 專題 ID（例如 ls-rpc）',
+      memSaveErrToast: '儲存記憶失敗',
+      memUnsupportedErr: '目前側邊欄後台版本過舊，請重新載入後再管理專題知識庫',
+      memTopicsEmpty: '尚無按需專題檔案。將各模組細節拆分至專題，可維持薄索引精煉並降低執行緒上下文負擔。',
+      memSizeTag: (lines, bytes) => {
+        const kb = bytes >= 1024 ? `${(bytes / 1024).toFixed(1)}KB` : `${bytes}B`;
+        return `${lines}行 / ${kb}`;
+      },
+      memBudgetWarnText: (lines, maxLines) =>
+        `目前薄索引已達 ${lines} 行（建議 <= ${maxLines} 行），建議將模組細節拆分至專題知識庫以防止上下文膨脹。`,
+      memMigrateTitle: '升級為雙層知識庫（無損）',
+      memMigrateDesc: (lines, legacyId) =>
+        `目前 project-memory.md 已達 ${lines} 行且尚未拆分專題。可交由總控按模組語意拆分，或先 100% 無損歸檔至「${legacyId}」專題。`,
+      memMigrateSplitBtn: '發給總控智慧拆分',
+      memMigrateArchiveBtn: (legacyId) => `無損歸檔至 ${legacyId} 專題`,
+      memModalDelTitle: '刪除知識專題',
+      memModalDelWarn: (id) =>
+        `將永久刪除 .agents/memory/${id}.md，自動移除薄索引表中對應列，並同步清理活躍 Worktree 副本。`,
+      memModalDelConfirm: '確認刪除專題',
+      memModalArchiveTitle: '無損歸檔舊記憶至專題',
+      memModalArchiveWarn: (legacyId) =>
+        `系統會先將目前完整 project-memory.md 原樣寫入 .agents/memory/${legacyId}.md（絕不覆寫既有專題，100% 零遺失），驗證落盤成功後再將 project-memory.md 重建為連結該專題的精簡薄索引。`,
+      memModalArchiveConfirm: '歸檔並重建薄索引',
+      memModalSplitTitle: '發給總控智慧拆分記憶',
+      memModalSplitWarn:
+        '將向目前活躍專案總控傳送結構化整理指令，由總控按模組語意將超長 project-memory.md 拆分為專題檔案並精簡薄索引。',
+      memModalSplitConfirm: '傳送給總控',
+      memArchiveSuccessToast: (id) => `已無損歸檔至專題 ${id} 並重建薄索引`,
+      memSplitSentToast: '已向總控傳送智慧拆分指令',
+      memMigrateErrToast: '記憶升級操作失敗',
     },
   };
 
@@ -1282,6 +1432,13 @@
   let updateCardError = '';
   let updateStatusTimer = null;
   let updateStatusNotice = { text: '', tone: 'ok' };
+  let memoryActiveView = 'index'; // 'index' | 'topic' | 'new_topic'
+  let memoryActiveTopicId = '';
+  let memoryEditorDirty = false;
+  let memoryImeComposing = false;
+  let memorySnapshot = null;
+  let memoryActiveTopicData = null;
+  let lastMemoryTopicsKey = '';
 
   // ---------- DOM References ----------
   const elBoardScreen = document.getElementById('board-screen');
@@ -1371,6 +1528,30 @@
   const elModalErr = document.getElementById('pt-modal-err');
   const elModalCancel = document.getElementById('pt-modal-cancel');
   const elModalConfirm = document.getElementById('pt-modal-confirm');
+  const elMemMigrateBanner = document.getElementById('mem-migrate-banner');
+  const elLblMemMigrateTitle = document.getElementById('lbl-mem-migrate-title');
+  const elMemMigrateBadge = document.getElementById('mem-migrate-badge');
+  const elLblMemMigrateDesc = document.getElementById('lbl-mem-migrate-desc');
+  const elBtnMemSplitCoord = document.getElementById('btn-mem-split-coord');
+  const elBtnMemArchiveLegacy = document.getElementById('btn-mem-archive-legacy');
+  const elMemBudgetBadge = document.getElementById('mem-budget-badge');
+  const elMemViewBar = document.getElementById('mem-view-bar');
+  const elBtnMemBackIndex = document.getElementById('btn-mem-back-index');
+  const elMemViewBadge = document.getElementById('mem-view-badge');
+  const elBtnMemDelTopic = document.getElementById('btn-mem-del-topic');
+  const elMemTopicMetaFields = document.getElementById('mem-topic-meta-fields');
+  const elMemTopicId = document.getElementById('mem-topic-id');
+  const elMemTopicTitle = document.getElementById('mem-topic-title');
+  const elMemTopicKeywords = document.getElementById('mem-topic-keywords');
+  const elMemTopicSummary = document.getElementById('mem-topic-summary');
+  const elMemEditor = document.getElementById('mem-editor');
+  const elMemBudgetWarn = document.getElementById('mem-budget-warn');
+  const elMemErr = document.getElementById('mem-err');
+  const elMemDirtyPill = document.getElementById('mem-dirty-pill');
+  const elMemTopicsSection = document.getElementById('mem-topics-section');
+  const elMemTopicsCount = document.getElementById('mem-topics-count');
+  const elBtnMemNewTopic = document.getElementById('btn-mem-new-topic');
+  const elMemTopicsList = document.getElementById('mem-topics-list');
 
   const esc = (s) =>
     String(s || '').replace(
@@ -1717,11 +1898,38 @@
     if (!submitBtn.disabled) submitBtn.textContent = t.fSubmit;
     document.getElementById('btn-cancel-dispatch').textContent = t.fCancel;
 
-    document.getElementById('lbl-lib-mem').textContent = t.libMem;
+    document.getElementById('lbl-lib-mem').textContent = supportsTopicMemory()
+      ? t.memThinIndexTitle
+      : t.libMem;
     const saveMemBtn = document.getElementById('btn-save-mem');
-    if (!saveMemBtn.disabled) saveMemBtn.textContent = t.libSave;
-    document.getElementById('btn-reload-mem').textContent = t.libReload;
+    if (saveMemBtn && !saveMemBtn.disabled) {
+      saveMemBtn.textContent = memoryActiveView === 'index' ? t.libSave : t.memSaveTopicBtn;
+    }
+    const reloadMemBtn = document.getElementById('btn-reload-mem');
+    if (reloadMemBtn) reloadMemBtn.textContent = t.libReload;
     document.getElementById('lbl-lib-wt').textContent = t.libWt;
+    const lblTopics = document.getElementById('lbl-mem-topics');
+    if (lblTopics) lblTopics.textContent = t.memTopicsTitle;
+    if (elBtnMemNewTopic) elBtnMemNewTopic.textContent = t.memNewTopicBtn;
+    if (elBtnMemBackIndex) elBtnMemBackIndex.textContent = t.memBackIndexBtn;
+    if (elBtnMemDelTopic) elBtnMemDelTopic.textContent = t.memDeleteTopicBtn;
+    const lblTopicId = document.getElementById('lbl-mem-topic-id');
+    if (lblTopicId) lblTopicId.textContent = t.memTopicIdLabel;
+    const lblTopicTitle = document.getElementById('lbl-mem-topic-title');
+    if (lblTopicTitle) lblTopicTitle.textContent = t.memTopicTitleLabel;
+    const lblTopicKw = document.getElementById('lbl-mem-topic-keywords');
+    if (lblTopicKw) lblTopicKw.textContent = t.memTopicKeywordsLabel;
+    const lblTopicSum = document.getElementById('lbl-mem-topic-summary');
+    if (lblTopicSum) lblTopicSum.textContent = t.memTopicSummaryLabel;
+    if (elMemTopicId) elMemTopicId.placeholder = t.memTopicIdPh;
+    if (elMemTopicTitle) elMemTopicTitle.placeholder = t.memTopicTitlePh;
+    if (elMemTopicKeywords) elMemTopicKeywords.placeholder = t.memTopicKeywordsPh;
+    if (elMemTopicSummary) elMemTopicSummary.placeholder = t.memTopicSummaryPh;
+    if (elMemDirtyPill) elMemDirtyPill.textContent = t.memDirtyTag;
+    if (typeof renderMemoryUi === 'function' && memorySnapshot) {
+      lastMemoryTopicsKey = '';
+      renderMemoryUi({ syncInputs: false });
+    }
 
     document.getElementById('lbl-back').textContent = t.backThreads;
     const syncBtn = document.getElementById('btn-sync-coord');
@@ -1829,6 +2037,21 @@
       elModalConfirm.textContent = activeModalCtx.busy
         ? t.rebindModalSwitching
         : t.rebindModalConfirm;
+      return;
+    }
+    if (activeModalCtx.mode === 'delete_topic') {
+      elModalConfirm.className = 'btn-danger';
+      elModalConfirm.textContent = activeModalCtx.busy ? t.modalWorking : t.memModalDelConfirm;
+      return;
+    }
+    if (activeModalCtx.mode === 'archive_legacy_memory') {
+      elModalConfirm.className = 'btn-solid';
+      elModalConfirm.textContent = activeModalCtx.busy ? t.modalWorking : t.memModalArchiveConfirm;
+      return;
+    }
+    if (activeModalCtx.mode === 'split_memory_coord') {
+      elModalConfirm.className = 'btn-solid';
+      elModalConfirm.textContent = activeModalCtx.busy ? t.modalWorking : t.memModalSplitConfirm;
       return;
     }
     const isForce = !elModalForceRow.hidden && elModalForceWt.checked;
@@ -3181,6 +3404,10 @@
     return typeof serverCapabilities !== 'undefined' && serverCapabilities.has('decision_custom_reply');
   }
 
+  function supportsTopicMemory() {
+    return typeof serverCapabilities !== 'undefined' && serverCapabilities.has('topic_memory');
+  }
+
   function inspectServerInfo(data, { fromState = false, expectServerInfo = false } = {}) {
     if (!data || typeof data !== 'object') return;
     const info = data.serverInfo && typeof data.serverInfo === 'object' ? data.serverInfo : null;
@@ -3188,6 +3415,7 @@
       ? `${backendVersionMismatch.kind}|${backendVersionMismatch.startedVersion}|${backendVersionMismatch.diskVersion}`
       : '';
     const prevCustomCap = supportsDecisionCustomReply();
+    const prevTopicCap = supportsTopicMemory();
 
     if (info) {
       const caps = Array.isArray(info.capabilities) ? info.capabilities : [];
@@ -3231,6 +3459,16 @@
       lastDecisionsRenderKey = '';
       if (cachedDecisions.length > 0 && typeof renderDecisionsPanel === 'function') {
         renderDecisionsPanel(cachedDecisions, { force: true });
+      }
+    }
+    if (supportsTopicMemory() !== prevTopicCap) {
+      const lblMem = document.getElementById('lbl-lib-mem');
+      if (lblMem) {
+        lblMem.textContent = supportsTopicMemory() ? L().memThinIndexTitle : L().libMem;
+      }
+      lastMemoryTopicsKey = '';
+      if (typeof renderMemoryUi === 'function' && memorySnapshot) {
+        renderMemoryUi({ syncInputs: false });
       }
     }
   }
@@ -4932,8 +5170,14 @@
       waiting.length > 0 ? String(waiting.length) : '';
     document.getElementById('cnt-threads').textContent =
       active.length > 0 ? String(active.length) : '';
+    const topicCount = Array.isArray(snap?.memory?.topics)
+      ? snap.memory.topics.length
+      : Array.isArray(memorySnapshot?.topics)
+        ? memorySnapshot.topics.length
+        : 0;
+    const libraryBadgeCount = wtThreads.length + topicCount;
     document.getElementById('cnt-library').textContent =
-      wtThreads.length > 0 ? String(wtThreads.length) : '';
+      libraryBadgeCount > 0 ? String(libraryBadgeCount) : '';
     document.getElementById('cnt-archived').textContent =
       archived.length > 0 ? String(archived.length) : '';
 
@@ -6971,7 +7215,371 @@
     }
   }
 
-  async function loadMemory() {
+  function isMemoryInputFocused() {
+    const active = document.activeElement;
+    if (!active) return false;
+    return (
+      active === elMemEditor ||
+      active === elMemTopicId ||
+      active === elMemTopicTitle ||
+      active === elMemTopicKeywords ||
+      active === elMemTopicSummary
+    );
+  }
+
+  function setMemoryDirty(dirty) {
+    memoryEditorDirty = Boolean(dirty);
+    if (elMemDirtyPill) {
+      elMemDirtyPill.hidden = !memoryEditorDirty;
+      if (memoryEditorDirty) elMemDirtyPill.textContent = L().memDirtyTag;
+    }
+  }
+
+  function clearMemoryError() {
+    if (!elMemErr) return;
+    elMemErr.hidden = true;
+    elMemErr.textContent = '';
+  }
+
+  function showMemoryError(msg) {
+    if (!elMemErr) return;
+    const text = String(msg || '').trim();
+    elMemErr.textContent = text;
+    elMemErr.hidden = !text;
+  }
+
+  function renderMemoryMigrationBanner() {
+    if (!elMemMigrateBanner) return;
+    const mig = memorySnapshot?.migration || null;
+    const show = Boolean(supportsTopicMemory() && mig && mig.needsMigration);
+    elMemMigrateBanner.hidden = !show;
+    if (!show) return;
+    const t = L();
+    const legacyId = String(mig.suggestedLegacyTopicId || 'legacy');
+    if (elLblMemMigrateTitle) elLblMemMigrateTitle.textContent = t.memMigrateTitle;
+    if (elMemMigrateBadge) {
+      elMemMigrateBadge.textContent = t.memSizeTag(
+        Number(mig.lineCount) || 0,
+        Number(mig.byteSize) || 0,
+      );
+    }
+    if (elLblMemMigrateDesc) {
+      elLblMemMigrateDesc.textContent = t.memMigrateDesc(Number(mig.lineCount) || 0, legacyId);
+    }
+    if (elBtnMemSplitCoord) elBtnMemSplitCoord.textContent = t.memMigrateSplitBtn;
+    if (elBtnMemArchiveLegacy) elBtnMemArchiveLegacy.textContent = t.memMigrateArchiveBtn(legacyId);
+  }
+
+  function renderMemoryTopicsList({ force = false } = {}) {
+    if (!elMemTopicsSection || !elMemTopicsList) return;
+    const capOk = supportsTopicMemory();
+    elMemTopicsSection.hidden = !capOk;
+    if (!capOk) return;
+
+    const t = L();
+    const topics = Array.isArray(memorySnapshot?.topics) ? memorySnapshot.topics : [];
+    if (elMemTopicsCount) elMemTopicsCount.textContent = topics.length > 0 ? String(topics.length) : '';
+    if (elBtnMemNewTopic) elBtnMemNewTopic.textContent = t.memNewTopicBtn;
+
+    const renderKey = JSON.stringify({
+      locale: curLocale,
+      view: memoryActiveView,
+      activeId: memoryActiveTopicId,
+      topics: topics.map((x) => [x.id, x.title, x.summary, x.lineCount, x.byteSize, x.keywords]),
+    });
+    if (!force && renderKey === lastMemoryTopicsKey) return;
+    lastMemoryTopicsKey = renderKey;
+
+    if (!topics.length) {
+      elMemTopicsList.innerHTML = `<div class="mem-topics-empty">${esc(t.memTopicsEmpty)}</div>`;
+      return;
+    }
+
+    elMemTopicsList.innerHTML = topics
+      .map((topic) => {
+        const isActive = memoryActiveView === 'topic' && memoryActiveTopicId === topic.id;
+        const sizeLabel = t.memSizeTag(Number(topic.lineCount) || 0, Number(topic.byteSize) || 0);
+        const kws = Array.isArray(topic.keywords) ? topic.keywords.slice(0, 4) : [];
+        const kwHtml = kws.length
+          ? `<div class="mem-topic-kw-row">${kws.map((k) => `<span class="mem-kw-pill" title="${esc(k)}">${esc(k)}</span>`).join('')}</div>`
+          : '';
+        const sumHtml = topic.summary
+          ? `<div class="mem-topic-summary" title="${esc(topic.summary)}">${esc(topic.summary)}</div>`
+          : '';
+        return `
+          <div class="mem-topic-card${isActive ? ' is-active' : ''}" data-topic-id="${esc(topic.id)}">
+            <div class="mem-topic-card-top">
+              <div class="mem-topic-title-wrap">
+                <span class="mem-topic-title" title="${esc(topic.title || topic.id)}">${esc(topic.title || topic.id)}</span>
+                <span class="mem-topic-id-pill">${esc(topic.id)}</span>
+              </div>
+              <div class="mem-topic-acts">
+                <span class="mem-size-pill tabular">${esc(sizeLabel)}</span>
+                <button type="button" class="row-act act-danger" data-action="delete-topic" data-topic-id="${esc(topic.id)}">${esc(t.memDeleteTopicBtn)}</button>
+              </div>
+            </div>
+            ${sumHtml}
+            ${kwHtml}
+          </div>
+        `;
+      })
+      .join('');
+
+    elMemTopicsList.querySelectorAll('.mem-topic-card').forEach((card) => {
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button[data-action="delete-topic"]')) return;
+        const tid = card.dataset.topicId || '';
+        if (tid) openMemoryTopic(tid);
+      });
+    });
+    elMemTopicsList.querySelectorAll('button[data-action="delete-topic"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tid = btn.dataset.topicId || '';
+        const topicObj = topics.find((x) => x.id === tid) || { id: tid, title: tid };
+        openMemoryActionModal({ mode: 'delete_topic', topic: topicObj, triggerBtn: btn });
+      });
+    });
+  }
+
+  function renderMemoryUi({ syncInputs = false } = {}) {
+    const t = L();
+    const capOk = supportsTopicMemory();
+    const snap = memorySnapshot || { path: '', content: '', topics: [], budget: null, migration: null };
+    const lblMem = document.getElementById('lbl-lib-mem');
+    if (lblMem) lblMem.textContent = capOk ? t.memThinIndexTitle : t.libMem;
+
+    const saveBtn = document.getElementById('btn-save-mem');
+    if (saveBtn && !saveBtn.disabled) {
+      saveBtn.textContent = memoryActiveView === 'index' ? t.libSave : t.memSaveTopicBtn;
+    }
+
+    const isTopicView = capOk && (memoryActiveView === 'topic' || memoryActiveView === 'new_topic');
+    if (elMemViewBar) elMemViewBar.hidden = !isTopicView;
+    if (elMemTopicMetaFields) elMemTopicMetaFields.hidden = !isTopicView;
+    if (elBtnMemDelTopic) {
+      elBtnMemDelTopic.hidden = !(capOk && memoryActiveView === 'topic' && memoryActiveTopicId);
+    }
+    if (elMemViewBadge) {
+      elMemViewBadge.textContent =
+        memoryActiveView === 'new_topic'
+          ? t.memNewTopicBadge
+          : memoryActiveView === 'topic'
+            ? t.memEditingTopicBadge(memoryActiveTopicId)
+            : '';
+    }
+
+    const pathEl = document.getElementById('mem-path');
+    if (memoryActiveView === 'index') {
+      const fullPath = snap.path || '';
+      const shortPath = fullPath.split(/[\\/]/).slice(-3).join('/');
+      if (pathEl) {
+        pathEl.textContent = shortPath;
+        pathEl.title = fullPath;
+      }
+      const budget = snap.budget || null;
+      if (elMemBudgetBadge) {
+        if (capOk && budget && (budget.lineCount > 0 || budget.byteSize > 0)) {
+          elMemBudgetBadge.hidden = false;
+          elMemBudgetBadge.textContent = t.memSizeTag(budget.lineCount, budget.byteSize);
+          elMemBudgetBadge.classList.toggle('is-warn', Boolean(budget.overBudget));
+        } else {
+          elMemBudgetBadge.hidden = true;
+        }
+      }
+      if (elMemBudgetWarn) {
+        const showWarn = Boolean(capOk && budget?.overBudget && !snap.migration?.needsMigration);
+        elMemBudgetWarn.hidden = !showWarn;
+        elMemBudgetWarn.textContent = showWarn
+          ? t.memBudgetWarnText(budget.lineCount, budget.softMaxLines || 60)
+          : '';
+      }
+      if (syncInputs && elMemEditor) {
+        elMemEditor.value = snap.content || '';
+        setMemoryDirty(false);
+      }
+    } else if (memoryActiveView === 'topic') {
+      const topicRec = memoryActiveTopicData || null;
+      const relPath = topicRec?.relativePath || `.agents/memory/${memoryActiveTopicId}.md`;
+      if (pathEl) {
+        pathEl.textContent = relPath;
+        pathEl.title = topicRec?.path || relPath;
+      }
+      if (elMemBudgetBadge) {
+        if (topicRec) {
+          elMemBudgetBadge.hidden = false;
+          elMemBudgetBadge.classList.remove('is-warn');
+          elMemBudgetBadge.textContent = t.memSizeTag(
+            Number(topicRec.lineCount) || 0,
+            Number(topicRec.byteSize) || 0,
+          );
+        } else {
+          elMemBudgetBadge.hidden = true;
+        }
+      }
+      if (elMemBudgetWarn) elMemBudgetWarn.hidden = true;
+      if (elMemTopicId) elMemTopicId.readOnly = true;
+      if (syncInputs && topicRec) {
+        if (elMemTopicId) elMemTopicId.value = topicRec.id || memoryActiveTopicId;
+        if (elMemTopicTitle) elMemTopicTitle.value = topicRec.title || '';
+        if (elMemTopicKeywords) {
+          elMemTopicKeywords.value = Array.isArray(topicRec.keywords)
+            ? topicRec.keywords.join(', ')
+            : '';
+        }
+        if (elMemTopicSummary) elMemTopicSummary.value = topicRec.summary || '';
+        if (elMemEditor) elMemEditor.value = topicRec.content || '';
+        setMemoryDirty(false);
+      }
+    } else if (memoryActiveView === 'new_topic') {
+      if (pathEl) {
+        pathEl.textContent = '.agents/memory/<topic>.md';
+        pathEl.title = '.agents/memory/<topic>.md';
+      }
+      if (elMemBudgetBadge) elMemBudgetBadge.hidden = true;
+      if (elMemBudgetWarn) elMemBudgetWarn.hidden = true;
+      if (elMemTopicId) elMemTopicId.readOnly = false;
+      if (syncInputs) {
+        if (elMemTopicId) elMemTopicId.value = '';
+        if (elMemTopicTitle) elMemTopicTitle.value = '';
+        if (elMemTopicKeywords) elMemTopicKeywords.value = '';
+        if (elMemTopicSummary) elMemTopicSummary.value = '';
+        if (elMemEditor) elMemEditor.value = '';
+        setMemoryDirty(false);
+      }
+    }
+
+    renderMemoryMigrationBanner();
+    renderMemoryTopicsList();
+  }
+
+  function switchToThinIndexView({ forceSync = true } = {}) {
+    memoryActiveView = 'index';
+    memoryActiveTopicId = '';
+    memoryActiveTopicData = null;
+    clearMemoryError();
+    lastMemoryTopicsKey = '';
+    renderMemoryUi({ syncInputs: forceSync });
+  }
+
+  function openNewMemoryTopic() {
+    if (!supportsTopicMemory()) {
+      flashToast(L().memUnsupportedErr, 'warn', 4200);
+      return;
+    }
+    memoryActiveView = 'new_topic';
+    memoryActiveTopicId = '';
+    memoryActiveTopicData = null;
+    clearMemoryError();
+    lastMemoryTopicsKey = '';
+    renderMemoryUi({ syncInputs: true });
+    if (elMemTopicId) elMemTopicId.focus();
+  }
+
+  async function openMemoryTopic(topicId) {
+    if (!supportsTopicMemory()) {
+      flashToast(L().memUnsupportedErr, 'warn', 4200);
+      return;
+    }
+    const cleanId = String(topicId || '').trim();
+    if (!cleanId) return;
+    clearMemoryError();
+    memoryActiveView = 'topic';
+    memoryActiveTopicId = cleanId;
+    lastMemoryTopicsKey = '';
+    renderMemoryUi({ syncInputs: false });
+    try {
+      await syncHostConversationScope();
+      const qs = new URLSearchParams(buildScopePayload({ topic: cleanId }));
+      const { data } = await fetchJsonWithTimeout(
+        `/api/memory?${qs}`,
+        { method: 'GET' },
+        { timeoutMs: API_READ_TIMEOUT_MS },
+      );
+      if (data?.locale) applyLocale(data.locale);
+      inspectServerInfo(data);
+      if (data?.ok && data.topic) {
+        memoryActiveTopicData = data.topic;
+        if (memorySnapshot) {
+          memorySnapshot = {
+            ...memorySnapshot,
+            topics: Array.isArray(data.topics) ? data.topics : memorySnapshot.topics,
+            budget: data.budget || memorySnapshot.budget,
+            migration: data.migration || memorySnapshot.migration,
+          };
+        }
+        renderMemoryUi({ syncInputs: true });
+      } else if (data?.error) {
+        showMemoryError(data.error);
+      }
+    } catch (err) {
+      showMemoryError(err?.message || L().memSaveErrToast);
+    }
+  }
+
+  function openMemoryActionModal({ mode, topic = null, triggerBtn = null } = {}) {
+    if (!supportsTopicMemory()) {
+      flashToast(L().memUnsupportedErr, 'warn', 4200);
+      return;
+    }
+    if (elModalRebindBox) elModalRebindBox.hidden = true;
+    const t = L();
+    const mig = memorySnapshot?.migration || null;
+    const legacyId = String(mig?.suggestedLegacyTopicId || 'legacy');
+
+    activeModalCtx = {
+      mode,
+      topic,
+      legacyId,
+      triggerBtn,
+      busy: false,
+      onDone: null,
+    };
+
+    elModalClose.title = t.closeTip;
+    elModalCancel.textContent = t.fCancel;
+    elModalRemoveRow.hidden = true;
+    elModalBranchRow.hidden = true;
+    elModalForceRow.hidden = true;
+    elModalErr.hidden = true;
+    elModalErr.textContent = '';
+
+    if (mode === 'delete_topic') {
+      const tid = String(topic?.id || '').trim();
+      elModalTitle.textContent = t.memModalDelTitle;
+      elModalThread.textContent = topic?.title ? `${topic.title} (${tid})` : tid;
+      elModalWtInfo.innerHTML = `<span class="pt-modal-path">${esc(`.agents/memory/${tid}.md`)}</span>`;
+      elModalWarn.hidden = false;
+      elModalWarn.textContent = t.memModalDelWarn(tid);
+    } else if (mode === 'archive_legacy_memory') {
+      elModalTitle.textContent = t.memModalArchiveTitle;
+      elModalThread.textContent = `project-memory.md -> .agents/memory/${legacyId}.md`;
+      elModalWtInfo.innerHTML = mig
+        ? `<span class="wt-pill">${esc(t.memSizeTag(Number(mig.lineCount) || 0, Number(mig.byteSize) || 0))}</span>`
+        : '';
+      elModalWarn.hidden = false;
+      elModalWarn.textContent = t.memModalArchiveWarn(legacyId);
+    } else {
+      elModalTitle.textContent = t.memModalSplitTitle;
+      const coordTitle = lastSnap?.coordinator?.title || t.kickerCoord;
+      elModalThread.textContent = coordTitle;
+      elModalWtInfo.innerHTML = mig
+        ? `<span class="wt-pill">${esc(t.memSizeTag(Number(mig.lineCount) || 0, Number(mig.byteSize) || 0))}</span>`
+        : '';
+      elModalWarn.hidden = false;
+      elModalWarn.textContent = t.memModalSplitWarn;
+    }
+
+    elModalConfirm.disabled = false;
+    elModalCancel.disabled = false;
+    elModalClose.disabled = false;
+    syncModalConfirmButton();
+    elModalBackdrop.hidden = false;
+    (mode === 'delete_topic' ? elModalCancel : elModalConfirm).focus();
+  }
+
+  async function loadMemory(opts = {}) {
+    const forceSyncEditor = Boolean(opts && opts.forceSyncEditor);
     try {
       await syncHostConversationScope();
       const qs = new URLSearchParams(buildScopePayload());
@@ -6982,12 +7590,22 @@
         { timeoutMs: API_READ_TIMEOUT_MS },
       );
       if (data.locale) applyLocale(data.locale);
+      inspectServerInfo(data);
       if (data.ok) {
-        const shortPath = (data.path || '').split(/[\\/]/).slice(-3).join('/');
-        const pathEl = document.getElementById('mem-path');
-        pathEl.textContent = shortPath;
-        pathEl.title = data.path || '';
-        document.getElementById('mem-editor').value = data.content || '';
+        memorySnapshot = data;
+        const canOverwriteDraft =
+          forceSyncEditor || (!memoryEditorDirty && !memoryImeComposing && !isMemoryInputFocused());
+        if (memoryActiveView === 'topic' && memoryActiveTopicId && canOverwriteDraft) {
+          const stillExists = (data.topics || []).some((x) => x.id === memoryActiveTopicId);
+          if (stillExists) {
+            await openMemoryTopic(memoryActiveTopicId);
+            return;
+          }
+          memoryActiveView = 'index';
+          memoryActiveTopicId = '';
+          memoryActiveTopicData = null;
+        }
+        renderMemoryUi({ syncInputs: memoryActiveView === 'index' && canOverwriteDraft });
       }
     } catch {
       // Ignore transient errors
@@ -7054,13 +7672,20 @@
           decisionImeComposingIds.clear();
           deferredDecisionsList = null;
           lastDecisionsRenderKey = '';
+          memoryActiveView = 'index';
+          memoryActiveTopicId = '';
+          memoryActiveTopicData = null;
+          memorySnapshot = null;
+          memoryImeComposing = false;
+          setMemoryDirty(false);
+          lastMemoryTopicsKey = '';
         }
         if (scopeChanged || convChanged) {
           lastHasGitRepo = null;
           manualPopoutConvId = '';
           threadOpenState.clear();
           if (currentTab === 'library') {
-            loadMemory();
+            loadMemory({ forceSyncEditor: scopeChanged });
           }
         }
       }
@@ -7600,6 +8225,81 @@
         renderUpdateCard();
         return;
       }
+      if (ctx.mode === 'delete_topic') {
+        const tid = String(ctx.topic?.id || '').trim();
+        await syncHostConversationScope();
+        const res = await postApi(
+          '/api/memory_save',
+          '/api/memory_save_get',
+          buildScopePayload({
+            mode: 'delete',
+            topic: tid,
+          }),
+          { timeoutMs: 0, allowGetFallback: false, expectServerInfo: true },
+        );
+        if (!res?.ok || res.action !== 'delete_topic') {
+          throw new Error(res?.error || L().memSaveErrToast);
+        }
+        closePtModal(true);
+        if (memoryActiveView === 'topic' && memoryActiveTopicId === tid) {
+          memoryActiveView = 'index';
+          memoryActiveTopicId = '';
+          memoryActiveTopicData = null;
+        }
+        if (res.memory) {
+          memorySnapshot = res.memory;
+        }
+        setMemoryDirty(false);
+        lastMemoryTopicsKey = '';
+        renderMemoryUi({ syncInputs: memoryActiveView === 'index' });
+        flashToast(L().memTopicDeletedToast(tid), 'ok', 2800);
+        return;
+      }
+      if (ctx.mode === 'archive_legacy_memory') {
+        await syncHostConversationScope();
+        const res = await postApi(
+          '/api/memory_migrate',
+          '/api/memory_migrate_get',
+          buildScopePayload({
+            action: 'archive_legacy',
+          }),
+          { timeoutMs: 0, allowGetFallback: false, expectServerInfo: true },
+        );
+        if (!res?.ok || res.action !== 'archive_legacy') {
+          throw new Error(res?.error || L().memMigrateErrToast);
+        }
+        closePtModal(true);
+        memoryActiveView = 'index';
+        memoryActiveTopicId = '';
+        memoryActiveTopicData = null;
+        if (res.memory) memorySnapshot = res.memory;
+        setMemoryDirty(false);
+        lastMemoryTopicsKey = '';
+        renderMemoryUi({ syncInputs: true });
+        flashToast(
+          L().memArchiveSuccessToast(res.legacyTopic?.id || ctx.legacyId || 'legacy'),
+          'ok',
+          3400,
+        );
+        return;
+      }
+      if (ctx.mode === 'split_memory_coord') {
+        await syncHostConversationScope();
+        const res = await postApi(
+          '/api/memory_migrate',
+          '/api/memory_migrate_get',
+          buildScopePayload({
+            action: 'request_coordinator_split',
+          }),
+          { timeoutMs: 0, allowGetFallback: false, expectServerInfo: true },
+        );
+        if (!res?.ok || res.action !== 'request_coordinator_split') {
+          throw new Error(res?.error || L().memMigrateErrToast);
+        }
+        closePtModal(true);
+        flashToast(L().memSplitSentToast, 'ok', 3400);
+        return;
+      }
       if (ctx.mode === 'archive') {
         const removeWorktree = elModalRemoveWt.checked;
         const forceWorktree = removeWorktree && elModalForceWt.checked;
@@ -7887,28 +8587,153 @@
     }
   });
 
+  for (const memField of [
+    elMemEditor,
+    elMemTopicId,
+    elMemTopicTitle,
+    elMemTopicKeywords,
+    elMemTopicSummary,
+  ]) {
+    if (!memField) continue;
+    memField.addEventListener('compositionstart', () => {
+      memoryImeComposing = true;
+    });
+    memField.addEventListener('compositionend', () => {
+      memoryImeComposing = false;
+      setMemoryDirty(true);
+    });
+    memField.addEventListener('input', () => {
+      clearMemoryError();
+      setMemoryDirty(true);
+    });
+  }
+
+  if (elBtnMemNewTopic) {
+    elBtnMemNewTopic.addEventListener('click', openNewMemoryTopic);
+  }
+  if (elBtnMemBackIndex) {
+    elBtnMemBackIndex.addEventListener('click', () => switchToThinIndexView({ forceSync: true }));
+  }
+  if (elBtnMemDelTopic) {
+    elBtnMemDelTopic.addEventListener('click', (ev) => {
+      if (!memoryActiveTopicId) return;
+      const topicObj =
+        memoryActiveTopicData ||
+        (memorySnapshot?.topics || []).find((x) => x.id === memoryActiveTopicId) || {
+          id: memoryActiveTopicId,
+          title: memoryActiveTopicId,
+        };
+      openMemoryActionModal({ mode: 'delete_topic', topic: topicObj, triggerBtn: ev.currentTarget });
+    });
+  }
+  if (elBtnMemSplitCoord) {
+    elBtnMemSplitCoord.addEventListener('click', (ev) => {
+      openMemoryActionModal({ mode: 'split_memory_coord', triggerBtn: ev.currentTarget });
+    });
+  }
+  if (elBtnMemArchiveLegacy) {
+    elBtnMemArchiveLegacy.addEventListener('click', (ev) => {
+      openMemoryActionModal({ mode: 'archive_legacy_memory', triggerBtn: ev.currentTarget });
+    });
+  }
+
   document.getElementById('btn-save-mem').addEventListener('click', async (ev) => {
     const btn = ev.currentTarget;
-    const content = document.getElementById('mem-editor').value;
+    const t = L();
+    const content = elMemEditor ? elMemEditor.value : '';
+    const isTopicSave = memoryActiveView === 'topic' || memoryActiveView === 'new_topic';
+    clearMemoryError();
+
+    let topicId = '';
+    let topicTitle = '';
+    let topicKeywords = '';
+    let topicSummary = '';
+    if (isTopicSave) {
+      if (!supportsTopicMemory()) {
+        showMemoryError(t.memUnsupportedErr);
+        flashToast(t.memUnsupportedErr, 'warn', 4200);
+        return;
+      }
+      topicId = String(
+        memoryActiveView === 'topic' ? memoryActiveTopicId : elMemTopicId?.value || '',
+      ).trim();
+      if (!topicId || !/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/i.test(topicId) || topicId.includes('--')) {
+        showMemoryError(t.memTopicEmptyErr);
+        if (elMemTopicId && !elMemTopicId.readOnly) elMemTopicId.focus();
+        return;
+      }
+      topicTitle = String(elMemTopicTitle?.value || '').trim();
+      topicKeywords = String(elMemTopicKeywords?.value || '').trim();
+      topicSummary = String(elMemTopicSummary?.value || '').trim();
+    }
+
     btn.disabled = true;
-    btn.textContent = L().libSaving;
+    btn.textContent = t.libSaving;
     try {
       await syncHostConversationScope();
+      const payload = isTopicSave
+        ? buildScopePayload({
+            mode: 'replace',
+            topic: topicId,
+            title: topicTitle,
+            keywords: topicKeywords,
+            summary: topicSummary,
+            content,
+          })
+        : buildScopePayload({
+            mode: 'replace',
+            content,
+          });
       const res = await postApi(
         '/api/memory_save',
         '/api/memory_save_get',
-        buildScopePayload({
-          content,
-          mode: 'replace',
-        }),
+        payload,
+        { timeoutMs: 0, allowGetFallback: false, expectServerInfo: true },
       );
-      if (res.ok) flashToast(L().libSaved);
+      const expectedAction = isTopicSave ? 'save_topic' : 'save_index';
+      const actionValid = isTopicSave
+        ? res?.action === expectedAction
+        : !res?.action || res.action === expectedAction;
+      if (!res?.ok || !actionValid) {
+        const msg = res?.error || L().memSaveErrToast;
+        showMemoryError(msg);
+        flashToast(msg, 'err', 4200);
+        return;
+      }
+      if (isTopicSave) {
+        const savedId = res.topic?.id || topicId.toLowerCase();
+        memoryActiveView = 'topic';
+        memoryActiveTopicId = savedId;
+        memoryActiveTopicData = res.topic || null;
+        if (res.memory) memorySnapshot = res.memory;
+        setMemoryDirty(false);
+        lastMemoryTopicsKey = '';
+        renderMemoryUi({ syncInputs: true });
+        flashToast(L().memTopicSavedToast(savedId), 'ok', 2800);
+      } else {
+        memorySnapshot = res;
+        setMemoryDirty(false);
+        lastMemoryTopicsKey = '';
+        renderMemoryUi({ syncInputs: true });
+        flashToast(L().libSaved, 'ok', 2600);
+      }
+    } catch (err) {
+      const msg = err?.message || L().memSaveErrToast;
+      showMemoryError(msg);
+      flashToast(msg, 'err', 4200);
     } finally {
       btn.disabled = false;
-      btn.textContent = L().libSave;
+      btn.textContent = memoryActiveView === 'index' ? L().libSave : L().memSaveTopicBtn;
     }
   });
-  document.getElementById('btn-reload-mem').addEventListener('click', loadMemory);
+  document.getElementById('btn-reload-mem').addEventListener('click', () => {
+    clearMemoryError();
+    if (memoryActiveView === 'topic' && memoryActiveTopicId) {
+      openMemoryTopic(memoryActiveTopicId);
+    } else {
+      loadMemory({ forceSyncEditor: true });
+    }
+  });
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {

@@ -1150,12 +1150,12 @@ test('MCP stdio server: schema scope params, fail-closed cross-project rejection
   assert.match(bareNumRes?.content?.[0]?.text || '', /Thread not found: 1/);
 });
 
-test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=16 enforces scope params, syncThreads reads fresh registry for decisions (no flicker), and single-thread writes avoid stale full-table overwrites', async (t) => {
-  // 1. P1-1: DIRECTIVE_VERSION=16 + SKILL.md + rules/AGENTS.md enforce passing coordinatorId & workspacePath
+test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=17 enforces scope params, syncThreads reads fresh registry for decisions (no flicker), and single-thread writes avoid stale full-table overwrites', async (t) => {
+  // 1. P1-1: DIRECTIVE_VERSION=17 + SKILL.md + rules/AGENTS.md enforce passing coordinatorId & workspacePath
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*16\s*;/);
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*17\s*;/);
   assert.match(skillMd, /get_thread_detail.*send_thread_message.*archive_thread/i);
   assert.match(skillMd, /coordinatorId.*workspacePath/i);
   assert.match(rulesMd, /Single-Thread Scope Isolation/i);
@@ -1228,7 +1228,7 @@ test('Opus P1-1/P1-4/P1-5 regressions: DIRECTIVE_VERSION=16 enforces scope param
   const hookOut = JSON.parse(hookProc.stdout.trim());
   const injected = hookOut?.injectSteps?.[0]?.systemMessage?.systemMessage || '';
   assert.match(injected, /`get_thread_detail`, `send_thread_message`, or `archive_thread`.*ALWAYS pass `coordinatorId:/);
-  assert.equal(loadRegistry().coordinators[keyA].directiveVersion, 16);
+  assert.equal(loadRegistry().coordinators[keyA].directiveVersion, 17);
 
   // 2. P1-4: Decision dismissed mid-syncThreads (when dirty===false) must NOT flicker back in snapshot
   const dec = addDecision({ workspacePath: repoA, threadId: 'thr-001', title: 'Flicker test decision' });

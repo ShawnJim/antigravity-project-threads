@@ -8,7 +8,6 @@ import {
   getThreadDetail,
   initCoordinator,
   listDecisions,
-  readProjectMemory,
   resolveDecision,
   resolveProjectScope,
   sendThreadMessage,
@@ -28,7 +27,7 @@ const TOOLS = [
   {
     name: 'init_project_coordinator',
     description:
-      'Initialize and pin the current conversation as the ongoing Project Coordinator (Claude Projects style), ensure isolated project memory exists (including default Worktree merge & archive conventions), and return the project coordination summary.',
+      'Initialize and pin the current conversation as the ongoing Project Coordinator for this attention-first parallel engineering workspace, ensure isolated project memory exists (including default Worktree merge & archive conventions), and return the project coordination summary.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -200,7 +199,7 @@ const TOOLS = [
   {
     name: 'update_project_memory',
     description:
-      'Read or update the isolated Project Memory (.agents/rules/project-memory.md or per-project memory file) and automatically broadcast updates to all active Worker Thread worktrees in the same project.',
+      'Read, list, update, or delete two-tier isolated Shared Project Memory: a concise thin index (.agents/rules/project-memory.md, target <= 60 lines / ~2KB) plus on-demand topic knowledge files (.agents/memory/<topic>.md), automatically keeping the thin-index topic table in sync and broadcasting updates to all active Worker Thread worktrees. Anti-bloat discipline: when existing conventions change, conflict, or memory grows beyond budget, call mode="read" first and consolidate/deduplicate using mode="replace" (or move domain details into a topic file via `topic`) rather than endlessly appending. Omitting `topic` remains 100% backward-compatible with legacy single-file usage.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -222,12 +221,32 @@ const TOOLS = [
         },
         mode: {
           type: 'string',
-          enum: ['read', 'append', 'replace'],
-          description: 'Use "read" to inspect memory, "append" to add a decision bullet under `section`, or "replace" to rewrite the full file.',
+          enum: ['read', 'append', 'replace', 'list', 'delete'],
+          description:
+            'Operation mode: "read" (inspect thin index or specified topic), "list" (list thin index budget + all topic files), "append" (add a concise bullet), "replace" (rewrite/consolidate thin index or create/overwrite a topic file), or "delete" (remove a topic file and update the thin index table).',
+        },
+        topic: {
+          type: 'string',
+          description:
+            'Optional lowercase kebab-case topic ID (e.g. "ls-rpc", "sidecar-ui") targeting .agents/memory/<topic>.md. Omit to read/update the thin index (.agents/rules/project-memory.md).',
+        },
+        title: {
+          type: 'string',
+          description: 'Optional human-readable topic title stored in topic metadata and the thin index table.',
+        },
+        summary: {
+          type: 'string',
+          description: 'Optional concise one-line summary for the thin index table when creating/updating a topic.',
+        },
+        keywords: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Optional trigger keywords or module paths (e.g. ["sidecars/threads/", "app.js", "DOM"]) used by dispatch_thread to recommend this topic on demand.',
         },
         section: {
           type: 'string',
-          description: 'Markdown H2 section heading when mode="append" (default: "Active Decisions & Constraints").',
+          description: 'Markdown H2 section heading when mode="append" (default: "Active Decisions & Constraints" for thin index).',
         },
         content: {
           type: 'string',
@@ -541,49 +560,119 @@ async function handleToolCall(name, args = {}) {
     }
 
     case 'update_project_memory': {
-      const mode = args.mode || (args.content ? 'append' : 'read');
-      if (mode === 'read') {
-        const scope = await resolveProjectScope({
+      try {
+        const rawTopic = String(args.topic || '').trim();
+        const mode = String(
+          args.mode || (args.content !== undefined && args.content !== '' ? (rawTopic ? 'replace' : 'append') : 'read'),
+        )
+          .trim()
+          .toLowerCase();
+        const result = await updateProjectMemory({
           workspacePath: args.workspacePath || '',
           conversationId: args.conversationId || args.coordinatorId || '',
           coordinatorId: args.coordinatorId || '',
           projectId: args.projectId || '',
+          content: args.content !== undefined ? String(args.content) : '',
+          mode,
+          section: args.section,
+          topic: rawTopic,
+          title: args.title || '',
+          summary: args.summary || '',
+          keywords: args.keywords,
         });
-        const mem = scope.scopeKey
-          ? readProjectMemory(scope.baseDir, scope.scopeKey)
-          : { path: '', content: '' };
+
+        const budgetNote = result?.budgetWarning ? `\n\n> Thin Index Budget Notice: ${result.budgetWarning}` : '';
+
+        if (mode === 'list') {
+          const topics = Array.isArray(result.topics) ? result.topics : [];
+          const budget = result.budget || {};
+          const lines = [
+            `Shared Project Memory Thin Index: \`${result.path || '(unresolved)'}\` (${budget.lineCount || 0} lines, ${budget.byteSize || 0} bytes)`,
+          ];
+          if (topics.length > 0) {
+            lines.push(
+              '',
+              '| `topic` ID | Topic | Keywords / Paths | Summary | Size |',
+              '| :--- | :--- | :--- | :--- | :--- |',
+              ...topics.map(
+                (t) =>
+                  `| \`${t.id}\` | ${String(t.title || t.id).replace(/\|/g, '\\|')} | ${(t.keywords || []).map((k) => `\`${String(k).replace(/\|/g, '\\|')}\``).join(', ')} | ${String(t.summary || '-').replace(/\|/g, '\\|')} | ${t.lineCount || 0}L / ${t.byteSize || 0}B |`,
+              ),
+            );
+          } else {
+            lines.push('', 'No topic knowledge files yet (`.agents/memory/<topic>.md`).');
+          }
+          return {
+            content: [{ type: 'text', text: `${lines.join('\n')}${budgetNote}` }],
+            structuredContent: result,
+          };
+        }
+
+        if (mode === 'read') {
+          if (rawTopic) {
+            const topicRec = result.topic || result;
+            const text = topicRec?.exists
+              ? `Topic \`${topicRec.id}\` (\`${topicRec.relativePath || topicRec.path}\`)\nTitle: ${topicRec.title}\nKeywords: ${(topicRec.keywords || []).join(', ')}\nSummary: ${topicRec.summary || '-'}\n\n${topicRec.content || ''}`
+              : `(Topic "${rawTopic}" does not exist yet at ${topicRec?.path || '.agents/memory/'})`;
+            return {
+              content: [{ type: 'text', text }],
+              structuredContent: result,
+            };
+          }
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  (result.content ||
+                    (result.path
+                      ? `(Empty memory at ${result.path})`
+                      : '(No project scope resolved; provide workspacePath or coordinatorId/conversationId)')) +
+                  budgetNote,
+              },
+            ],
+            structuredContent: result,
+          };
+        }
+
+        if (mode === 'delete') {
+          const text = result.deleted
+            ? `Deleted topic \`${result.id}\` (\`${result.path}\`), refreshed thin index table, and synced to active worktrees.${budgetNote}`
+            : `Topic \`${result.id}\` did not exist on disk; ensured thin index table is clean and synced to active worktrees.${budgetNote}`;
+          return {
+            content: [{ type: 'text', text }],
+            structuredContent: result,
+          };
+        }
+
+        if (rawTopic) {
+          const tRec = result.topic || {};
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Updated topic \`${tRec.id || rawTopic}\` (\`${tRec.relativePath || tRec.path || ''}\`), refreshed thin index table, and synced to active worktrees.${budgetNote}\n\n${tRec.content || ''}`,
+              },
+            ],
+            structuredContent: result,
+          };
+        }
+
         return {
           content: [
             {
               type: 'text',
-              text:
-                mem.content ||
-                (mem.path
-                  ? `(Empty memory at ${mem.path})`
-                  : '(No project scope resolved; provide workspacePath or coordinatorId/conversationId)'),
+              text: `Updated Shared Project Memory (\`${result.path}\`) and synced to active worktrees.${budgetNote}\n\n${result.content}`,
             },
           ],
-          structuredContent: mem,
+          structuredContent: result,
+        };
+      } catch (err) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: err.message }],
         };
       }
-      const updated = await updateProjectMemory({
-        workspacePath: args.workspacePath || '',
-        conversationId: args.conversationId || args.coordinatorId || '',
-        coordinatorId: args.coordinatorId || '',
-        projectId: args.projectId || '',
-        content: args.content || '',
-        mode,
-        section: args.section,
-      });
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Updated Shared Project Memory (\`${updated.path}\`) and synced to active worktrees.\n\n${updated.content}`,
-          },
-        ],
-        structuredContent: updated,
-      };
     }
 
     case 'send_thread_message': {

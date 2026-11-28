@@ -20,8 +20,11 @@ import {
   listCoordinatorCandidates,
   loadSettings,
   markThreadRead,
+  migrateProjectMemory,
+  readMemoryTopic,
   readProjectMemory,
   rebindCoordinator,
+  refreshExistingProjectMemoryHygiene,
   resolveAppLocale,
   resolveProjectScope,
   saveSettingsWithFastResponse,
@@ -34,7 +37,7 @@ import {
 const THIS_FILE = fileURLToPath(import.meta.url);
 const HERE = dirname(THIS_FILE);
 const PLUGIN_ROOT = join(HERE, '..', '..');
-const SERVER_API_REVISION = 5;
+const SERVER_API_REVISION = 6;
 const SERVER_CAPABILITIES = [
   'settings',
   'settings_save_fast',
@@ -46,6 +49,7 @@ const SERVER_CAPABILITIES = [
   'rebind_coordinator',
   'coordinator_candidates',
   'review_model',
+  'topic_memory',
 ];
 const app = new SidecarApp();
 
@@ -449,22 +453,55 @@ app.api(
   async (data = {}) => {
     try {
       const scope = await resolveProjectScope({
-        workspacePath: data.workspace || '',
+        workspacePath: data.workspacePath || data.workspace || '',
         conversationId: data.conversationId || '',
         coordinatorId: data.coordinatorId || '',
         projectId: data.projectId || '',
       });
+      const rawTopic = String(data.topic || '').trim();
+      if (scope.scopeKey) {
+        refreshExistingProjectMemoryHygiene(scope.baseDir, scope.scopeKey);
+      }
+      if (rawTopic) {
+        if (!scope.scopeKey) {
+          return {
+            ok: false,
+            error: 'No project scope resolved.',
+            locale: resolveAppLocale(),
+            serverInfo: buildServerInfo(),
+          };
+        }
+        const topic = readMemoryTopic(scope.baseDir, scope.scopeKey, rawTopic);
+        const mem = readProjectMemory(scope.baseDir, scope.scopeKey);
+        return {
+          ok: true,
+          locale: resolveAppLocale(),
+          scopeKey: scope.scopeKey,
+          topic,
+          topics: mem.topics,
+          budget: mem.budget,
+          budgetWarning: mem.budgetWarning,
+          migration: mem.migration,
+          serverInfo: buildServerInfo(),
+        };
+      }
       const mem = scope.scopeKey
         ? readProjectMemory(scope.baseDir, scope.scopeKey)
-        : { path: '', content: '' };
+        : { path: '', content: '', topicsDir: '', topics: [], budget: null, budgetWarning: '', migration: null };
       return {
         ok: true,
         locale: resolveAppLocale(),
         scopeKey: scope.scopeKey,
         ...mem,
+        serverInfo: buildServerInfo(),
       };
     } catch (err) {
-      return { ok: false, error: err.message, locale: resolveAppLocale() };
+      return {
+        ok: false,
+        error: err.message,
+        locale: resolveAppLocale(),
+        serverInfo: buildServerInfo(),
+      };
     }
   },
   'GET',
@@ -472,21 +509,73 @@ app.api(
 
 async function handleSaveMemory(data = {}) {
   try {
+    let keywords = data.keywords;
+    if (typeof keywords === 'string') {
+      const trimmed = keywords.trim();
+      if (trimmed.startsWith('[')) {
+        try {
+          keywords = JSON.parse(trimmed);
+        } catch {
+          // Keep comma-separated string for normalizeKeywords
+        }
+      }
+    }
     const res = await updateProjectMemory({
-      workspacePath: data.workspace || '',
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
       conversationId: data.conversationId || '',
       coordinatorId: data.coordinatorId || '',
       projectId: data.projectId || '',
-      content: data.content || '',
+      content: data.content !== undefined ? String(data.content) : '',
       mode: data.mode || 'replace',
       section: data.section || 'Active Decisions & Constraints',
+      topic: data.topic || '',
+      title: data.title || '',
+      summary: data.summary || '',
+      keywords,
     });
-    return { ok: true, locale: resolveAppLocale(), ...res };
+    return {
+      ok: true,
+      locale: resolveAppLocale(),
+      ...res,
+      serverInfo: buildServerInfo(),
+    };
   } catch (err) {
-    return { ok: false, error: err.message, locale: resolveAppLocale() };
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
   }
 }
 registerDualApi('/api/memory_save', handleSaveMemory);
+
+async function handleMigrateMemory(data = {}) {
+  try {
+    const res = await migrateProjectMemory({
+      workspacePath: data.workspacePath || data.workspace || '',
+      workspaceKey: data.workspaceKey || '',
+      conversationId: data.conversationId || '',
+      coordinatorId: data.coordinatorId || '',
+      projectId: data.projectId || '',
+      action: data.action || '',
+    });
+    return {
+      ...res,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message,
+      locale: resolveAppLocale(),
+      serverInfo: buildServerInfo(),
+    };
+  }
+}
+registerDualApi('/api/memory_migrate', handleMigrateMemory);
 
 function buildSettingsScopeOpts(data = {}) {
   return {
