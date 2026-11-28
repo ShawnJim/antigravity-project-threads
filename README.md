@@ -22,48 +22,29 @@
 
 ---
 
-Running multiple AI agents in parallel shouldn't turn you into a full-time tab switcher. **Antigravity Project Threads** (`project-threads`) turns **Antigravity 2.0 Desktop** into an **attention-first command center** for parallel development: pin your main window as an always-on **`[Coordinator]`** focused purely on scoping, architecture, and judgment; delegate implementation and deep investigations to physically isolated **Git Worktree** (or zero-copy read-only) background threads via native `ConversationService`; and let structured summaries, **Pending Decisions**, inline **`Preview`** chats, Coordinator switching, and plugin updates converge cleanly in the right-hand **Project Threads** sidecar board.
+Running multiple AI agents in parallel shouldn't turn you into a full-time tab switcher. **Antigravity Project Threads** (`project-threads`) turns **Antigravity 2.0 Desktop** into an **attention-first parallel engineering workspace**: pin your main window as a calm **`[Coordinator]`** for scoping and judgment, dispatch isolated background threads via native `ConversationService`, and let structured summaries, **Pending Decisions**, and inline **`Preview`** chats converge in one right-hand sidecar board.
 
-## Built for Developer Attention
+## Why Project Threads?
 
-Parallel AI coding breaks down when your own working memory becomes the bottleneck. **Project Threads** offloads the orchestration overhead so you stay in flow:
+| Parallel AI Pain | How Project Threads Solves It |
+| --- | --- |
+| Main chat drowns in grep noise and build logs | `[Coordinator]` stays clean and high-signal for architecture tradeoffs, delegation, and review. |
+| Concurrent code edits collide on the same branch | Code threads run in isolated Git Worktrees while research threads read zero-copy—zero working-tree conflicts. |
+| Constant tab-switching to check progress or catch blockers | Finished threads push structured summaries back automatically; choices, merges, and sign-offs surface in the pinned **Pending Decisions** queue for one-click action. |
+| Quick follow-ups or model switches break your flow | Click any thread card to open a 1:1 inline **`Preview`** drawer beside your Coordinator—steer workers or switch models without leaving your seat. |
 
-- **Stay in One Calm Window**: Keep `[Coordinator]` clean and high-signal for design tradeoffs, task decomposition, and review—never drown your main conversation in hundreds of lines of search noise or build logs.
-- **Parallel Execution Without Branch Chaos**: Spin up isolated Git Worktrees for code changes and zero-copy read-only threads for investigations simultaneously, with zero working-tree collisions.
-- **Decisions Come to You**: Finished threads push structured summaries back automatically, while choices, merges, and sign-offs surface in the pinned **Pending Decisions** queue for one-click action.
-- **Inspect Without Losing Context**: Click any thread card to open a 1:1 inline **`Preview`** drawer right beside your Coordinator—follow up, steer a worker, or switch its model without ever leaving your seat.
+## Core Capabilities
 
-## Highlights
-
-- **Persistent Coordinator (`/coord`), One-Click Rebinding & Retired Session Protection**:
-  - Keeps your main `[Coordinator] <project>` session focused on scoping, architecture decisions, task delegation, and review, guarded by `PreInvocation` / `PreToolUse` / `Stop` hooks and standing protocol `v14`.
-  - **One-Click Coordinator Switching**: Rebind the project Coordinator directly from the board (**`Switch`** / **`Switch to This`**) to the current main window session, another project session, or a conversation UUID. Active unarchived threads and pending explicit decisions migrate cleanly to the new Coordinator without replaying stale idle callbacks, while retired Coordinator sessions receive a retired-session notice and are blocked from stale single-thread writes.
-  - **Mode-Based Archiving Policy**: Read-only investigation threads (`createWorktree: false`) can be archived autonomously right after reporting; Worktree code threads (`createWorktree: true`) stay open for verification or follow-ups until user acceptance / sign-off and are then archived automatically, safely recognizing both standard merges and `cherry-pick` merges before removing clean Worktrees and branches.
-- **Pending Decisions Board (`manage_decisions`)**:
-  - Pinned at the top of the right-hand **Project Threads** panel so decisions awaiting your call never get buried in chat history.
-  - **Explicit Decision Cards**: Registered by the Coordinator via `manage_decisions` with 1–3 quick-action buttons (`send_coordinator`, `archive_thread`, `dismiss`) to reply back to `[Coordinator]` in one click, and cleared via `resolve` when you answer directly in chat.
-  - **Automatic Worktree Hints**: Automatically detects clean Worktree threads with unmerged commits (ready to merge) or already merged / cherry-picked branches (ready to accept & archive), deduplicated per thread against explicit decisions.
-- **Dual-Mode Parallel Worker Threads (`dispatch_thread`) & Language Following**:
-  - **Isolated Git Worktree Mode (`createWorktree: true`)**: Automatically provisions an isolated checkout and branch under `../.worktrees/<repo>/<thread-slug>`, enabling parallel code changes without branch or working-tree collisions.
-  - **Zero-Copy Read-Only Mode (`createWorktree: false`)**: Runs code investigations, log checks, and design research directly against the repository with zero disk copy overhead.
-  - **Automatic User Language Following**: Thread titles, task prompts, worker analysis, and final summaries automatically follow the user's active conversation language.
-- **Fail-Closed Scope Isolation, Per-Project `#N` Sequences & Async Task Awareness**:
-  - Fail-closed workspace scoping based on live `GetConversation` metadata and the Git repository root keeps threads, Coordinator bindings, decisions, and shared memory strictly isolated per project. Single-thread MCP operations enforce project scope parameters (`coordinatorId` / `workspacePath`) by default.
-  - **Per-Project Display Sequences (`#N`)**: Assigns clean consecutive `#1`, `#2`, `#3`… numbers within each project alongside globally unique `thr-xxx` IDs (eliminating cross-project numbering gaps) and supports scoped `#N` lookup.
-  - Detects active background commands (`run_command` async tasks) to prevent premature completion reports, and uses atomic claim locks (`wx`) to deduplicate structured completion cards pushed back to `[Coordinator]`.
-- **Two-Tier Model + Thinking Effort Picker, `inherit` Mode & Usage Telemetry**:
-  - Pick models and reasoning effort tiers effortlessly via the two-tier family + effort selector in both Sidecar Settings and the inline thread composer, with mid-conversation model switching and unified **`Extra High`** effort normalization.
-  - Configure global or per-project default models separately for Worktree code threads and Read-Only threads, with first-class **`inherit` (Follow Coordinator)** support that dynamically resolves the Coordinator's last executed model at dispatch time.
-  - Displays per-thread **total token consumption**, **compaction-line progress**, and **compaction count** directly on the board—reusing generator-metadata polling with cached offline transcript fallback at zero extra RPC cost.
-- **Swarm-Styled Live Board, Real Project Names & 1:1 Inline `Preview` Drawer**:
-  - Matches Antigravity's native Swarm Overview aesthetics (`--pt-*` isolated tokens, automatic light/dark theme adaptation, real Antigravity project names in the header via `ReadProject`, live progress rings, and adaptive `Coordinator` navigation that hides when already on the Coordinator session).
-  - **Inline `Preview` by Default**: Clicking any thread opens a 1:1 native conversation drawer right inside the sidecar (`Worked for Xm Ys` collapsible step trees, clickable file-line pills, checklists, model picker, and follow-up composer) without leaving the main window—while keeping **`Open ↗`** for popping out into the main window.
-- **Dual-Channel Update Checker & Safe Local Updater**:
-  - Built-in **Version & Updates** card in Sidecar Settings with a subtle red-dot badge on the top-right Settings gear whenever an update is available.
-  - Switch freely between **`stable`** (`origin/main` / `vX.Y.Z` / `stable` releases) and **`dev`** (`origin/dev` pre-releases). One-click Git updates enforce clean working-tree checks and `--ff-only` fast-forwards (never running `git reset --hard`), non-Git installs link safely to GitHub Releases, and a backend/UI version-drift guard prompts you to reload whenever the running sidecar lags behind updated plugin files.
-- **Shared Project Memory (`project-memory.md`) & Trilingual UI**:
-  - Automatically syncs `.agents/rules/project-memory.md` (including default Worktree merge & archive conventions) across active Worktrees, excluded from Git commits via `.git/info/exclude`.
-  - Automatically follows Antigravity's global locale across `English`, `简体中文`, and `繁體中文`.
+| Capability | What You Get | Key Mechanics |
+| --- | --- | --- |
+| **Persistent Coordinator & Rebinding (`/coord`)** | One calm decision center with seamless handoff and mode-aware archiving | Guarded by `PreInvocation` / `PreToolUse` / `Stop` hooks and protocol `v14`. **`Switch`** / **`Switch to This`** migrates active threads and pending explicit decisions without replaying stale idle callbacks, while retired sessions get a retired notice and write guard. Read-only threads archive autonomously after reporting; Worktree threads stay open until user acceptance and recognize both standard merges and `cherry-pick` commits before cleanup. |
+| **Pending Decisions Board (`manage_decisions`)** | Actionable decisions pinned at the top of the board, never buried in chat | Explicit cards registered via `manage_decisions` include 1–3 quick actions (`send_coordinator`, `archive_thread`, `dismiss`) and auto-clear via `resolve` when answered in chat. Automatic Worktree hints detect ready-to-merge and already-merged / cherry-picked branches, deduplicated per thread. |
+| **Dual-Mode Worker Threads (`dispatch_thread`)** | Conflict-free parallel execution that matches your active language | `createWorktree: true` provisions isolated branches under `../.worktrees/<repo>/<thread-slug>`; `createWorktree: false` runs zero-copy read-only investigations directly on the repo. Titles, task prompts, analysis, and final summaries automatically follow your conversation language. |
+| **Fail-Closed Isolation & Async Awareness** | Strict per-project boundaries, clean local numbering, and reliable completion signals | Live `GetConversation` metadata and Git repo-root scoping isolate threads, bindings, decisions, and memory per project; single-thread MCP calls enforce scope by default. Tracks per-project `#1`, `#2`, … sequences alongside global `thr-xxx` IDs. Detects active background `run_command` tasks and uses atomic `wx` claim locks to deduplicate completion cards. |
+| **Model Picker, `inherit` & Telemetry** | Right model and reasoning effort per thread, plus real-time context visibility | Two-tier model family + thinking effort selector in Settings and inline composer, with mid-thread switching and unified **`Extra High`** normalization. Separate global/project defaults for Worktree and Read-Only threads with first-class **`inherit` (Follow Coordinator)**. Zero extra RPC cost for per-thread total tokens, compaction progress, and compaction count (with cached offline transcript fallback). |
+| **Swarm Board & 1:1 Inline `Preview`** | Native Antigravity aesthetics and zero-context-switch inspection | `--pt-*` scoped design tokens, automatic light/dark theming, real Antigravity project names via `ReadProject`, live progress rings, and adaptive Coordinator navigation. Clicking a card opens an inline 1:1 **`Preview`** drawer (`Worked for Xm Ys` collapsible step trees, clickable file-line pills, checklists, model picker, composer), with **`Open ↗`** to pop out anytime. |
+| **Dual-Channel Safe Updater** | Stay current across `stable` and `dev` without risking local edits | Built-in **Version & Updates** card in Settings with a red-dot gear badge when updates arrive. Switch between `stable` (`origin/main` / `vX.Y.Z`) and `dev` (`origin/dev` pre-releases). One-click Git updates enforce clean-tree checks and `--ff-only` fast-forwards (never `git reset --hard`), non-Git installs link to Releases, plus backend/UI version-drift and request-timeout protection. |
+| **Shared Memory & Trilingual UI** | Consistent architectural context across every Worktree and automatic locale sync | Broadcasts `.agents/rules/project-memory.md` (with default Worktree merge & archive conventions) across active Worktrees while excluding it from commits via `.git/info/exclude`. UI automatically follows Antigravity locale across `English` / `简体中文` / `繁體中文`. |
 
 ## MCP Tools (8 Tools)
 
