@@ -1,10 +1,15 @@
 import { resolveLsEndpoint } from '../lib/ls-client.mjs';
 import {
+  addDecision,
   archiveThread,
+  buildBoardDecisions,
+  dismissDecision,
   dispatchThread,
   initCoordinator,
+  listDecisions,
   loadRegistry,
   readProjectMemory,
+  resolveDecision,
   resolveProjectScope,
   sendThreadMessage,
   syncThreads,
@@ -244,6 +249,96 @@ const TOOLS = [
       required: ['threadId'],
     },
   },
+  {
+    name: 'manage_decisions',
+    description:
+      'Register, list, resolve, or dismiss Pending Decisions pinned at the top of the right-hand Project Threads board. Use action="add" whenever you ask the user to make a call (design choice, branch merge, release, or cleanup) with 1–3 quick-action buttons, and action="resolve" once the user decides directly in chat.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['add', 'list', 'resolve', 'dismiss'],
+          description: 'Operation to perform: "add", "list", "resolve", or "dismiss".',
+        },
+        coordinatorId: {
+          type: 'string',
+          description: 'Coordinator conversation ID to scope decisions to the active project.',
+        },
+        conversationId: {
+          type: 'string',
+          description: 'Current conversation ID when resolving project scope.',
+        },
+        workspacePath: {
+          type: 'string',
+          description: 'Absolute path of the project repository.',
+        },
+        projectId: {
+          type: 'string',
+          description: 'Optional Antigravity Project ID for strict project isolation.',
+        },
+        threadId: {
+          type: 'string',
+          description: 'Optional associated Worker Thread ID (e.g. "thr-044") to badge and link on the board.',
+        },
+        title: {
+          type: 'string',
+          description: 'Concise one-line decision title in the user\'s active language (required when action="add").',
+        },
+        summary: {
+          type: 'string',
+          description: 'Optional brief context or trade-off summary (1–2 sentences).',
+        },
+        options: {
+          type: 'array',
+          description: '1–3 quick-action buttons displayed on the decision card (when action="add").',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Optional option identifier (e.g. "opt-merge").' },
+              label: { type: 'string', description: 'Short button label in the user\'s active language.' },
+              action: {
+                type: 'string',
+                enum: ['send_coordinator', 'archive_thread', 'dismiss'],
+                description: 'Action executed when clicked (default: "send_coordinator").',
+              },
+              message: {
+                type: 'string',
+                description: 'Instruction text sent back to the Coordinator when action="send_coordinator".',
+              },
+              style: {
+                type: 'string',
+                enum: ['primary', 'secondary', 'danger'],
+                description: 'Visual emphasis of the button.',
+              },
+            },
+            required: ['label'],
+          },
+        },
+        decisionId: {
+          type: 'string',
+          description: 'Decision ID (e.g. "dec-001") or auto-decision key (required for "resolve" / "dismiss").',
+        },
+        optionId: {
+          type: 'string',
+          description: 'Optional chosen option ID when action="resolve".',
+        },
+        optionLabel: {
+          type: 'string',
+          description: 'Optional chosen option label when action="resolve".',
+        },
+        includeResolved: {
+          type: 'boolean',
+          description: 'When action="list", include resolved/dismissed explicit decisions (default: false).',
+        },
+        includeAuto: {
+          type: 'boolean',
+          description: 'When action="list", include automatic Worktree merge/archive hints (default: true).',
+        },
+      },
+      required: ['action'],
+    },
+  },
 ];
 
 function formatThreadsMarkdown(snapshot) {
@@ -431,6 +526,134 @@ async function handleToolCall(name, args = {}) {
       return { content: [{ type: 'text', text: lines.join('\n') }], structuredContent: res };
     }
 
+    case 'manage_decisions': {
+      const action = String(args.action || '').trim().toLowerCase();
+      if (!['add', 'list', 'resolve', 'dismiss'].includes(action)) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: `Invalid action "${args.action || ''}". Expected one of: add, list, resolve, dismiss.`,
+            },
+          ],
+        };
+      }
+
+      if (action === 'add') {
+        const title = String(args.title || '').trim();
+        if (!title) {
+          return {
+            isError: true,
+            content: [{ type: 'text', text: '`title` is required when action="add".' }],
+          };
+        }
+        const scope = await resolveProjectScope({
+          workspacePath: args.workspacePath || '',
+          conversationId: args.conversationId || args.coordinatorId || '',
+          coordinatorId: args.coordinatorId || '',
+          projectId: args.projectId || '',
+        });
+        const created = addDecision({
+          workspaceKey: scope.scopeKey || '',
+          workspacePath: args.workspacePath || scope.baseDir || '',
+          projectId: args.projectId || scope.projectId || '',
+          coordinatorId: args.coordinatorId || args.conversationId || '',
+          conversationId: args.conversationId || '',
+          threadId: args.threadId || '',
+          title,
+          summary: args.summary || '',
+          options: args.options,
+        });
+        const optLabels = (created.options || []).map((o) => `\`${o.label}\` (${o.action})`).join(', ');
+        const text = [
+          `Pinned Pending Decision **\`${created.id}\`**: ${created.title}`,
+          created.threadId ? `- Linked Thread: \`${created.threadId}\`` : '',
+          created.summary ? `- Summary: ${created.summary}` : '',
+          optLabels ? `- Quick Actions: ${optLabels}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n');
+        return { content: [{ type: 'text', text }], structuredContent: created };
+      }
+
+      if (action === 'list') {
+        const scope = await resolveProjectScope({
+          workspacePath: args.workspacePath || '',
+          conversationId: args.conversationId || args.coordinatorId || '',
+          coordinatorId: args.coordinatorId || '',
+          projectId: args.projectId || '',
+        });
+        const scopeParams = {
+          workspaceKey: scope.scopeKey || '',
+          workspacePath: args.workspacePath || scope.baseDir || '',
+          projectId: args.projectId || scope.projectId || '',
+          coordinatorId: args.coordinatorId || '',
+          conversationId: args.conversationId || '',
+          includeResolved: Boolean(args.includeResolved),
+        };
+        const includeAuto = args.includeAuto !== false;
+        let items;
+        if (args.includeResolved) {
+          const explicitAll = listDecisions(scopeParams);
+          const autoPending = includeAuto
+            ? buildBoardDecisions(scopeParams).filter((d) => d.source === 'auto')
+            : [];
+          items = [...explicitAll, ...autoPending];
+        } else {
+          items = includeAuto ? buildBoardDecisions(scopeParams) : listDecisions(scopeParams);
+        }
+        const lines = items.length
+          ? [
+              '| ID | Source | Status | Thread | Title |',
+              '|---|---|---|---|---|',
+              ...items.map(
+                (d) =>
+                  `| \`${d.id}\` | ${d.source || 'explicit'} | ${d.status || 'pending'} | ${d.threadId ? `\`${d.threadId}\`` : '-'} | ${String(d.title || '').replace(/\|/g, '\\|')} |`,
+              ),
+            ]
+          : ['No pending decisions found for this project scope.'];
+        return {
+          content: [{ type: 'text', text: lines.join('\n') }],
+          structuredContent: { scopeKey: scope.scopeKey || '', decisions: items },
+        };
+      }
+
+      if (action === 'resolve') {
+        const decisionId = String(args.decisionId || '').trim();
+        if (!decisionId) {
+          return {
+            isError: true,
+            content: [{ type: 'text', text: '`decisionId` is required when action="resolve".' }],
+          };
+        }
+        const updated = resolveDecision({
+          decisionId,
+          optionId: args.optionId || '',
+          optionLabel: args.optionLabel || '',
+        });
+        const text = `Resolved decision \`${updated.id}\` (${updated.title})${updated.resolvedOptionLabel ? ` — chosen: **${updated.resolvedOptionLabel}**` : ''}.`;
+        return { content: [{ type: 'text', text }], structuredContent: updated };
+      }
+
+      // action === 'dismiss'
+      const decisionId = String(args.decisionId || '').trim();
+      if (!decisionId && !args.threadId) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: '`decisionId` (or `threadId`) is required when action="dismiss".',
+            },
+          ],
+        };
+      }
+      const dismissed = dismissDecision(decisionId || { threadId: args.threadId });
+      const text = `Dismissed decision \`${dismissed.decisionId || dismissed.key || decisionId}\`.`;
+      return { content: [{ type: 'text', text }], structuredContent: dismissed };
+    }
+
     default:
       return {
         isError: true,
@@ -501,8 +724,9 @@ async function dispatchRpc(msg) {
   }
 }
 
-// Stdio reader supporting standard MCP newline-delimited JSON
+// Stdio reader supporting standard MCP newline-delimited JSON (preserves request ordering)
 let buffer = '';
+let rpcQueue = Promise.resolve();
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
   buffer += chunk;
@@ -513,7 +737,7 @@ process.stdin.on('data', (chunk) => {
     if (!line || line.startsWith('Content-Length:')) continue;
     try {
       const parsed = JSON.parse(line);
-      dispatchRpc(parsed);
+      rpcQueue = rpcQueue.then(() => dispatchRpc(parsed));
     } catch (err) {
       process.stderr.write(`[project-threads mcp] parse error: ${err.message}\n`);
     }

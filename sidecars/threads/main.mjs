@@ -13,6 +13,7 @@ import {
   canonicalizeModelForSettings,
   cleanupThreadWorktree,
   dispatchThread,
+  executeDecisionAction,
   getEffectiveSettings,
   getThreadMessages,
   initCoordinator,
@@ -259,6 +260,30 @@ async function handleCleanupWorktree(data = {}) {
   }
 }
 registerDualApi('/api/cleanup_worktree', handleCleanupWorktree);
+
+async function handleDecisionAction(data = {}) {
+  try {
+    const res = await executeDecisionAction({
+      decisionId: data.decisionId || '',
+      optionId: data.optionId || '',
+      action: data.action || '',
+      threadId: data.threadId || '',
+      autoKind: data.autoKind || '',
+      lastCommit: data.lastCommit || '',
+      message: data.message || '',
+      label: data.label || '',
+      title: data.title || '',
+      workspacePath: data.workspacePath || data.workspace || '',
+      conversationId: data.conversationId || '',
+      coordinatorId: data.coordinatorId || '',
+      projectId: data.projectId || '',
+    });
+    return { ...res, locale: resolveAppLocale() };
+  } catch (err) {
+    return { ok: false, error: err.message, locale: resolveAppLocale() };
+  }
+}
+registerDualApi('/api/decision_action', handleDecisionAction);
 
 app.api(
   '/api/memory',

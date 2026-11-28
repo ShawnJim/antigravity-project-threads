@@ -309,6 +309,25 @@
       usageCompactLine: 'Compact line',
       usageCompacts: (n) => `${n} ${n === 1 ? 'compact' : 'compacts'}`,
       usageDetailTip: (inp, out, cache) => `Input ${inp} | Output ${out} | Cache ${cache}`,
+      decisionsTitle: 'Pending Decisions',
+      decisionBadge: 'Decision',
+      decisionAutoTag: 'Auto hint',
+      decisionToggleTip: 'Expand or collapse pending decisions',
+      decisionDismissTip: 'Dismiss',
+      decisionThreadTip: (tid) => `Locate thread ${tid}`,
+      decisionWorking: 'Working…',
+      decisionSentCoordToast: 'Decision sent to Coordinator',
+      decisionDismissedToast: 'Decision dismissed',
+      decisionActionErrToast: 'Decision action failed',
+      decisionAutoMergeTitle: 'Worktree ready to merge',
+      decisionAutoMergeSummary: (title, branch, commits) =>
+        `${title}${branch ? ` (${branch}, +${commits} commit${commits === 1 ? '' : 's'})` : ` (+${commits} commit${commits === 1 ? '' : 's'})`}`,
+      decisionAutoMergeBtn: 'Merge to target',
+      decisionAutoArchiveTitle: (isCherry) =>
+        isCherry ? 'Cherry-picked, ready to archive' : 'Merged, ready to archive',
+      decisionAutoArchiveSummary: (title, branch) => `${title}${branch ? ` (${branch})` : ''}`,
+      decisionAutoArchiveBtn: 'Accept & Archive',
+      decisionDismissBtn: 'Dismiss',
     },
 
     'zh-CN': {
@@ -604,6 +623,25 @@
       usageCompactLine: '压缩线',
       usageCompacts: (n) => `${n} 次压缩`,
       usageDetailTip: (inp, out, cache) => `输入 ${inp} | 输出 ${out} | 缓存 ${cache}`,
+      decisionsTitle: '待决策',
+      decisionBadge: '待决策',
+      decisionAutoTag: '自动提示',
+      decisionToggleTip: '展开或收起待决策区',
+      decisionDismissTip: '忽略此提醒',
+      decisionThreadTip: (tid) => `定位到线程 ${tid}`,
+      decisionWorking: '处理中…',
+      decisionSentCoordToast: '已将决策发送给总控执行',
+      decisionDismissedToast: '已忽略该待决策项',
+      decisionActionErrToast: '执行决策操作失败',
+      decisionAutoMergeTitle: '分支已就绪，待合入',
+      decisionAutoMergeSummary: (title, branch, commits) =>
+        `${title}${branch ? `（${branch}，+${commits} 次提交）` : `（+${commits} 次提交）`}`,
+      decisionAutoMergeBtn: '合入目标分支',
+      decisionAutoArchiveTitle: (isCherry) =>
+        isCherry ? '已 cherry-pick 合入，待验收归档' : '已合入，待验收归档',
+      decisionAutoArchiveSummary: (title, branch) => `${title}${branch ? `（${branch}）` : ''}`,
+      decisionAutoArchiveBtn: '验收归档',
+      decisionDismissBtn: '忽略',
     },
 
     'zh-TW': {
@@ -899,6 +937,25 @@
       usageCompactLine: '壓縮線',
       usageCompacts: (n) => `${n} 次壓縮`,
       usageDetailTip: (inp, out, cache) => `輸入 ${inp} | 輸出 ${out} | 快取 ${cache}`,
+      decisionsTitle: '待決策',
+      decisionBadge: '待決策',
+      decisionAutoTag: '自動提示',
+      decisionToggleTip: '展開或收起待決策區',
+      decisionDismissTip: '忽略此提醒',
+      decisionThreadTip: (tid) => `定位至執行緒 ${tid}`,
+      decisionWorking: '處理中…',
+      decisionSentCoordToast: '已將決策傳送給總控執行',
+      decisionDismissedToast: '已忽略該待決策項',
+      decisionActionErrToast: '執行決策操作失敗',
+      decisionAutoMergeTitle: '分支已就緒，待合併',
+      decisionAutoMergeSummary: (title, branch, commits) =>
+        `${title}${branch ? `（${branch}，+${commits} 次提交）` : `（+${commits} 次提交）`}`,
+      decisionAutoMergeBtn: '合併至目標分支',
+      decisionAutoArchiveTitle: (isCherry) =>
+        isCherry ? '已 cherry-pick 合併，待驗收封存' : '已合併，待驗收封存',
+      decisionAutoArchiveSummary: (title, branch) => `${title}${branch ? `（${branch}）` : ''}`,
+      decisionAutoArchiveBtn: '驗收封存',
+      decisionDismissBtn: '忽略',
     },
   };
 
@@ -928,6 +985,7 @@
     popout:
       '<svg class="ico ico-xs" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
     eye: '<svg class="ico ico-xs" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    close: '<svg class="ico ico-xs" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
   };
 
   // ---------- Application State ----------
@@ -941,10 +999,13 @@
   let currentTab = 'threads';
   let sortMode = 'priority'; // 'priority' | 'recent'
   let tasksCardCollapsed = true; // Compact 1-line summary bar by default (like Swarm o2-prog)
+  let decisionsPanelCollapsed = false;
+  const pendingDecisionIds = new Set();
   const threadOpenState = new Map(); // threadId -> boolean
   let lastBoardKey = '';
   let lastSnap = null;
   let cachedThreads = [];
+  let cachedDecisions = [];
   let boardScrollTop = 0;
 
   let openThreadId = '';
@@ -1019,6 +1080,7 @@
   const elNewBtn = document.getElementById('btn-new');
   const elToast = document.getElementById('toast');
   const elGoalCard = document.getElementById('goal-card');
+  const elDecisionsPanel = document.getElementById('decisions-panel');
   const elBtnOpenCoord = document.getElementById('btn-open-coord');
   const elBtnCardCoord = document.getElementById('btn-card-coord');
   const elBtnChatCoord = document.getElementById('btn-chat-coord');
@@ -2853,7 +2915,267 @@
     return `<div class="o2-th-usage">${parts.join('')}</div>`;
   }
 
-  function renderO2ThreadCard(th) {
+  function getLocalizedDecisionDisplay(dec) {
+    const t = L();
+    if (!dec || dec.source !== 'auto') {
+      return {
+        title: String(dec?.title || ''),
+        summary: String(dec?.summary || ''),
+        options: Array.isArray(dec?.options) ? dec.options : [],
+      };
+    }
+    const baseOpts = Array.isArray(dec.options) ? dec.options : [];
+    const thTitle = dec.threadTitle || dec.threadId || '';
+    if (dec.autoKind === 'worktree_merge_ready') {
+      return {
+        title: t.decisionAutoMergeTitle,
+        summary: t.decisionAutoMergeSummary(thTitle, dec.branch || '', Number(dec.aheadCount) || 0),
+        options: baseOpts.map((o) =>
+          o.action === 'dismiss'
+            ? { ...o, label: t.decisionDismissBtn }
+            : { ...o, label: t.decisionAutoMergeBtn },
+        ),
+      };
+    }
+    if (dec.autoKind === 'worktree_archive_ready') {
+      const isCherry = dec.mergeMethod === 'cherry-pick';
+      return {
+        title: t.decisionAutoArchiveTitle(isCherry),
+        summary: t.decisionAutoArchiveSummary(thTitle, dec.branch || ''),
+        options: baseOpts.map((o) =>
+          o.action === 'dismiss'
+            ? { ...o, label: t.decisionDismissBtn }
+            : { ...o, label: t.decisionAutoArchiveBtn },
+        ),
+      };
+    }
+    return {
+      title: String(dec.title || ''),
+      summary: String(dec.summary || ''),
+      options: baseOpts,
+    };
+  }
+
+  function renderDecisionsPanelHtml(decisions, { collapsed = false, busyIds = null } = {}) {
+    if (!Array.isArray(decisions) || decisions.length === 0) return '';
+    const t = L();
+    const busySet =
+      busyIds && typeof busyIds.has === 'function' ? busyIds : pendingDecisionIds;
+
+    const cardsHtml = decisions
+      .map((dec) => {
+        const isAuto = dec.source === 'auto';
+        const isBusy = busySet.has(dec.id);
+        const view = getLocalizedDecisionDisplay(dec);
+        const hasMetaRow = Boolean(dec.threadId || isAuto);
+        const dismissBtnHtml = `
+          <button type="button" class="dec-dismiss-btn" data-dec-dismiss="${esc(dec.id)}" title="${esc(t.decisionDismissTip)}" aria-label="${esc(t.decisionDismissTip)}"${isBusy ? ' disabled' : ''}>
+            ${ICONS.close}
+          </button>
+        `;
+        const topHtml = hasMetaRow
+          ? `
+            <div class="decision-top">
+              ${
+                dec.threadId
+                  ? `<button type="button" class="dec-thread-badge" data-dec-thread="${esc(dec.threadId)}" title="${esc(t.decisionThreadTip(dec.threadId))}">${esc(dec.threadId)}</button>`
+                  : ''
+              }
+              ${isAuto ? `<span class="dec-auto-tag">${esc(t.decisionAutoTag)}</span>` : ''}
+              ${dismissBtnHtml}
+            </div>
+            <div class="decision-title">${esc(view.title)}</div>
+          `
+          : `
+            <div class="decision-top">
+              <div class="decision-title">${esc(view.title)}</div>
+              ${dismissBtnHtml}
+            </div>
+          `;
+        const summaryHtml = view.summary
+          ? `<div class="decision-summary" title="${esc(view.summary)}">${esc(view.summary)}</div>`
+          : '';
+        const opts = (view.options || []).slice(0, 3);
+        const actionsHtml = opts.length
+          ? `<div class="decision-actions">${opts
+              .map((opt) => {
+                const styleCls =
+                  opt.style === 'primary'
+                    ? 'dec-btn-primary'
+                    : opt.style === 'danger'
+                      ? 'dec-btn-danger'
+                      : 'dec-btn-secondary';
+                return `<button type="button" class="dec-btn ${styleCls}" data-dec-id="${esc(dec.id)}" data-opt-id="${esc(opt.id)}" data-opt-action="${esc(opt.action || 'send_coordinator')}"${isBusy ? ' disabled' : ''}>${esc(isBusy ? t.decisionWorking : opt.label)}</button>`;
+              })
+              .join('')}</div>`
+          : '';
+        return `
+          <div class="decision-card${isAuto ? ' is-auto' : ''}${isBusy ? ' is-busy' : ''}" data-decision-id="${esc(dec.id)}">
+            ${topHtml}
+            ${summaryHtml}
+            ${actionsHtml}
+          </div>
+        `;
+      })
+      .join('');
+
+    return `
+      <button type="button" class="decisions-hdr" data-action="toggle-decisions" aria-expanded="${collapsed ? 'false' : 'true'}" title="${esc(t.decisionToggleTip)}">
+        <span class="dec-dot" aria-hidden="true"></span>
+        <span class="decisions-title">${esc(t.decisionsTitle)}</span>
+        <span class="decisions-count tabular">${decisions.length}</span>
+        <span class="decisions-chev" aria-hidden="true">${ICONS.chevronDown}</span>
+      </button>
+      <div class="decisions-list">
+        ${cardsHtml}
+      </div>
+    `;
+  }
+
+  function focusOrPreviewDecisionThread(threadId) {
+    if (!threadId) return;
+    let targetCard = null;
+    document.querySelectorAll('.o2-th[data-th-card]').forEach((node) => {
+      if (!targetCard && node.dataset.thCard === threadId) targetCard = node;
+    });
+    if (targetCard) {
+      threadOpenState.set(threadId, true);
+      targetCard.classList.add('open');
+      const foldBtn = targetCard.querySelector('.o2-fold-btn');
+      if (foldBtn) foldBtn.setAttribute('aria-expanded', 'true');
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetCard.classList.remove('dec-highlight');
+      void targetCard.offsetWidth;
+      targetCard.classList.add('dec-highlight');
+      setTimeout(() => {
+        targetCard.classList.remove('dec-highlight');
+      }, 1900);
+      return;
+    }
+    openThreadDrawer(threadId);
+  }
+
+  async function handleDecisionActionTrigger(dec, opt, triggerBtn) {
+    if (!dec || !dec.id || pendingDecisionIds.has(dec.id)) return;
+    const t = L();
+    pendingDecisionIds.add(dec.id);
+
+    const cardEl = triggerBtn?.closest?.('.decision-card');
+    if (cardEl) {
+      cardEl.classList.add('is-busy');
+      cardEl.querySelectorAll('button').forEach((b) => {
+        b.disabled = true;
+      });
+    }
+    if (triggerBtn && triggerBtn.classList.contains('dec-btn')) {
+      triggerBtn.textContent = t.decisionWorking;
+    }
+
+    const action = opt?.action || 'dismiss';
+    const payload = buildScopePayload({
+      decisionId: dec.id,
+      optionId: opt?.id || '',
+      action,
+      threadId: dec.threadId || '',
+      autoKind: dec.autoKind || '',
+      lastCommit: dec.lastCommit || '',
+      message: opt?.message || '',
+      label: opt?.label || '',
+      title: dec.title || '',
+      coordinatorId: dec.coordinatorId || lastSnap?.coordinator?.conversationId || '',
+    });
+
+    try {
+      const res = await postApi('/api/decision_action', '/api/decision_action_get', payload);
+      pendingDecisionIds.delete(dec.id);
+      if (!res || res.ok === false) {
+        flashToast(res?.error || t.decisionActionErrToast, 'err', 3600);
+        renderDecisionsPanel(cachedDecisions);
+        return;
+      }
+
+      if (res.action === 'archive_thread') {
+        showArchiveResultToast(res.archiveResult || { ok: true, archived: true });
+      } else if (res.action === 'send_coordinator') {
+        flashToast(t.decisionSentCoordToast, 'ok', 2800);
+      } else {
+        flashToast(t.decisionDismissedToast, 'ok', 2200);
+      }
+
+      cachedDecisions = cachedDecisions.filter((x) => x.id !== dec.id);
+      renderDecisionsPanel(cachedDecisions);
+      lastBoardKey = '';
+      refreshBoard(true);
+    } catch (err) {
+      pendingDecisionIds.delete(dec.id);
+      flashToast(err?.message || t.decisionActionErrToast, 'err', 3600);
+      renderDecisionsPanel(cachedDecisions);
+    }
+  }
+
+  function renderDecisionsPanel(decisions) {
+    if (!elDecisionsPanel) return;
+    const list = Array.isArray(decisions) ? decisions : [];
+    cachedDecisions = list;
+    if (!list.length) {
+      elDecisionsPanel.hidden = true;
+      elDecisionsPanel.classList.remove('collapsed');
+      elDecisionsPanel.innerHTML = '';
+      return;
+    }
+    elDecisionsPanel.hidden = false;
+    elDecisionsPanel.classList.toggle('collapsed', decisionsPanelCollapsed);
+    elDecisionsPanel.innerHTML = renderDecisionsPanelHtml(list, {
+      collapsed: decisionsPanelCollapsed,
+      busyIds: pendingDecisionIds,
+    });
+
+    const toggleBtn = elDecisionsPanel.querySelector('button[data-action="toggle-decisions"]');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        decisionsPanelCollapsed = !decisionsPanelCollapsed;
+        elDecisionsPanel.classList.toggle('collapsed', decisionsPanelCollapsed);
+        toggleBtn.setAttribute('aria-expanded', decisionsPanelCollapsed ? 'false' : 'true');
+      });
+    }
+
+    elDecisionsPanel.querySelectorAll('button[data-dec-thread]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        focusOrPreviewDecisionThread(btn.dataset.decThread);
+      });
+    });
+
+    elDecisionsPanel.querySelectorAll('button[data-dec-dismiss]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const did = btn.dataset.decDismiss;
+        const dec = cachedDecisions.find((x) => x.id === did);
+        if (dec) {
+          handleDecisionActionTrigger(dec, { id: 'dismiss', action: 'dismiss', label: L().decisionDismissBtn }, btn);
+        }
+      });
+    });
+
+    elDecisionsPanel.querySelectorAll('button[data-dec-id][data-opt-id]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const did = btn.dataset.decId;
+        const oid = btn.dataset.optId;
+        const dec = cachedDecisions.find((x) => x.id === did);
+        if (!dec) return;
+        const view = getLocalizedDecisionDisplay(dec);
+        const opt = (view.options || []).find((o) => o.id === oid) || {
+          id: oid,
+          action: btn.dataset.optAction || 'send_coordinator',
+          label: btn.textContent || '',
+        };
+        handleDecisionActionTrigger(dec, opt, btn);
+      });
+    });
+  }
+
+  function renderO2ThreadCard(th, decisionThreadIds = null) {
     const t = L();
     const isWorking = th.bucket === 'working';
     const isWaiting = th.bucket === 'waiting';
@@ -2862,6 +3184,11 @@
     const activeWorkerId = getActiveMainWorkerConvId();
     const isActiveMain = Boolean(
       activeWorkerId && th.conversationId && th.conversationId === activeWorkerId,
+    );
+    const hasPendingDecision = Boolean(
+      decisionThreadIds &&
+        typeof decisionThreadIds.has === 'function' &&
+        decisionThreadIds.has(th.threadId),
     );
 
     const statusWord = isWorking
@@ -2946,7 +3273,10 @@
     const modelLabel = formatModelDisplay(th.modelDisplayName || th.resolvedModel || th.model);
     const modelChip = `<span class="o2-wchips"><span class="o2-wchip" title="${esc(modelLabel)}">${esc(modelLabel)}</span></span>`;
     const usageHtml = renderThreadUsageRow(th);
-    const cardCls = `o2-th ${stateCls}${isOpen ? ' open' : ''}${isActiveMain ? ' active-main' : ''}`;
+    const decisionBadgeHtml = hasPendingDecision
+      ? `<span class="o2-dec-badge">${esc(t.decisionBadge)}</span>`
+      : '';
+    const cardCls = `o2-th ${stateCls}${isOpen ? ' open' : ''}${isActiveMain ? ' active-main' : ''}${hasPendingDecision ? ' has-decision' : ''}`;
 
     return `
       <div class="${cardCls}" data-th-card="${esc(th.threadId)}">
@@ -2955,6 +3285,7 @@
           <button type="button" class="o2-tht" data-action="open-primary" data-id="${esc(th.threadId)}" title="${esc(th.displayTitle || th.title)}">
             <b>${esc(th.title)}</b>
             <em>${esc(statusWord)}</em>
+            ${decisionBadgeHtml}
           </button>
           <span class="o2-thc">${rightMetaHtml}</span>
           <button type="button" class="o2-fold-btn" data-action="fold-th" data-id="${esc(th.threadId)}" aria-expanded="${isOpen ? 'true' : 'false'}" title="${esc(t.foldTip)}">
@@ -2974,7 +3305,7 @@
     `;
   }
 
-  function renderO2ThreadsSection(waiting, working, idle, active) {
+  function renderO2ThreadsSection(waiting, working, idle, active, decisionThreadIds = null) {
     if (!active.length) return '';
     const t = L();
     const ordered =
@@ -2990,7 +3321,7 @@
           <span>${esc(t.secThreads)}</span>
           <em>${active.length}</em>
         </h3>
-        ${ordered.map(renderO2ThreadCard).join('')}
+        ${ordered.map((th) => renderO2ThreadCard(th, decisionThreadIds)).join('')}
       </section>
     `;
   }
@@ -3293,6 +3624,13 @@
     const badgeEl = document.getElementById('other-running-badge');
     if (badgeEl) badgeEl.textContent = otherRunning > 0 ? `${otherRunning}` : '';
 
+    // 0. Pinned Pending Decisions panel (above Running section; zero footprint when empty)
+    const decisions = Array.isArray(snap.decisions) ? snap.decisions : [];
+    const decisionThreadIds = new Set(
+      decisions.map((d) => String(d?.threadId || '').trim()).filter(Boolean),
+    );
+    renderDecisionsPanel(decisions);
+
     // 1. Threads Pane (Card B Running + Card C Compact Progress + Section D Swarm .o2-th Cards)
     const cardsEl = document.getElementById('threads-cards');
     if (!active.length) {
@@ -3306,7 +3644,7 @@
       cardsEl.innerHTML = [
         renderRunningCard(working),
         renderTasksCard(waiting, idle, working.length, active.length),
-        renderO2ThreadsSection(waiting, working, idle, active),
+        renderO2ThreadsSection(waiting, working, idle, active, decisionThreadIds),
       ].join('');
       bindOverviewEvents(cardsEl);
     }
@@ -5118,9 +5456,11 @@
         scopeTitle: data.scopeTitle || '',
         projectLabel: data.projectLabel || '',
         sortMode,
+        decisionsPanelCollapsed,
         timeBucket,
         coordinator: data.coordinator,
         threads: data.threads,
+        decisions: data.decisions || [],
       });
       if (!force && !scopeChanged && !convChanged && key === lastBoardKey) return;
       lastBoardKey = key;
