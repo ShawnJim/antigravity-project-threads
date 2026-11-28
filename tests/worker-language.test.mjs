@@ -52,13 +52,13 @@ function writeTranscript(appDataDir, convId, steps) {
   return txPath;
 }
 
-test('hook-handler v15 directive, SKILL.md, rules/AGENTS.md, and MCP schema enforce user-language matching and mode-based archiving policy', (t) => {
+test('hook-handler v16 directive, SKILL.md, rules/AGENTS.md, and MCP schema enforce user-language matching and mode-based archiving policy', (t) => {
   const hookHandler = readFileSync(new URL('../scripts/hook-handler.mjs', import.meta.url), 'utf8');
   const skillMd = readFileSync(new URL('../skills/coord/SKILL.md', import.meta.url), 'utf8');
   const rulesMd = readFileSync(new URL('../rules/AGENTS.md', import.meta.url), 'utf8');
   const serverMjs = readFileSync(new URL('../mcp/server.mjs', import.meta.url), 'utf8');
 
-  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*15\s*;/);
+  assert.match(hookHandler, /const\s+DIRECTIVE_VERSION\s*=\s*16\s*;/);
   assert.match(skillMd, /Follow the User's Language/i);
   assert.match(skillMd, /title.*taskPrompt.*active conversation language/i);
   assert.match(skillMd, /Read-only.*`createWorktree:\s*false`.*autonomously decide.*`archive_thread`.*without asking the user/i);
@@ -88,7 +88,7 @@ test('hook-handler v15 directive, SKILL.md, rules/AGENTS.md, and MCP schema enfo
     workspacePath: ws,
     repoRoot: ws,
     title: '[Coordinator] LangTest',
-    directiveVersion: 13,
+    directiveVersion: 15,
   };
   saveRegistry(reg);
 
@@ -125,7 +125,7 @@ test('hook-handler v15 directive, SKILL.md, rules/AGENTS.md, and MCP schema enfo
   );
   assert.doesNotMatch(directive, /NEVER auto-archive/i);
   assert.doesNotMatch(directive, /archive Worktree code threads once confirmed merged/i);
-  assert.equal(loadRegistry().coordinators['__lang_hook__'].directiveVersion, 15);
+  assert.equal(loadRegistry().coordinators['__lang_hook__'].directiveVersion, 16);
 });
 
 test('detectPromptLanguage and buildWorkerPrompt localize Chinese tasks and preserve English templates', () => {

@@ -3,7 +3,8 @@
 
   const BOARD_POLL_MS = 2200;
   const CHAT_POLL_MS = 1200;
-  const EXPECTED_SERVER_API_REVISION = 4;
+  const EXPECTED_SERVER_API_REVISION = 5;
+  const MAX_DECISION_CUSTOM_MESSAGE_LEN = 2000;
   const REQUIRED_UPDATE_CAPABILITIES = ['update_status', 'update_check', 'update_apply'];
   const API_READ_TIMEOUT_MS = 10_000;
   const API_WRITE_TIMEOUT_MS = 12_000;
@@ -416,6 +417,9 @@
       decisionCustomEmptyToast: 'Please enter a custom instruction first',
       decisionCustomSentToast: 'Custom instruction sent to Coordinator',
       decisionCustomInputTip: 'Press Enter to send, Esc to collapse',
+      decisionCustomUnsupportedErr: 'Custom instruction requires reloading the Sidecar service',
+      decisionCustomTooLongToast: (max) => `Custom instruction cannot exceed ${max} characters`,
+      decisionAlreadyResolvedToast: 'This decision has already been handled',
     },
 
     'zh-CN': {
@@ -793,6 +797,9 @@
       decisionCustomEmptyToast: '请先输入自定义指令内容',
       decisionCustomSentToast: '已将自定义指令发送给总控',
       decisionCustomInputTip: '按 Enter 发送，按 Esc 收起',
+      decisionCustomUnsupportedErr: '当前侧边栏后台版本过旧，请重载后再发送自定义指令',
+      decisionCustomTooLongToast: (max) => `自定义指令长度不能超过 ${max} 个字符`,
+      decisionAlreadyResolvedToast: '该待决策项已被处理',
     },
 
     'zh-TW': {
@@ -1170,6 +1177,9 @@
       decisionCustomEmptyToast: '請先輸入自訂指令內容',
       decisionCustomSentToast: '已將自訂指令傳送給總控',
       decisionCustomInputTip: '按 Enter 傳送，按 Esc 收起',
+      decisionCustomUnsupportedErr: '目前側邊欄後台版本過舊，請重新載入後再傳送自訂指令',
+      decisionCustomTooLongToast: (max) => `自訂指令長度不能超過 ${max} 個字元`,
+      decisionAlreadyResolvedToast: '該待決策項已被處理',
     },
   };
 
@@ -1268,6 +1278,7 @@
   let pluginUpdateAppliedVersion = '';
   let pluginUpdatePollTimer = null;
   let backendVersionMismatch = null;
+  let serverCapabilities = new Set();
   let updateCardError = '';
   let updateStatusTimer = null;
   let updateStatusNotice = { text: '', tone: 'ok' };
@@ -3166,15 +3177,21 @@
     }
   }
 
+  function supportsDecisionCustomReply() {
+    return typeof serverCapabilities !== 'undefined' && serverCapabilities.has('decision_custom_reply');
+  }
+
   function inspectServerInfo(data, { fromState = false, expectServerInfo = false } = {}) {
     if (!data || typeof data !== 'object') return;
     const info = data.serverInfo && typeof data.serverInfo === 'object' ? data.serverInfo : null;
     const prevKey = backendVersionMismatch
       ? `${backendVersionMismatch.kind}|${backendVersionMismatch.startedVersion}|${backendVersionMismatch.diskVersion}`
       : '';
+    const prevCustomCap = supportsDecisionCustomReply();
 
     if (info) {
       const caps = Array.isArray(info.capabilities) ? info.capabilities : [];
+      serverCapabilities = new Set(caps.map((c) => String(c || '').trim()).filter(Boolean));
       const rev = Number(info.apiRevision) || 0;
       const missingCaps = REQUIRED_UPDATE_CAPABILITIES.some((c) => !caps.includes(c));
       if (rev < EXPECTED_SERVER_API_REVISION || missingCaps) {
@@ -3195,6 +3212,7 @@
         backendVersionMismatch = null;
       }
     } else if (expectServerInfo || (fromState && !data.error && 'threads' in data)) {
+      serverCapabilities = new Set();
       backendVersionMismatch = {
         kind: 'stale_backend',
         startedVersion: '',
@@ -3208,6 +3226,12 @@
       : '';
     if (nextKey !== prevKey && settingsScreenOpen) {
       renderUpdateCard();
+    }
+    if (supportsDecisionCustomReply() !== prevCustomCap) {
+      lastDecisionsRenderKey = '';
+      if (cachedDecisions.length > 0 && typeof renderDecisionsPanel === 'function') {
+        renderDecisionsPanel(cachedDecisions, { force: true });
+      }
     }
   }
 
@@ -3875,10 +3899,18 @@
 
   function renderDecisionsPanelHtml(
     decisions,
-    { collapsed = false, busyIds = null, expandedIds = null, drafts = null } = {},
+    { collapsed = false, busyIds = null, expandedIds = null, drafts = null, customReplyEnabled = null } = {},
   ) {
     if (!Array.isArray(decisions) || decisions.length === 0) return '';
     const t = L();
+    const maxCustomLen =
+      typeof MAX_DECISION_CUSTOM_MESSAGE_LEN === 'number' ? MAX_DECISION_CUSTOM_MESSAGE_LEN : 2000;
+    const allowCustomReply =
+      typeof customReplyEnabled === 'boolean'
+        ? customReplyEnabled
+        : typeof serverCapabilities !== 'undefined'
+          ? serverCapabilities.has('decision_custom_reply')
+          : true;
     const busySet =
       busyIds && typeof busyIds.has === 'function' ? busyIds : pendingDecisionIds;
     const expandedSet =
@@ -3898,7 +3930,7 @@
       .map((dec) => {
         const isAuto = dec.source === 'auto';
         const isBusy = busySet.has(dec.id);
-        const isCustomOpen = Boolean(expandedSet && expandedSet.has(dec.id));
+        const isCustomOpen = Boolean(allowCustomReply && expandedSet && expandedSet.has(dec.id));
         const draftVal = draftMap && draftMap.has(dec.id) ? String(draftMap.get(dec.id) || '') : '';
         const hasDraft = Boolean(draftVal.trim());
         const view = getLocalizedDecisionDisplay(dec);
@@ -3949,8 +3981,13 @@
             return `<button type="button" class="dec-btn ${styleCls}" data-dec-id="${esc(dec.id)}" data-opt-id="${esc(opt.id)}" data-opt-action="${esc(opt.action || 'send_coordinator')}"${isBusy ? ' disabled' : ''}>${esc(isBusy ? t.decisionWorking : opt.label)}</button>`;
           })
           .join('');
-        const customToggleHtml = `<button type="button" class="dec-btn dec-btn-custom${isCustomOpen ? ' is-active' : ''}${hasDraft && !isCustomOpen ? ' has-draft' : ''}" data-dec-custom-toggle="${esc(dec.id)}" aria-expanded="${isCustomOpen ? 'true' : 'false'}"${isBusy ? ' disabled' : ''}>${esc(t.decisionCustomBtn)}</button>`;
-        const actionsHtml = `<div class="decision-actions">${optBtnsHtml}${customToggleHtml}</div>`;
+        const customToggleHtml = allowCustomReply
+          ? `<button type="button" class="dec-btn dec-btn-custom${isCustomOpen ? ' is-active' : ''}${hasDraft && !isCustomOpen ? ' has-draft' : ''}" data-dec-custom-toggle="${esc(dec.id)}" aria-expanded="${isCustomOpen ? 'true' : 'false'}"${isBusy ? ' disabled' : ''}>${esc(t.decisionCustomBtn)}</button>`
+          : '';
+        const actionsHtml =
+          optBtnsHtml || customToggleHtml
+            ? `<div class="decision-actions">${optBtnsHtml}${customToggleHtml}</div>`
+            : '';
         const customRowHtml = isCustomOpen
           ? `
             <div class="dec-custom-row" data-dec-custom-box="${esc(dec.id)}">
@@ -3959,6 +3996,7 @@
                 class="dec-custom-input"
                 data-dec-custom-input="${esc(dec.id)}"
                 value="${esc(draftVal)}"
+                maxlength="${maxCustomLen}"
                 placeholder="${esc(t.decisionCustomPlaceholder)}"
                 title="${esc(t.decisionCustomInputTip)}"
                 aria-label="${esc(t.decisionCustomPlaceholder)}"
@@ -4058,6 +4096,17 @@
       });
       pendingDecisionIds.delete(dec.id);
       if (!res || res.ok === false) {
+        if (res?.alreadyResolved || res?.reason === 'already_resolved') {
+          expandedCustomDecisionIds.delete(dec.id);
+          decisionCustomDrafts.delete(dec.id);
+          decisionImeComposingIds.delete(dec.id);
+          flashToast(t.decisionAlreadyResolvedToast, 'ok', 2400);
+          cachedDecisions = cachedDecisions.filter((x) => x.id !== dec.id);
+          renderDecisionsPanel(cachedDecisions, { force: true });
+          lastBoardKey = '';
+          refreshBoard(true);
+          return;
+        }
         flashToast(res?.error || t.decisionActionErrToast, 'err', 3600);
         renderDecisionsPanel(cachedDecisions, { force: true });
         return;
@@ -4090,10 +4139,22 @@
   async function handleDecisionCustomSubmit(dec, inputEl, sendBtn) {
     if (!dec || !dec.id || pendingDecisionIds.has(dec.id)) return;
     const t = L();
+    if (!supportsDecisionCustomReply()) {
+      flashToast(t.decisionCustomUnsupportedErr, 'err', 3600);
+      return;
+    }
     const rawValue = inputEl ? inputEl.value : decisionCustomDrafts.get(dec.id) || '';
     const customMessage = String(rawValue || '').trim();
     if (!customMessage) {
       flashToast(t.decisionCustomEmptyToast, 'err', 2400);
+      if (inputEl && typeof inputEl.focus === 'function') inputEl.focus();
+      return;
+    }
+    const maxLen =
+      typeof MAX_DECISION_CUSTOM_MESSAGE_LEN === 'number' ? MAX_DECISION_CUSTOM_MESSAGE_LEN : 2000;
+    if (customMessage.length > maxLen) {
+      decisionCustomDrafts.set(dec.id, rawValue);
+      flashToast(t.decisionCustomTooLongToast(maxLen), 'err', 3200);
       if (inputEl && typeof inputEl.focus === 'function') inputEl.focus();
       return;
     }
@@ -4131,8 +4192,24 @@
         allowGetFallback: false,
       });
       pendingDecisionIds.delete(dec.id);
-      if (!res || res.ok === false) {
-        flashToast(res?.error || t.decisionActionErrToast, 'err', 3600);
+      if (res && res.ok === false && (res.alreadyResolved || res.reason === 'already_resolved')) {
+        expandedCustomDecisionIds.delete(dec.id);
+        decisionCustomDrafts.delete(dec.id);
+        decisionImeComposingIds.delete(dec.id);
+        flashToast(t.decisionAlreadyResolvedToast, 'ok', 2400);
+        cachedDecisions = cachedDecisions.filter((x) => x.id !== dec.id);
+        renderDecisionsPanel(cachedDecisions, { force: true });
+        lastBoardKey = '';
+        refreshBoard(true);
+        return;
+      }
+      if (!res || res.ok === false || res.action !== 'custom_reply') {
+        const errMsg =
+          res?.error ||
+          (res && res.ok !== false && res.action !== 'custom_reply'
+            ? t.decisionCustomUnsupportedErr
+            : t.decisionActionErrToast);
+        flashToast(errMsg, 'err', 3600);
         renderDecisionsPanel(cachedDecisions, { force: true, focusDecisionId: dec.id });
         return;
       }
@@ -4215,9 +4292,11 @@
       if (!validIds.has(id)) decisionImeComposingIds.delete(id);
     }
 
+    const allowCustomReply = supportsDecisionCustomReply();
     const decisionsKey = JSON.stringify({
       locale: curLocale,
       collapsed: decisionsPanelCollapsed,
+      allowCustomReply,
       busy: [...pendingDecisionIds].sort(),
       expanded: [...expandedCustomDecisionIds].sort(),
       list,
@@ -4241,6 +4320,7 @@
       busyIds: pendingDecisionIds,
       expandedIds: expandedCustomDecisionIds,
       drafts: decisionCustomDrafts,
+      customReplyEnabled: allowCustomReply,
     });
 
     const toggleBtn = elDecisionsPanel.querySelector('button[data-action="toggle-decisions"]');

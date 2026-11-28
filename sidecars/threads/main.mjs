@@ -34,7 +34,7 @@ import {
 const THIS_FILE = fileURLToPath(import.meta.url);
 const HERE = dirname(THIS_FILE);
 const PLUGIN_ROOT = join(HERE, '..', '..');
-const SERVER_API_REVISION = 4;
+const SERVER_API_REVISION = 5;
 const SERVER_CAPABILITIES = [
   'settings',
   'settings_save_fast',
