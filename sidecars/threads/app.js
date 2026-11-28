@@ -258,6 +258,10 @@
       settingsInheritShort: 'Follow Coordinator',
       settingsRefreshModelsTip: 'Refresh live model catalog',
       useSettingsDefault: (lbl) => `Use Settings Default (${lbl})`,
+      usageTokensLabel: 'Tokens',
+      usageCompactLine: 'Compact line',
+      usageCompacts: (n) => `${n} ${n === 1 ? 'compact' : 'compacts'}`,
+      usageDetailTip: (inp, out, cache) => `Input ${inp} | Output ${out} | Cache ${cache}`,
     },
 
     'zh-CN': {
@@ -502,6 +506,10 @@
       settingsInheritShort: '跟随主会话模型',
       settingsRefreshModelsTip: '刷新实时模型列表',
       useSettingsDefault: (lbl) => `使用设置默认 (${lbl})`,
+      usageTokensLabel: 'Tokens',
+      usageCompactLine: '压缩线',
+      usageCompacts: (n) => `${n} 次压缩`,
+      usageDetailTip: (inp, out, cache) => `输入 ${inp} | 输出 ${out} | 缓存 ${cache}`,
     },
 
     'zh-TW': {
@@ -746,6 +754,10 @@
       settingsInheritShort: '跟隨主會話模型',
       settingsRefreshModelsTip: '重新整理即時模型清單',
       useSettingsDefault: (lbl) => `使用設定預設 (${lbl})`,
+      usageTokensLabel: 'Tokens',
+      usageCompactLine: '壓縮線',
+      usageCompacts: (n) => `${n} 次壓縮`,
+      usageDetailTip: (inp, out, cache) => `輸入 ${inp} | 輸出 ${out} | 快取 ${cache}`,
     },
   };
 
@@ -2586,6 +2598,87 @@
     return '';
   }
 
+  function formatTokenCount(raw, { millionThreshold = 700_000 } = {}) {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return '0';
+    if (n < 1000) return String(Math.round(n));
+    if (n < millionThreshold) {
+      if (n < 100_000) {
+        const k = n / 1000;
+        const formatted = k.toFixed(1).replace(/\.0$/, '');
+        return `${formatted}K`;
+      }
+      return `${Math.round(n / 1000)}K`;
+    }
+    const m = n / 1_000_000;
+    const formatted =
+      m >= 100
+        ? String(Math.round(m))
+        : m >= 10
+          ? m.toFixed(1).replace(/\.0$/, '')
+          : m.toFixed(2).replace(/0$/, '').replace(/\.0$/, '');
+    return `${formatted}M`;
+  }
+
+  function renderThreadUsageRow(th) {
+    const u = th?.usage;
+    if (!u || typeof u !== 'object') return '';
+    const totalTokens = Number(u.totalTokens) || 0;
+    const contextTokens = Number(u.contextTokens) || 0;
+    if (totalTokens <= 0 && contextTokens <= 0) return '';
+
+    const t = L();
+    const inputTokens = Number(u.inputTokens) || 0;
+    const outputTokens = Number(u.outputTokens) || 0;
+    const cacheReadTokens = Number(u.cacheReadTokens) || 0;
+    const compactLimit = Number(u.compactLimit) || 0;
+    const compactCount = Math.max(0, Math.floor(Number(u.compactCount) || 0));
+
+    let compactPercent = null;
+    if (compactLimit > 0) {
+      const rawPct =
+        u.compactPercent !== null && u.compactPercent !== undefined && Number.isFinite(Number(u.compactPercent))
+          ? Number(u.compactPercent)
+          : Math.round((contextTokens / compactLimit) * 100);
+      compactPercent = Math.min(100, Math.max(0, Math.round(rawPct)));
+    }
+
+    const totalText = formatTokenCount(totalTokens);
+    const detailTip = t.usageDetailTip(
+      formatTokenCount(inputTokens, { millionThreshold: 1_000_000 }),
+      formatTokenCount(outputTokens, { millionThreshold: 1_000_000 }),
+      formatTokenCount(cacheReadTokens, { millionThreshold: 1_000_000 }),
+    );
+
+    const parts = [];
+    if (totalTokens > 0) {
+      parts.push(
+        `<span class="o2-usage-item o2-usage-tokens" title="${esc(detailTip)}"><span class="o2-usage-lbl">${esc(t.usageTokensLabel)}</span><b class="o2-usage-val tabular">${esc(totalText)}</b></span>`,
+      );
+    }
+
+    if (contextTokens > 0) {
+      const ctxText = formatTokenCount(contextTokens, { millionThreshold: 1_000_000 });
+      if (compactLimit > 0 && compactPercent !== null) {
+        const limitText = formatTokenCount(compactLimit, { millionThreshold: 1_000_000 });
+        const toneCls = compactPercent >= 90 ? 'danger' : compactPercent >= 70 ? 'warn' : 'ok';
+        parts.push(
+          `<span class="o2-usage-item o2-usage-compact"><span class="o2-usage-lbl">${esc(t.usageCompactLine)}</span><span class="o2-usage-bar" aria-hidden="true"><i class="${toneCls}" style="width:${compactPercent}%"></i></span><span class="o2-usage-val tabular">${esc(ctxText)} / ${esc(limitText)} (${compactPercent}%)</span></span>`,
+        );
+      } else {
+        parts.push(
+          `<span class="o2-usage-item o2-usage-compact"><span class="o2-usage-lbl">${esc(t.usageCompactLine)}</span><span class="o2-usage-val tabular">${esc(ctxText)}</span></span>`,
+        );
+      }
+    }
+
+    parts.push(
+      `<span class="o2-usage-pill${compactCount > 0 ? ' has-compacts' : ''} tabular">${esc(t.usageCompacts(compactCount))}</span>`,
+    );
+
+    return `<div class="o2-th-usage">${parts.join('')}</div>`;
+  }
+
   function renderO2ThreadCard(th) {
     const t = L();
     const isWorking = th.bucket === 'working';
@@ -2678,6 +2771,7 @@
 
     const modelLabel = formatModelDisplay(th.modelDisplayName || th.resolvedModel || th.model);
     const modelChip = `<span class="o2-wchips"><span class="o2-wchip" title="${esc(modelLabel)}">${esc(modelLabel)}</span></span>`;
+    const usageHtml = renderThreadUsageRow(th);
     const cardCls = `o2-th ${stateCls}${isOpen ? ' open' : ''}${isActiveMain ? ' active-main' : ''}`;
 
     return `
@@ -2696,6 +2790,7 @@
         ${goalLine ? `<div class="o2-thg" data-action="open-primary" data-id="${esc(th.threadId)}">${esc(goalLine)}</div>` : ''}
         ${nowHtml}
         ${tasksHtml}
+        ${usageHtml}
         <div class="o2-th-actions">
           ${actions.join('')}
           <span class="spacer"></span>

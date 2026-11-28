@@ -1267,6 +1267,7 @@ button.o2-tht:active:not(:disabled) {
 }
 
 .o2-th:not(.open) .o2-tasks,
+.o2-th:not(.open) .o2-th-usage,
 .o2-th:not(.open) .o2-th-actions,
 .o2-th:not(.open) .o2-th-body {
   display: none;
@@ -1401,6 +1402,79 @@ button.o2-tht:active:not(:disabled) {
   text-overflow: ellipsis;
 }
 
+.o2-th-usage {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin: 8px 0 0 16px;
+  padding: 5px 8px;
+  border-radius: var(--pt-r-sm);
+  background: var(--pt-surface-1);
+  border: 1px solid var(--pt-line);
+  font-size: var(--pt-text-2xs);
+  line-height: 1.35;
+  color: var(--pt-sub);
+}
+.o2-usage-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.o2-usage-lbl {
+  color: var(--pt-dim);
+  font-weight: 500;
+}
+.o2-usage-val {
+  color: var(--pt-fg-2);
+  font-weight: 600;
+}
+.o2-usage-bar {
+  width: 44px;
+  height: 5px;
+  border-radius: var(--pt-r-pill);
+  background: var(--pt-surface-3);
+  overflow: hidden;
+  display: inline-block;
+  flex: none;
+}
+.o2-usage-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: var(--pt-r-pill);
+  background: var(--pt-ok);
+  transition: width 0.25s var(--pt-ease), background-color 0.2s ease;
+}
+.o2-usage-bar > i.ok {
+  background: var(--pt-ok);
+}
+.o2-usage-bar > i.warn {
+  background: var(--pt-warn);
+}
+.o2-usage-bar > i.danger {
+  background: var(--pt-danger);
+}
+.o2-usage-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--pt-r-pill);
+  background: var(--pt-surface-2);
+  border: 1px solid var(--pt-line);
+  color: var(--pt-sub);
+  font-size: var(--pt-text-2xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.o2-usage-pill.has-compacts {
+  color: var(--pt-warn);
+  border-color: color-mix(in srgb, var(--pt-warn) 36%, var(--pt-line));
+  background: var(--pt-warn-soft);
+}
+
 .o2-th-actions {
   display: flex;
   align-items: center;
@@ -1409,6 +1483,11 @@ button.o2-tht:active:not(:disabled) {
   margin: 9px 0 0 16px;
   padding-top: 8px;
   border-top: 1px solid var(--pt-line);
+}
+.o2-th-usage + .o2-th-actions {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed color-mix(in srgb, var(--pt-line) 80%, transparent);
 }
 .o2-tasks:not(:empty) + .o2-th-actions {
   margin-top: 8px;
