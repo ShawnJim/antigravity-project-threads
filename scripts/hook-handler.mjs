@@ -8,7 +8,7 @@ import {
 } from '../lib/store.mjs';
 import { extractThreadCompletion } from '../lib/transcript.mjs';
 
-const DIRECTIVE_VERSION = 11;
+const DIRECTIVE_VERSION = 12;
 const LEADING_SLASH_COORD_RE = /^\s*\/coord(?=$|[\s:：，,。!?！？])/i;
 
 function readStdin() {
@@ -56,7 +56,7 @@ function buildCoordinatorDirective(coord) {
     '   - **3–5 concise takeaway bullets**: Summarize only root cause, key changes/findings, and any decision needed from the user. Do NOT dump long logs or large tables into the Coordinator session.',
     `   - **Trailing divider**: End the card with \`---\` (and if cross-cutting project conventions emerged, call \`update_project_memory\` passing \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`).`,
     '   - If a callback duplicates an already-reported conclusion, acknowledge briefly in one line or stay concise without exposing internal dedup metadata. **NEVER call `dispatch_thread` again in response to a completion sync!**',
-    `4. **Thread management & archiving policy**: To check thread status, steer an existing thread, or archive finished work, call \`list_threads\` (always pass \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`), \`get_thread_detail\`, \`send_thread_message\`, or \`archive_thread\`. Follow strict mode-based archiving rules once a Worker Thread has completed and been reported: (a) **Read-only investigation / check threads (\`createWorktree: false\`)**: you may **autonomously decide** to call \`archive_thread\` directly after reporting results without asking the user each time; (b) **Feature development / code-change Worktree threads (\`createWorktree: true\`)**: **NEVER auto-archive** (even after changes are merged into a branch, the user may still follow up or iterate in the same thread) — only call \`archive_thread\` after the user explicitly confirms or requests archiving.`,
+    `4. **Thread management & archiving policy**: To check thread status, steer an existing thread, or archive finished work, call \`list_threads\` (always pass \`coordinatorId: ${JSON.stringify(cid)}\`, \`workspacePath: ${JSON.stringify(repo)}\`), \`get_thread_detail\`, \`send_thread_message\`, or \`archive_thread\`. Follow strict mode-based archiving rules once a Worker Thread has completed and been reported: (a) **Read-only investigation / check threads (\`createWorktree: false\`)**: you may **autonomously decide** to call \`archive_thread\` directly after reporting results without asking the user each time; (b) **Feature development / code-change Worktree threads (\`createWorktree: true\`)**: do **NOT** auto-archive before user acceptance (even after changes are merged into a branch, keep the thread open for verification or follow-up iterations); however, **once the user confirms acceptance / sign-off** (e.g. "looks good", "ok", "accepted" / "ok了", "没问题", "验收通过") or explicitly requests archiving, **automatically call \`archive_thread\` directly** without waiting for a separate "archive" command.`,
   ].join('\n');
 }
 
