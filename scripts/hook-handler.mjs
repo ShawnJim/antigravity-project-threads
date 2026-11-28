@@ -1,7 +1,9 @@
 import { resolveLsEndpoint } from '../lib/ls-client.mjs';
 import {
+  clearManualCancelFieldsInRecord,
   findRetiredCoordinatorOwner,
   getThreadDisplayId,
+  hasNewUserTurnAfterCancel,
   initCoordinator,
   inspectWorktreeGit,
   loadRegistry,
@@ -136,7 +138,19 @@ async function main() {
       const reason = String(input.terminationReason || 'NO_TOOL_CALL');
       const isUserCanceled =
         reason === 'USER_CANCELED' || /cancel|abort|interrupt/i.test(reason);
-      if (isUserCanceled || thread.canceledAt) {
+      const stopCompPre = extractThreadCompletion(convId, input.transcriptPath || '', {
+        canceledAt: thread.canceledAt || '',
+        bgTasksKilledAt: thread.bgTasksKilledAt || '',
+      });
+      const resumedFromCancel = Boolean(
+        !isUserCanceled && thread.canceledAt && hasNewUserTurnAfterCancel(thread, stopCompPre),
+      );
+      if (isUserCanceled || (thread.canceledAt && !resumedFromCancel)) {
+        const stopSuppressedStep = Math.max(
+          Number.isInteger(stopCompPre.stepIndex) ? stopCompPre.stepIndex : -1,
+          Number.isInteger(stopCompPre.latestUserStepIndex) ? stopCompPre.latestUserStepIndex : -1,
+          Number.isInteger(stopCompPre.maxStepIndex) ? stopCompPre.maxStepIndex : -1,
+        );
         const canceledAt = thread.canceledAt || new Date().toISOString();
         mutateRegistry((freshReg) => {
           const freshT =
@@ -149,10 +163,30 @@ async function main() {
           freshT.activeToolObj = null;
           freshT.bucket = 'idle';
           freshT.waitingReason = '';
-          if (!freshT.canceledAt) freshT.canceledAt = canceledAt;
+          if (!freshT.canceledAt) {
+            freshT.canceledAt = canceledAt;
+            if (stopSuppressedStep >= 0) {
+              freshT.canceledStepIndex = stopSuppressedStep;
+            }
+          }
           if (!freshT.updatedAt || canceledAt > freshT.updatedAt) freshT.updatedAt = canceledAt;
         });
       } else {
+        if (resumedFromCancel) {
+          const origCanceledAt = thread.canceledAt;
+          mutateRegistry((freshReg) => {
+            const freshT =
+              freshReg.threads[thread.threadId] ||
+              Object.values(freshReg.threads || {}).find((x) => x.conversationId === convId);
+            if (!freshT || freshT.archived) return;
+            if (freshT.canceledAt && freshT.canceledAt === origCanceledAt) {
+              clearManualCancelFieldsInRecord(
+                freshT,
+                stopCompPre.latestUserStepAt || new Date().toISOString(),
+              );
+            }
+          });
+        }
         try {
           await syncCompletionToCoordinator({
             threadId: thread.threadId,
@@ -162,7 +196,10 @@ async function main() {
           });
         } catch {
           // Fallback: still persist local summary & state if LS/agentapi was unreachable (unless waiting on bg task)
-          const comp = extractThreadCompletion(convId, input.transcriptPath || '');
+          const comp = extractThreadCompletion(convId, input.transcriptPath || '', {
+            canceledAt: resumedFromCancel ? '' : thread.canceledAt || '',
+            bgTasksKilledAt: thread.bgTasksKilledAt || '',
+          });
           if (!comp.waitingOnBackgroundTask) {
             let nextGit = null;
             if (thread.worktreePath) {
@@ -183,7 +220,15 @@ async function main() {
               const freshT =
                 freshReg.threads[thread.threadId] ||
                 Object.values(freshReg.threads || {}).find((x) => x.conversationId === convId);
-              if (!freshT || freshT.canceledAt) return;
+              if (!freshT) return;
+              if (freshT.canceledAt) {
+                const freshComp = extractThreadCompletion(convId, input.transcriptPath || '', {
+                  canceledAt: freshT.canceledAt,
+                  bgTasksKilledAt: freshT.bgTasksKilledAt || '',
+                });
+                if (!hasNewUserTurnAfterCancel(freshT, freshComp)) return;
+                clearManualCancelFieldsInRecord(freshT, freshComp.latestUserStepAt || completedAt);
+              }
               if (comp.cardSummary) freshT.lastSummary = comp.cardSummary;
               freshT.runState = 'RUN_STATE_IDLE';
               freshT.hasPendingBgTask = false;
@@ -322,12 +367,24 @@ async function main() {
 
     // Fallback injection ONLY for threads that have NEVER been pushed/notified, are not suppressed by a stale
     // pre-rebind historical baseline, and are not waiting on a background task
+    const resumedCancelClearMap = new Map();
     const newlyFinished = Object.values(reg.threads).filter((t) => {
       if (t.archived || t.coordinatorId !== convId || !t.lastCompletedAt) return false;
       if (t.pushedToCoordinatorAt || t.notifiedCoordinatorAt) return false;
-      if (t.canceledAt) return false;
       if (t.runState === 'RUN_STATE_IDLE' || t.runState !== 'RUN_STATE_RUNNING') {
-        const comp = extractThreadCompletion(t.conversationId);
+        const comp = extractThreadCompletion(t.conversationId, '', {
+          canceledAt: t.canceledAt || '',
+          bgTasksKilledAt: t.bgTasksKilledAt || '',
+        });
+        if (t.canceledAt) {
+          if (!hasNewUserTurnAfterCancel(t, comp)) {
+            return false;
+          }
+          resumedCancelClearMap.set(t.threadId, {
+            origCanceledAt: t.canceledAt,
+            clearedAt: comp.latestUserStepAt || '',
+          });
+        }
         if (comp.waitingOnBackgroundTask) return false;
         const suppressedByBaseline =
           (Number.isInteger(t.reboundBaselineStepIndex) &&
@@ -372,7 +429,12 @@ async function main() {
       // Non-fatal: watchdog notice injection must never block PreInvocation
     }
 
-    if (shouldUpdateDirective || shouldUpdateSteps || notifiedIds.length > 0) {
+    if (
+      shouldUpdateDirective ||
+      shouldUpdateSteps ||
+      notifiedIds.length > 0 ||
+      resumedCancelClearMap.size > 0
+    ) {
       mutateRegistry((freshReg) => {
         const freshCoord =
           (coord.key && freshReg.coordinators?.[coord.key]) ||
@@ -380,6 +442,12 @@ async function main() {
         if (freshCoord && freshCoord.conversationId === convId) {
           if (shouldUpdateDirective) freshCoord.directiveVersion = DIRECTIVE_VERSION;
           if (shouldUpdateSteps) freshCoord.lastStepCount = stepCount;
+        }
+        for (const [tid, cancelMeta] of resumedCancelClearMap.entries()) {
+          const freshT = freshReg.threads?.[tid];
+          if (freshT && freshT.canceledAt === cancelMeta.origCanceledAt) {
+            clearManualCancelFieldsInRecord(freshT, cancelMeta.clearedAt || now);
+          }
         }
         for (const tid of notifiedIds) {
           const freshT = freshReg.threads?.[tid];

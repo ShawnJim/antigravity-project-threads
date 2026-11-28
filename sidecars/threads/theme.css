@@ -864,6 +864,10 @@ button.row-act.away:hover:not(:disabled) {
 #thread-toast-detail {
   margin-top: 6px;
 }
+#thread-toast-detail .toast-detail-msg {
+  max-height: 160px;
+  overflow-y: auto;
+}
 
 /* ==================== SCROLLABLE OVERVIEW CONTAINER ==================== */
 .board-body,

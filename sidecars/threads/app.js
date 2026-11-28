@@ -8424,6 +8424,11 @@
     if (!openThreadId || !openThreadObj || openThreadObj.archived) return;
     const targetThreadId = openThreadId;
     const reqEpoch = scopeEpoch;
+    const initialThreadLabel = String(
+      openThreadObj?.localId ||
+        openThreadObj?.displayId ||
+        (/^thr-\d+$/i.test(targetThreadId) ? targetThreadId : ''),
+    ).trim();
     const t = L();
 
     if (!supportsThreadCancel()) {
@@ -8434,6 +8439,14 @@
 
     cancelingThreadIds.add(targetThreadId);
     syncSendButtonState();
+
+    let resolvedLabel = initialThreadLabel;
+    const formatCancelToast = (msg) => {
+      if (openThreadId !== targetThreadId && resolvedLabel) {
+        return `[${resolvedLabel}] ${msg}`;
+      }
+      return msg;
+    };
 
     try {
       const payload = buildScopePayload({
@@ -8449,6 +8462,11 @@
         throw new Error(res?.error || L().stopThreadErr);
       }
       if (reqEpoch !== scopeEpoch) return;
+
+      const returnedLabel = String(res.thread?.localId || res.thread?.displayId || '').trim();
+      if (returnedLabel) {
+        resolvedLabel = returnedLabel;
+      }
 
       cancelingThreadIds.delete(targetThreadId);
       if (openThreadId === targetThreadId) {
@@ -8471,13 +8489,15 @@
 
       const lt = L();
       if (res.alreadyIdle) {
-        flashToast(lt.stopThreadAlreadyIdleOk, 'ok', 2400);
+        flashToast(formatCancelToast(lt.stopThreadAlreadyIdleOk), 'ok', 2400);
       } else {
-        flashToast(lt.stopThreadOk, 'ok', 2600);
+        flashToast(formatCancelToast(lt.stopThreadOk), 'ok', 2600);
       }
 
       if (openThreadId === targetThreadId) {
         await refreshOpenThread(false, false);
+      } else if (!openThreadId && typeof refreshBoard === 'function') {
+        await refreshBoard(false);
       }
     } catch (err) {
       if (reqEpoch !== scopeEpoch) return;
@@ -8486,7 +8506,7 @@
       if (err?.isBackendMismatch || err?.status === 404 || err?.status === 405) {
         msg = lt.stopThreadUnsupportedErr;
       }
-      flashToast(msg, 'err', 4200);
+      flashToast(formatCancelToast(msg), 'err', 4200);
     } finally {
       cancelingThreadIds.delete(targetThreadId);
       if (reqEpoch === scopeEpoch && openThreadId === targetThreadId) {

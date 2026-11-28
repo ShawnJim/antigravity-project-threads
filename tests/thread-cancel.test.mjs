@@ -30,7 +30,10 @@ import {
 import {
   archiveThread,
   cancelThread,
+  clearManualCancelFieldsInRecord,
   dispatchThread,
+  getThreadMessages,
+  hasNewUserTurnAfterCancel,
   loadRegistry,
   normalizeKey,
   saveRegistry,
@@ -38,8 +41,13 @@ import {
   syncCompletionToCoordinator,
   syncThreads,
 } from '../lib/store.mjs';
-import { peekLiveActivity, resetTranscriptCaches } from '../lib/transcript.mjs';
-import { mergeWatchdogStateMaps } from '../lib/watchdog.mjs';
+import {
+  extractThreadCompletion,
+  parseThreadTranscript,
+  peekLiveActivity,
+  resetTranscriptCaches,
+} from '../lib/transcript.mjs';
+import { mergeWatchdogStateMaps, patrolProjectScope } from '../lib/watchdog.mjs';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -1129,6 +1137,7 @@ process.exit(0);
   const fetchCalls = [];
   const headerUpdates = [];
   const refreshCalls = [];
+  const refreshBoardCalls = [];
   let nextResponseFactory = () => ({
     ok: true,
     status: 200,
@@ -1187,6 +1196,7 @@ process.exit(0);
     },
     headerUpdates,
     refreshCalls,
+    refreshBoardCalls,
   };
 
   vm.runInNewContext(
@@ -1243,6 +1253,7 @@ process.exit(0);
     const buildScopePayload = (extra = {}) => ({ workspace: '/demo/repo', workspaceKey: '/demo/repo', ...extra });
     const renderThreadHeader = (th) => { openThreadObj = th; headerUpdates.push(th); syncSendButtonState(); };
     const refreshOpenThread = async (a, b) => { refreshCalls.push({ a, b }); };
+    const refreshBoard = async (force) => { refreshBoardCalls.push(Boolean(force)); };
     ${appJs.slice(apiStart, apiEnd)}
     ${extractedFns}
     this.api = {
@@ -1255,6 +1266,7 @@ process.exit(0);
       clearToast,
       toggleToastDetail,
       setThreadObj: (th) => { openThreadObj = th; syncSendButtonState(); },
+      setOpenThreadId: (id) => { openThreadId = String(id || ''); },
       setCapabilities: (caps) => { serverCapabilities = new Set(caps); syncSendButtonState(); },
       setScreenState: ({ boardHidden, threadHidden, settingsOpen }) => {
         elBoardScreen.hidden = Boolean(boardHidden);
@@ -1437,6 +1449,128 @@ process.exit(0);
   vmCtx.api.flashToast('Settings notice', 'ok', 2000);
   assert.equal(elSettingsToast.textContent, 'Settings notice');
 
+  // [P2-1] Context-aware toast & board refresh when user leaves/switches away from canceling thread
+  vmCtx.api.setCapabilities(['thread_cancel']);
+  vmCtx.api.setScreenState({ boardHidden: true, threadHidden: false, settingsOpen: false });
+  vmCtx.api.setOpenThreadId('pt-ui-thr-001');
+  vmCtx.api.setThreadObj({
+    threadId: 'pt-ui-thr-001',
+    localId: 'thr-001',
+    displayId: 'thr-001',
+    runState: 'RUN_STATE_RUNNING',
+    hasPendingBgTask: false,
+    archived: false,
+  });
+  let resolveSwitchedCancel = null;
+  nextResponseFactory = () =>
+    new Promise((resolve) => {
+      resolveSwitchedCancel = () =>
+        resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          text: async () =>
+            JSON.stringify({
+              ok: true,
+              action: 'cancel',
+              canceled: true,
+              alreadyIdle: false,
+              locale: 'zh-CN',
+              serverInfo: {
+                apiRevision: 9,
+                capabilities: ['thread_cancel'],
+                versionDrifted: false,
+              },
+              thread: {
+                threadId: 'pt-ui-thr-001',
+                localId: 'thr-001',
+                displayId: 'thr-001',
+                runState: 'RUN_STATE_IDLE',
+                hasPendingBgTask: false,
+                archived: false,
+              },
+            }),
+        });
+    });
+  refreshCalls.length = 0;
+  refreshBoardCalls.length = 0;
+  const switchedCancelPromise = vmCtx.api.cancelRunningThread();
+  // User switches to another thread B while cancel is in-flight
+  vmCtx.api.setOpenThreadId('pt-ui-thr-002');
+  vmCtx.api.setThreadObj({
+    threadId: 'pt-ui-thr-002',
+    localId: 'thr-002',
+    runState: 'RUN_STATE_IDLE',
+    archived: false,
+  });
+  resolveSwitchedCancel();
+  await switchedCancelPromise;
+  assert.equal(
+    elThreadToast.textContent,
+    `[thr-001] ${vmCtx.api.I18N['zh-CN'].stopThreadOk}`,
+    'Switched-thread cancel toast must prefix [thr-NNN]',
+  );
+  assert.equal(refreshCalls.length, 0, 'Must not refresh thread B after thread A cancel');
+
+  // Now close drawer while cancel is in-flight -> routes to board toast and calls refreshBoard(false)
+  vmCtx.api.setOpenThreadId('pt-ui-thr-001');
+  vmCtx.api.setThreadObj({
+    threadId: 'pt-ui-thr-001',
+    localId: 'thr-001',
+    displayId: 'thr-001',
+    runState: 'RUN_STATE_RUNNING',
+    hasPendingBgTask: false,
+    archived: false,
+  });
+  let resolveBoardCancel = null;
+  nextResponseFactory = () =>
+    new Promise((resolve) => {
+      resolveBoardCancel = () =>
+        resolve({
+          ok: true,
+          status: 200,
+          headers: { get: () => 'application/json' },
+          text: async () =>
+            JSON.stringify({
+              ok: true,
+              action: 'cancel',
+              canceled: true,
+              alreadyIdle: false,
+              locale: 'zh-CN',
+              serverInfo: {
+                apiRevision: 9,
+                capabilities: ['thread_cancel'],
+                versionDrifted: false,
+              },
+              thread: {
+                threadId: 'pt-ui-thr-001',
+                localId: 'thr-001',
+                displayId: 'thr-001',
+                runState: 'RUN_STATE_IDLE',
+                hasPendingBgTask: false,
+                archived: false,
+              },
+            }),
+        });
+    });
+  const boardCancelPromise = vmCtx.api.cancelRunningThread();
+  // User returns to Kanban board
+  vmCtx.api.setScreenState({ boardHidden: false, threadHidden: true, settingsOpen: false });
+  vmCtx.api.setOpenThreadId('');
+  vmCtx.api.setThreadObj(null);
+  resolveBoardCancel();
+  await boardCancelPromise;
+  assert.equal(refreshBoardCalls.length, 1, 'Returning to board after cancel must trigger refreshBoard(false)');
+  assert.equal(refreshBoardCalls[0], false);
+  assert.equal(elToast.textContent, `[thr-001] ${vmCtx.api.I18N['zh-CN'].stopThreadOk}`);
+
+  // [P2-2] #thread-toast-detail long message container must cap max-height with vertical scroll
+  const toastDetailThemeCss = readFileSync(join(REPO_ROOT, 'sidecars/threads/theme.css'), 'utf8');
+  assert.match(
+    toastDetailThemeCss,
+    /#thread-toast-detail\s+\.toast-detail-msg\s*\{[\s\S]*?max-height:\s*160px;[\s\S]*?overflow-y:\s*auto;/,
+  );
+
   // 4. Trilingual I18N keys & zero middle dots & zero native dialogs & strict LF
   const stopKeys = [
     'stopThreadTip',
@@ -1479,4 +1613,871 @@ process.exit(0);
     const raw = readFileSync(join(REPO_ROOT, rel), 'utf8');
     assert.equal(raw.includes('\u00b7'), false, `${rel} must have zero U+00B7`);
   }
+});
+
+test('5. P0-1: saveRegistry merge uses monotonic cancelClearedAt tombstone and never resurrects canceledAt', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-cancel-p0-1-');
+  const repoDir = join(tempRoot, 'repo-p0-1');
+  initGitRepo(repoDir);
+  const scopeKey = normalizeKey(repoDir);
+
+  const t0 = '2026-11-29T02:00:00.000Z';
+  const lsState = { runState: 'RUN_STATE_IDLE', updateTime: t0 };
+  const mockLs = await startMockLsServer(t, (req, res, body) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/product.v1.ConversationService/GetConversation') {
+      res.end(
+        JSON.stringify({
+          conversation: {
+            id: body.conversationId,
+            conversationId: body.conversationId,
+            state: { runState: lsState.runState, updateTime: lsState.updateTime },
+            annotations: { archived: false },
+          },
+        }),
+      );
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeTrajectoryGeneratorMetadata') {
+      res.end(JSON.stringify({ generatorMetadata: [] }));
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData') {
+      res.end(JSON.stringify({ clientModelConfigs: [] }));
+      return;
+    }
+    res.end(JSON.stringify({ ok: true }));
+  });
+  process.env.ANTIGRAVITY_LS_ADDRESS = mockLs.address;
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'csrf-p0-1';
+
+  const sendLog = join(tempRoot, 'agentapi.log');
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = writeMockAgentApi(tempRoot, sendLog);
+
+  const reg = loadRegistry();
+  reg.coordinators[scopeKey] = {
+    key: scopeKey,
+    conversationId: 'coord-p0-1',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    projectId: 'proj-p0-1',
+    title: '[Coordinator] P0-1',
+  };
+  reg.threads['pt-p01-thr-001'] = {
+    threadId: 'pt-p01-thr-001',
+    projectSeq: 1,
+    localId: 'thr-001',
+    displayId: 'thr-001',
+    conversationId: 'conv-p01-1',
+    coordinatorId: 'coord-p0-1',
+    workspaceKey: scopeKey,
+    projectId: 'proj-p0-1',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Tombstone Test',
+    runState: 'RUN_STATE_IDLE',
+    hasPendingBgTask: false,
+    bucket: 'idle',
+    archived: false,
+    canceledAt: t0,
+    canceledStepIndex: 1,
+    createdAt: t0,
+    updatedAt: t0,
+  };
+  saveRegistry(reg);
+
+  // Same-millisecond clear must strictly bump cancelClearedAt > t0 and preserve RUN_STATE_RUNNING
+  // even when disk holds older/equal canceledAt = t0 and stale updatedAt <= disk.canceledAt!
+  const memReg = loadRegistry();
+  const memT = memReg.threads['pt-p01-thr-001'];
+  clearManualCancelFieldsInRecord(memT, t0);
+  memT.runState = 'RUN_STATE_RUNNING';
+  memT.updatedAt = '2026-11-29T01:59:59.000Z'; // Deliberately stale updatedAt < diskT.canceledAt
+  assert.equal('canceledAt' in memT, false);
+  assert.equal(memT.cancelClearedAt > t0, true, 'Same-ms clear must strictly advance cancelClearedAt past canceledAt');
+
+  saveRegistry(memReg);
+  const mergedSameMs = loadRegistry();
+  assert.equal(mergedSameMs.threads['pt-p01-thr-001'].canceledAt, undefined);
+  assert.equal(mergedSameMs.threads['pt-p01-thr-001'].runState, 'RUN_STATE_RUNNING');
+  assert.equal(mergedSameMs.threads['pt-p01-thr-001'].cancelClearedAt > t0, true);
+
+  // Simulate another writer flushing a stale disk snapshot with canceledAt=t0 & no cancelClearedAt,
+  // then saving our resumed memReg (with stale updatedAt < t0): cancelClearedAt must win cleanly!
+  const regPath = join(tempRoot, '.gemini', 'antigravity', 'project-threads', 'registry.json');
+  const staleDisk = loadRegistry();
+  staleDisk.threads['pt-p01-thr-001'].canceledAt = t0;
+  staleDisk.threads['pt-p01-thr-001'].canceledStepIndex = 1;
+  delete staleDisk.threads['pt-p01-thr-001'].cancelClearedAt;
+  staleDisk.threads['pt-p01-thr-001'].runState = 'RUN_STATE_IDLE';
+  staleDisk.threads['pt-p01-thr-001'].updatedAt = t0;
+  writeFileSync(regPath, JSON.stringify(staleDisk, null, 2), 'utf8');
+
+  saveRegistry(memReg);
+  const afterMerge = loadRegistry();
+  assert.equal(afterMerge.threads['pt-p01-thr-001'].canceledAt, undefined);
+  assert.equal(afterMerge.threads['pt-p01-thr-001'].runState, 'RUN_STATE_RUNNING');
+  assert.equal(afterMerge.threads['pt-p01-thr-001'].cancelClearedAt > t0, true);
+
+  // Verify getThreadMessages clearing cancel (on new user turn) also writes cancelClearedAt monotonically
+  writeTranscript(appDataDir, 'conv-p01-1', [
+    { step_index: 0, type: 'USER_INPUT', content: 'start', created_at: t0 },
+    { step_index: 1, type: 'PLANNER_RESPONSE', content: 'partial', created_at: t0 },
+    { step_index: 2, type: 'USER_INPUT', content: 'sidebar resume', created_at: '2026-11-29T02:00:05.000Z' },
+  ]);
+  const rReset = loadRegistry();
+  rReset.threads['pt-p01-thr-001'].canceledAt = '2026-11-29T02:00:02.000Z';
+  rReset.threads['pt-p01-thr-001'].canceledStepIndex = 1;
+  rReset.threads['pt-p01-thr-001'].runState = 'RUN_STATE_RUNNING';
+  delete rReset.threads['pt-p01-thr-001'].cancelClearedAt;
+  saveRegistry(rReset);
+  lsState.runState = 'RUN_STATE_RUNNING';
+  lsState.updateTime = '2026-11-29T02:00:05.000Z';
+  await getThreadMessages({ threadId: 'thr-001', workspacePath: repoDir });
+  const afterMsgRead = loadRegistry().threads['pt-p01-thr-001'];
+  assert.equal(afterMsgRead.canceledAt, undefined);
+  assert.ok(afterMsgRead.cancelClearedAt > '2026-11-29T02:00:02.000Z');
+});
+
+test('6. P0-2: Native sidebar resumption lifts cancel suppression across Stop, PreInvocation, syncCompletionToCoordinator, and syncThreads (including step 0 pre-reply cancel)', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-cancel-p0-2-');
+  const repoDir = join(tempRoot, 'repo-p0-2');
+  initGitRepo(repoDir);
+  const scopeKey = normalizeKey(repoDir);
+
+  const sendLog = join(tempRoot, 'agentapi.log');
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = writeMockAgentApi(tempRoot, sendLog);
+
+  const t0 = new Date(Date.now() - 20_000).toISOString();
+  const tCancel = new Date(Date.now() - 10_000).toISOString();
+  const tResumeUser = new Date(Date.now() - 4_000).toISOString();
+  const tResumeDone = new Date(Date.now() - 1_000).toISOString();
+
+  const lsState = { runState: 'RUN_STATE_RUNNING', updateTime: t0 };
+  const mockLs = await startMockLsServer(t, (req, res, body) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/exa.language_server_pb.LanguageServerService/CancelCascadeInvocation') {
+      lsState.runState = 'RUN_STATE_IDLE';
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url === '/product.v1.ConversationService/GetConversation') {
+      res.end(
+        JSON.stringify({
+          conversation: {
+            id: body.conversationId,
+            conversationId: body.conversationId,
+            state: { runState: lsState.runState, updateTime: lsState.updateTime },
+            annotations: { archived: false },
+          },
+        }),
+      );
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeTrajectoryGeneratorMetadata') {
+      res.end(JSON.stringify({ generatorMetadata: [] }));
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData') {
+      res.end(JSON.stringify({ clientModelConfigs: [] }));
+      return;
+    }
+    res.end(JSON.stringify({ ok: true }));
+  });
+  process.env.ANTIGRAVITY_LS_ADDRESS = mockLs.address;
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'csrf-p0-2';
+
+  const reg = loadRegistry();
+  reg.coordinators[scopeKey] = {
+    key: scopeKey,
+    conversationId: 'coord-p0-2',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    projectId: 'proj-p0-2',
+    runState: 'RUN_STATE_IDLE',
+    title: '[Coordinator] P0-2',
+    directiveVersion: 18,
+  };
+  reg.threads['pt-p02-thr-001'] = {
+    threadId: 'pt-p02-thr-001',
+    projectSeq: 1,
+    localId: 'thr-001',
+    displayId: 'thr-001',
+    conversationId: 'conv-p02-1',
+    coordinatorId: 'coord-p0-2',
+    workspaceKey: scopeKey,
+    projectId: 'proj-p0-2',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Native Sidebar Resume Before First Reply',
+    runState: 'RUN_STATE_RUNNING',
+    bucket: 'working',
+    archived: false,
+    createdAt: t0,
+    updatedAt: t0,
+  };
+  saveRegistry(reg);
+
+  // Transcript only has initial step_index=0 USER_INPUT (no assistant reply yet!)
+  writeTranscript(appDataDir, 'conv-p02-1', [
+    { step_index: 0, type: 'USER_INPUT', content: 'Initial task', created_at: t0 },
+  ]);
+
+  // 1. Cancel BEFORE any assistant reply -> canceledStepIndex must include step_index=0 so initial user turn never un-suppresses!
+  const cancelRes = await cancelThread(
+    { threadId: 'thr-001', workspacePath: repoDir },
+    { now: () => tCancel },
+  );
+  assert.equal(cancelRes.ok, true);
+  const canceledRec = loadRegistry().threads['pt-p02-thr-001'];
+  assert.equal(canceledRec.canceledStepIndex, 0);
+  assert.equal(hasNewUserTurnAfterCancel(canceledRec, peekLiveActivity('conv-p02-1')), false);
+
+  const preSuppressedSync = await syncCompletionToCoordinator({
+    threadId: 'pt-p02-thr-001',
+    force: false,
+  });
+  assert.equal(preSuppressedSync.synced, false);
+  assert.equal(preSuppressedSync.reason, 'no_completion_content');
+
+  // Even if lastSummary was transiently populated on disk, manual cancel still suppresses before new user turn!
+  const withStaleSummary = loadRegistry();
+  withStaleSummary.threads['pt-p02-thr-001'].lastSummary = 'Stale summary';
+  saveRegistry(withStaleSummary);
+  const suppressedWithSummary = await syncCompletionToCoordinator({
+    threadId: 'pt-p02-thr-001',
+    force: false,
+  });
+  assert.equal(suppressedWithSummary.synced, false);
+  assert.equal(suppressedWithSummary.reason, 'suppressed_by_manual_cancel');
+
+  // 2. User resumes directly in Antigravity native sidebar (writes new USER_INPUT step=1 + assistant final step=2)
+  writeTranscript(appDataDir, 'conv-p02-1', [
+    { step_index: 0, type: 'USER_INPUT', content: 'Initial task', created_at: t0 },
+    { step_index: 1, type: 'USER_INPUT', content: 'Continue directly from native sidebar', created_at: tResumeUser },
+    { step_index: 2, type: 'PLANNER_RESPONSE', content: 'Completed after native sidebar resume.', tool_calls: [], created_at: tResumeDone },
+  ]);
+  const postComp = extractThreadCompletion('conv-p02-1', '', { canceledAt: canceledRec.canceledAt });
+  assert.equal(postComp.latestUserStepIndex, 1);
+  assert.equal(hasNewUserTurnAfterCancel(canceledRec, postComp), true);
+
+  // Verify PreInvocation lifts cancel & emits [Project Threads Update] when lastCompletedAt is already present
+  const preCheckReg = loadRegistry();
+  preCheckReg.threads['pt-p02-thr-001'].lastCompletedAt = tResumeDone;
+  saveRegistry(preCheckReg);
+  const runHookAsync = (eventName, payloadObj) =>
+    new Promise((resolve, reject) => {
+      const child = execFile(
+        process.execPath,
+        [join(REPO_ROOT, 'scripts', 'hook-handler.mjs'), eventName],
+        { encoding: 'utf8', env: process.env },
+        (err, stdout, stderr) => {
+          if (err) reject(err);
+          else resolve({ stdout, stderr });
+        },
+      );
+      child.stdin.end(JSON.stringify(payloadObj));
+    });
+  const preHookRes = await runHookAsync('PreInvocation', {
+    hookEventName: 'PreInvocation',
+    conversationId: 'coord-p0-2',
+    lastUserInput: 'Any updates?',
+  });
+  assert.match(preHookRes.stdout, /\[Project Threads Update\]/);
+  assert.match(preHookRes.stdout, /thr-001/);
+  const afterPreHook = loadRegistry().threads['pt-p02-thr-001'];
+  assert.equal(afterPreHook.canceledAt, undefined);
+  assert.ok(afterPreHook.cancelClearedAt);
+  assert.ok(afterPreHook.notifiedCoordinatorAt);
+
+  // 3. Re-seed canceled state (simulating PreInvocation hadn't fired yet) and test Stop hook with normal NO_TOOL_CALL reason
+  const regStop = loadRegistry();
+  regStop.threads['pt-p02-thr-001'].canceledAt = tCancel;
+  regStop.threads['pt-p02-thr-001'].canceledStepIndex = 0;
+  delete regStop.threads['pt-p02-thr-001'].cancelClearedAt;
+  delete regStop.threads['pt-p02-thr-001'].lastCompletedAt;
+  delete regStop.threads['pt-p02-thr-001'].notifiedCoordinatorAt;
+  delete regStop.threads['pt-p02-thr-001'].pushedToCoordinatorAt;
+  saveRegistry(regStop);
+
+  lsState.runState = 'RUN_STATE_IDLE';
+  lsState.updateTime = tResumeDone;
+  await runHookAsync('Stop', {
+    hookEventName: 'Stop',
+    conversationId: 'conv-p02-1',
+    terminationReason: 'NO_TOOL_CALL',
+  });
+  const afterStop = loadRegistry().threads['pt-p02-thr-001'];
+  assert.equal(afterStop.canceledAt, undefined, 'Stop hook must clear stale cancel tombstone once resumed');
+  assert.ok(afterStop.cancelClearedAt);
+  assert.ok(afterStop.pushedToCoordinatorAt, 'Stop hook must push resumed completion to Coordinator');
+  assert.equal(existsSync(sendLog), true);
+
+  // 4. Independent thread resumed directly in native sidebar & converged IDLE (>8s reconciler grace) -> syncThreads heals & notifies!
+  rmSync(sendLog, { force: true });
+  const tStep4Cancel = new Date(Date.now() - 25_000).toISOString();
+  const tStep4User = new Date(Date.now() - 12_000).toISOString();
+  const tStep4Done = new Date(Date.now() - 9_500).toISOString();
+  lsState.runState = 'RUN_STATE_IDLE';
+  lsState.updateTime = tStep4Done;
+  const regSync = loadRegistry();
+  regSync.threads['pt-p02-thr-002'] = {
+    threadId: 'pt-p02-thr-002',
+    projectSeq: 2,
+    localId: 'thr-002',
+    displayId: 'thr-002',
+    conversationId: 'conv-p02-2',
+    coordinatorId: 'coord-p0-2',
+    workspaceKey: scopeKey,
+    projectId: 'proj-p0-2',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Native Sidebar Idle Missed Poll',
+    runState: 'RUN_STATE_IDLE',
+    bucket: 'idle',
+    archived: false,
+    canceledAt: tStep4Cancel,
+    canceledStepIndex: 0,
+    createdAt: t0,
+    updatedAt: tStep4Cancel,
+  };
+  saveRegistry(regSync);
+  writeTranscript(appDataDir, 'conv-p02-2', [
+    { step_index: 0, type: 'USER_INPUT', content: 'Initial prompt', created_at: t0 },
+    { step_index: 1, type: 'USER_INPUT', content: 'Native sidebar follow-up', created_at: tStep4User },
+    { step_index: 2, type: 'PLANNER_RESPONSE', content: 'Side-channel resume completed cleanly.', tool_calls: [], created_at: tStep4Done },
+  ]);
+
+  await syncThreads({ workspacePath: repoDir, backgroundSideEffects: false });
+  const afterSync = loadRegistry().threads['pt-p02-thr-002'];
+  assert.equal(afterSync.canceledAt, undefined);
+  assert.ok(afterSync.cancelClearedAt);
+  assert.ok(afterSync.pushedToCoordinatorAt);
+  assert.equal(existsSync(sendLog), true);
+});
+
+test('7. P0-3: bgTasksKilledAt permanently suppresses pre-kill ghost background tasks across follow-ups and Watchdog while detecting new post-kill tasks', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-cancel-p0-3-');
+  const repoDir = join(tempRoot, 'repo-p0-3');
+  initGitRepo(repoDir);
+  const scopeKey = normalizeKey(repoDir);
+
+  const tOldUser = '2026-11-29T02:00:00.000Z';
+  const tOldBg = '2026-11-29T02:00:02.000Z';
+  const tCancelKill = '2026-11-29T02:01:00.000Z';
+  const tFollowUp = '2026-11-29T02:02:00.000Z';
+  const tNewBg = '2026-11-29T02:03:00.000Z';
+
+  let lsRunState = 'RUN_STATE_RUNNING';
+  const mockLs = await startMockLsServer(t, (req, res, body) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/exa.language_server_pb.LanguageServerService/CancelCascadeInvocation') {
+      lsRunState = 'RUN_STATE_IDLE';
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/SendUserCascadeMessage') {
+      lsRunState = 'RUN_STATE_RUNNING';
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url === '/product.v1.ConversationService/GetConversation') {
+      res.end(
+        JSON.stringify({
+          conversation: {
+            id: body.conversationId,
+            conversationId: body.conversationId,
+            state: { runState: lsRunState, updateTime: tFollowUp },
+            annotations: { archived: false },
+          },
+        }),
+      );
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeTrajectoryGeneratorMetadata') {
+      res.end(JSON.stringify({ generatorMetadata: [] }));
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData') {
+      res.end(JSON.stringify({ clientModelConfigs: [] }));
+      return;
+    }
+    res.end(JSON.stringify({ ok: true }));
+  });
+  process.env.ANTIGRAVITY_LS_ADDRESS = mockLs.address;
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'csrf-p0-3';
+  const sendLog = join(tempRoot, 'agentapi.log');
+  process.env.ANTIGRAVITY_AGENTAPI_EXE = writeMockAgentApi(tempRoot, sendLog);
+
+  const reg = loadRegistry();
+  reg.coordinators[scopeKey] = {
+    key: scopeKey,
+    conversationId: 'coord-p0-3',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    projectId: 'proj-p0-3',
+    runState: 'RUN_STATE_IDLE',
+    title: '[Coordinator] P0-3',
+  };
+  reg.threads['pt-p03-thr-001'] = {
+    threadId: 'pt-p03-thr-001',
+    projectSeq: 1,
+    localId: 'thr-001',
+    displayId: 'thr-001',
+    conversationId: 'conv-p03-1',
+    coordinatorId: 'coord-p0-3',
+    workspaceKey: scopeKey,
+    projectId: 'proj-p0-3',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Ghost BG Task Test',
+    runState: 'RUN_STATE_RUNNING',
+    hasPendingBgTask: true,
+    bucket: 'working',
+    archived: false,
+    createdAt: tOldUser,
+    updatedAt: tOldBg,
+  };
+  saveRegistry(reg);
+
+  writeTranscript(appDataDir, 'conv-p03-1', [
+    { step_index: 0, type: 'USER_INPUT', content: 'Start server', created_at: tOldUser },
+    {
+      step_index: 1,
+      type: 'PLANNER_RESPONSE',
+      content: '',
+      tool_calls: [{ name: 'run_command', args: { CommandLine: 'npm run dev' } }],
+      created_at: '2026-11-29T02:00:01.000Z',
+    },
+    {
+      step_index: 2,
+      type: 'GENERIC',
+      status: 'RUNNING',
+      content: 'Tool is running as a background task with task id: conv-p03-1/bg-old',
+      created_at: tOldBg,
+    },
+  ]);
+
+  // 1. Cancel with killBackgroundTasks=true -> records bgTasksKilledAt
+  const cancelRes = await cancelThread(
+    { threadId: 'thr-001', workspacePath: repoDir, killBackgroundTasks: true },
+    { now: () => tCancelKill },
+  );
+  assert.equal(cancelRes.ok, true);
+  assert.equal(loadRegistry().threads['pt-p03-thr-001'].bgTasksKilledAt, tCancelKill);
+
+  // 2. Follow up via sendThreadMessage -> clears canceledAt, preserves bgTasksKilledAt
+  const sendRes = await sendThreadMessage({
+    threadId: 'thr-001',
+    workspacePath: repoDir,
+    message: 'Run quick follow-up check',
+  });
+  assert.equal(sendRes.ok, true);
+  lsRunState = 'RUN_STATE_IDLE';
+  writeTranscript(appDataDir, 'conv-p03-1', [
+    { step_index: 0, type: 'USER_INPUT', content: 'Start server', created_at: tOldUser },
+    {
+      step_index: 1,
+      type: 'PLANNER_RESPONSE',
+      content: '',
+      tool_calls: [{ name: 'run_command', args: { CommandLine: 'npm run dev' } }],
+      created_at: '2026-11-29T02:00:01.000Z',
+    },
+    {
+      step_index: 2,
+      type: 'GENERIC',
+      status: 'RUNNING',
+      content: 'Tool is running as a background task with task id: conv-p03-1/bg-old',
+      created_at: tOldBg,
+    },
+    { step_index: 3, type: 'USER_INPUT', content: 'Run quick follow-up check', created_at: tFollowUp },
+    { step_index: 4, type: 'PLANNER_RESPONSE', content: 'Follow-up complete.', tool_calls: [], created_at: tFollowUp },
+  ]);
+
+  const postFollowRec = loadRegistry().threads['pt-p03-thr-001'];
+  assert.equal(postFollowRec.canceledAt, undefined);
+  assert.equal(postFollowRec.bgTasksKilledAt, tCancelKill);
+
+  // Old killed bg task MUST stay suppressed across all readers
+  const liveOld = peekLiveActivity('conv-p03-1', {
+    runState: 'RUN_STATE_IDLE',
+    bgTasksKilledAt: postFollowRec.bgTasksKilledAt,
+  });
+  assert.equal(liveOld.hasPendingBgTask, false);
+
+  const compOld = extractThreadCompletion('conv-p03-1', '', {
+    bgTasksKilledAt: postFollowRec.bgTasksKilledAt,
+  });
+  assert.equal(compOld.waitingOnBackgroundTask, false);
+
+  const parsedOld = parseThreadTranscript('conv-p03-1', [], {
+    bgTasksKilledAt: postFollowRec.bgTasksKilledAt,
+  });
+  const oldBgItem = parsedOld.items
+    .flatMap((it) => it.calls || it.entries || [])
+    .find((entry) => entry.rawTarget === 'npm run dev');
+  assert.ok(oldBgItem);
+  assert.equal(oldBgItem.running, false);
+
+  // getThreadMessages settles IDLE with hasPendingBgTask=false
+  const msgView = await getThreadMessages({ threadId: 'thr-001', workspacePath: repoDir });
+  assert.equal(msgView.thread.hasPendingBgTask, false);
+
+  // Watchdog patrol sees idle + no pending bg task -> must NOT flag bg_task_silent stall
+  const wdOut = await patrolProjectScope(scopeKey, {
+    deps: { now: () => Date.parse('2026-11-29T02:45:00.000Z') },
+  });
+  assert.equal(wdOut.stalledCount, 0);
+
+  // 3. A NEW background task started AFTER bgTasksKilledAt MUST still be tracked!
+  writeTranscript(appDataDir, 'conv-p03-1', [
+    { step_index: 0, type: 'USER_INPUT', content: 'Start server', created_at: tOldUser },
+    {
+      step_index: 1,
+      type: 'PLANNER_RESPONSE',
+      content: '',
+      tool_calls: [{ name: 'run_command', args: { CommandLine: 'npm run dev' } }],
+      created_at: '2026-11-29T02:00:01.000Z',
+    },
+    {
+      step_index: 2,
+      type: 'GENERIC',
+      status: 'RUNNING',
+      content: 'Tool is running as a background task with task id: conv-p03-1/bg-old',
+      created_at: tOldBg,
+    },
+    { step_index: 3, type: 'USER_INPUT', content: 'Start fresh bg task', created_at: tFollowUp },
+    {
+      step_index: 4,
+      type: 'PLANNER_RESPONSE',
+      content: '',
+      tool_calls: [{ name: 'run_command', args: { CommandLine: 'node worker.mjs' } }],
+      created_at: '2026-11-29T02:02:59.000Z',
+    },
+    {
+      step_index: 5,
+      type: 'GENERIC',
+      status: 'RUNNING',
+      content: 'Tool is running as a background task with task id: conv-p03-1/bg-new',
+      created_at: tNewBg,
+    },
+  ]);
+  const liveNew = peekLiveActivity('conv-p03-1', {
+    runState: 'RUN_STATE_IDLE',
+    bgTasksKilledAt: postFollowRec.bgTasksKilledAt,
+  });
+  assert.equal(liveNew.hasPendingBgTask, true);
+  const compNew = extractThreadCompletion('conv-p03-1', '', {
+    bgTasksKilledAt: postFollowRec.bgTasksKilledAt,
+  });
+  assert.equal(compNew.waitingOnBackgroundTask, true);
+});
+
+test('8. P1-1: isCascadeNotRunningError accepts Connect HTTP 404 not_found / HTTP 400 failed_precondition while rejecting unimplemented/501/404 page not found', async (t) => {
+  const { tempRoot } = createTempEnv(t, 'pt-cancel-p1-1-');
+  const repoDir = join(tempRoot, 'repo-p1-1');
+  initGitRepo(repoDir);
+  const scopeKey = normalizeKey(repoDir);
+
+  let mode = 'connect_404_not_found';
+  const mockLs = await startMockLsServer(t, (req, res, body) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/exa.language_server_pb.LanguageServerService/CancelCascadeInvocation') {
+      if (mode === 'connect_404_not_found') {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ code: 'not_found', message: 'cascade not found' }));
+        return;
+      }
+      if (mode === 'connect_400_failed_precondition') {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ code: 'failed_precondition', message: 'cascade is not running' }));
+        return;
+      }
+      if (mode === 'plain_404') {
+        res.statusCode = 404;
+        res.setHeader('Content-Type', 'text/plain');
+        res.end('404 page not found');
+        return;
+      }
+      if (mode === 'connect_404_unimplemented') {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ code: 'unimplemented', message: 'CancelCascadeInvocation is not implemented' }));
+        return;
+      }
+      if (mode === 'http_501') {
+        res.statusCode = 501;
+        res.end(JSON.stringify({ code: 'unimplemented', message: 'Not Implemented' }));
+        return;
+      }
+    }
+    if (req.url === '/product.v1.ConversationService/GetConversation') {
+      res.end(
+        JSON.stringify({
+          conversation: {
+            id: body.conversationId,
+            conversationId: body.conversationId,
+            state: { runState: 'RUN_STATE_IDLE', updateTime: new Date().toISOString() },
+            annotations: { archived: false },
+          },
+        }),
+      );
+      return;
+    }
+    res.end('{}');
+  });
+  process.env.ANTIGRAVITY_LS_ADDRESS = mockLs.address;
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'csrf-p1-1';
+
+  const captureErr = async (m) => {
+    mode = m;
+    let err = null;
+    await assert.rejects(async () => {
+      try {
+        await cancelCascadeInvocation('conv-p11');
+      } catch (e) {
+        err = e;
+        throw e;
+      }
+    });
+    return err;
+  };
+
+  assert.equal(isCascadeNotRunningError(await captureErr('connect_404_not_found')), true);
+  assert.equal(isCascadeNotRunningError(await captureErr('connect_400_failed_precondition')), true);
+  assert.equal(isCascadeNotRunningError(await captureErr('plain_404')), false);
+  assert.equal(isCascadeNotRunningError(await captureErr('connect_404_unimplemented')), false);
+  assert.equal(isCascadeNotRunningError(await captureErr('http_501')), false);
+
+  // Verify end-to-end cancelThread treats Connect 404 not_found + IDLE getConversation as alreadyIdle: true
+  const reg = loadRegistry();
+  reg.coordinators[scopeKey] = {
+    key: scopeKey,
+    conversationId: 'coord-p1-1',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    projectId: 'proj-p1-1',
+    title: '[Coordinator] P1-1',
+  };
+  reg.threads['pt-p11-thr-001'] = {
+    threadId: 'pt-p11-thr-001',
+    projectSeq: 1,
+    localId: 'thr-001',
+    displayId: 'thr-001',
+    conversationId: 'conv-p11',
+    coordinatorId: 'coord-p1-1',
+    workspaceKey: scopeKey,
+    projectId: 'proj-p1-1',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Connect 404 Idle Verify',
+    runState: 'RUN_STATE_RUNNING',
+    bucket: 'working',
+    archived: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  saveRegistry(reg);
+
+  mode = 'connect_404_not_found';
+  const idleRes = await cancelThread({ threadId: 'thr-001', workspacePath: repoDir });
+  assert.equal(idleRes.ok, true);
+  assert.equal(idleRes.alreadyIdle, true);
+  assert.equal(idleRes.thread.runState, 'RUN_STATE_IDLE');
+
+  // Unimplemented HTTP 501 must fail rather than masquerading as alreadyIdle
+  const regRetry = loadRegistry();
+  regRetry.threads['pt-p11-thr-001'].runState = 'RUN_STATE_RUNNING';
+  delete regRetry.threads['pt-p11-thr-001'].canceledAt;
+  saveRegistry(regRetry);
+  mode = 'http_501';
+  const unimplRes = await cancelThread({ threadId: 'thr-001', workspacePath: repoDir });
+  assert.equal(unimplRes.ok, false);
+});
+
+test('9. P1-2: 10s cancel convergence grace prevents early rebound and Watchdog refuses to overwrite concurrent cancel/cleared tombstones', async (t) => {
+  const { tempRoot, appDataDir } = createTempEnv(t, 'pt-cancel-p1-2-');
+  const repoDir = join(tempRoot, 'repo-p1-2');
+  initGitRepo(repoDir);
+  const scopeKey = normalizeKey(repoDir);
+
+  const t0 = new Date(Date.now() - 120_000).toISOString();
+  const tCancel = new Date(Date.now() - 2_000).toISOString(); // only 2s ago (< 10s grace)
+  const tUpdateWithinGrace = new Date(Date.parse(tCancel) + 1500).toISOString();
+
+  let lsUpdateTime = tUpdateWithinGrace;
+  let lsRunState = 'RUN_STATE_RUNNING';
+  const mockLs = await startMockLsServer(t, (req, res, body) => {
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/product.v1.ConversationService/GetConversation') {
+      res.end(
+        JSON.stringify({
+          conversation: {
+            id: body.conversationId,
+            conversationId: body.conversationId,
+            state: { runState: lsRunState, updateTime: lsUpdateTime },
+            annotations: { archived: false },
+          },
+        }),
+      );
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeTrajectoryGeneratorMetadata') {
+      res.end(JSON.stringify({ generatorMetadata: [] }));
+      return;
+    }
+    if (req.url === '/exa.language_server_pb.LanguageServerService/GetCascadeModelConfigData') {
+      res.end(JSON.stringify({ clientModelConfigs: [] }));
+      return;
+    }
+    res.end(JSON.stringify({ ok: true }));
+  });
+  process.env.ANTIGRAVITY_LS_ADDRESS = mockLs.address;
+  process.env.ANTIGRAVITY_CSRF_TOKEN = 'csrf-p1-2';
+
+  const reg = loadRegistry();
+  reg.coordinators[scopeKey] = {
+    key: scopeKey,
+    conversationId: 'coord-p1-2',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    projectId: 'proj-p1-2',
+    runState: 'RUN_STATE_IDLE',
+    title: '[Coordinator] P1-2',
+  };
+  reg.threads['pt-p12-thr-001'] = {
+    threadId: 'pt-p12-thr-001',
+    projectSeq: 1,
+    localId: 'thr-001',
+    displayId: 'thr-001',
+    conversationId: 'conv-p12-1',
+    coordinatorId: 'coord-p1-2',
+    workspaceKey: scopeKey,
+    projectId: 'proj-p1-2',
+    workspacePath: repoDir,
+    repoRoot: repoDir,
+    title: 'Grace & Watchdog Race Test',
+    runState: 'RUN_STATE_IDLE',
+    bucket: 'idle',
+    archived: false,
+    canceledAt: tCancel,
+    canceledStepIndex: 0,
+    createdAt: t0,
+    updatedAt: tCancel,
+  };
+  saveRegistry(reg);
+  writeTranscript(appDataDir, 'conv-p12-1', [
+    { step_index: 0, type: 'USER_INPUT', content: 'Run long check', created_at: t0 },
+  ]);
+
+  // Within < 10s without new user turn, transient LS RUN_STATE_RUNNING must NOT clear canceledAt
+  await syncThreads({ workspacePath: repoDir, backgroundSideEffects: false });
+  const duringGrace = loadRegistry().threads['pt-p12-thr-001'];
+  assert.equal(duringGrace.canceledAt, tCancel);
+  assert.equal(duringGrace.runState, 'RUN_STATE_IDLE');
+
+  // After > 10s with genuinely active LS updateTime > canceledAt + 10s, fallback clears canceledAt
+  const oldCancel = new Date(Date.now() - 25_000).toISOString();
+  const r2 = loadRegistry();
+  r2.threads['pt-p12-thr-001'].canceledAt = oldCancel;
+  saveRegistry(r2);
+  lsUpdateTime = new Date(Date.parse(oldCancel) + 15_000).toISOString();
+  await syncThreads({ workspacePath: repoDir, backgroundSideEffects: false });
+  const afterGrace = loadRegistry().threads['pt-p12-thr-001'];
+  assert.equal(afterGrace.canceledAt, undefined);
+  assert.equal(afterGrace.runState, 'RUN_STATE_RUNNING');
+  assert.ok(afterGrace.cancelClearedAt);
+
+  // Watchdog patrol race: thread cancels CONCURRENTLY during getConversation probe!
+  // Pre-seed previous watching/stalled candidate so patrol picks it up, then simulate concurrent cancel mid-probe
+  const r3 = loadRegistry();
+  r3.threads['pt-p12-thr-001'].runState = 'RUN_STATE_RUNNING';
+  r3.threads['pt-p12-thr-001'].bucket = 'working';
+  r3.watchdogState[scopeKey] = {
+    scopeKey,
+    coordinatorId: 'coord-p1-2',
+    updatedAt: t0,
+    threads: {
+      'pt-p12-thr-001': {
+        state: 'watching',
+        lastProgressAt: t0,
+        lastObservedStepCount: 0,
+        lastObservedTranscriptSize: 0,
+        lastObservedTranscriptMtimeMs: 0,
+        lastObservedUpdatedAt: t0,
+        stalled: false,
+        updatedAt: t0,
+      },
+    },
+  };
+  saveRegistry(r3);
+
+  const peekSeenOpts = [];
+  let canceledMidProbe = false;
+  const patrolOut = await patrolProjectScope(scopeKey, {
+    deps: {
+      now: () => Date.parse(t0) + 600_000,
+      getConversation: async (cid) => {
+        if (cid === 'conv-p12-1' && !canceledMidProbe) {
+          canceledMidProbe = true;
+          await cancelThread(
+            { threadId: 'thr-001', workspacePath: repoDir },
+            {
+              cancelCascadeInvocation: async () => ({ ok: true }),
+              now: () => new Date(Date.parse(t0) + 599_000).toISOString(),
+            },
+          );
+        }
+        return {
+          conversation: {
+            conversationId: cid,
+            state: { runState: cid === 'coord-p1-2' ? 'RUN_STATE_IDLE' : 'RUN_STATE_RUNNING', updateTime: t0 },
+            annotations: { archived: false },
+          },
+        };
+      },
+      peekLiveActivity: (cid, opts) => {
+        peekSeenOpts.push({ cid, opts });
+        return peekLiveActivity(cid, opts);
+      },
+    },
+  });
+  assert.equal(canceledMidProbe, true);
+  assert.equal(peekSeenOpts.length >= 1, true);
+  assert.ok('canceledAt' in peekSeenOpts[0].opts, 'patrolProjectScope must forward canceledAt to peekLiveActivity');
+  assert.ok('bgTasksKilledAt' in peekSeenOpts[0].opts, 'patrolProjectScope must forward bgTasksKilledAt to peekLiveActivity');
+  assert.equal(patrolOut.alertedCount, 0);
+  const wdFinalEntry = loadRegistry().watchdogState[scopeKey].threads['pt-p12-thr-001'];
+  assert.equal(wdFinalEntry.state, 'cleared', 'Watchdog must NOT overwrite concurrent cleared tombstone with stalled/watching');
+
+  // Also verify targetThreadId IDLE patrol passes canceledAt & bgTasksKilledAt to BOTH peekLiveActivity and extractThreadCompletion
+  const compSeenOpts = [];
+  const peekIdleSeenOpts = [];
+  const idlePatrolOut = await patrolProjectScope(scopeKey, {
+    targetThreadId: 'pt-p12-thr-001',
+    deps: {
+      now: () => Date.parse(t0) + 650_000,
+      getConversation: async (cid) => ({
+        conversation: {
+          conversationId: cid,
+          state: { runState: 'RUN_STATE_IDLE', updateTime: t0 },
+          annotations: { archived: false },
+        },
+      }),
+      peekLiveActivity: (cid, opts) => {
+        peekIdleSeenOpts.push({ cid, opts });
+        return peekLiveActivity(cid, opts);
+      },
+      extractThreadCompletion: (cid, overridePath, opts) => {
+        compSeenOpts.push({ cid, overridePath, opts });
+        return extractThreadCompletion(cid, overridePath, opts);
+      },
+    },
+  });
+  assert.equal(idlePatrolOut.stalledCount, 0);
+  assert.equal(peekIdleSeenOpts.length, 1);
+  assert.equal(compSeenOpts.length, 1);
+  assert.ok(Boolean(peekIdleSeenOpts[0].opts.canceledAt), 'IDLE patrol must forward canceledAt to peekLiveActivity');
+  assert.ok(Boolean(peekIdleSeenOpts[0].opts.bgTasksKilledAt), 'IDLE patrol must forward bgTasksKilledAt to peekLiveActivity');
+  assert.ok(Boolean(compSeenOpts[0].opts?.canceledAt), 'IDLE patrol must forward canceledAt to extractThreadCompletion');
+  assert.ok(Boolean(compSeenOpts[0].opts?.bgTasksKilledAt), 'IDLE patrol must forward bgTasksKilledAt to extractThreadCompletion');
 });
