@@ -1,97 +1,141 @@
-# Antigravity Project Threads (`project-threads`)
+<div align="center">
+  <img src="./assets/logo.svg" width="96" height="96" alt="Project Threads Logo" />
 
-在 **Antigravity 2.0 Desktop** 中复刻 **Claude Code Projects** 风格的持续项目总控与并发工作线程体系：将左侧主窗口锚定为常驻 **`[Coordinator]`** 总控会话，后台通过原生 `ConversationService` 并发派发物理隔离的 **Git Worktree**（或零拷贝只读）子线程，并在右侧 **Project Threads** 辅助面板实时监控与内联预览对话。
+  <h1>Antigravity Project Threads</h1>
 
----
+  <p>
+    Claude Code Projects–style persistent Coordinator and parallel isolated Worker Threads for <strong>Antigravity 2.0 Desktop</strong>.
+  </p>
 
-## 核心特性 (Highlights)
+  <p>
+    <img src="https://img.shields.io/badge/version-v1.1.0-38BDF8?style=flat-square" alt="Version v1.1.0" />
+    <img src="https://img.shields.io/badge/dependencies-zero%20(Node.js%20ESM)-34D399?style=flat-square" alt="Zero Dependencies" />
+    <img src="https://img.shields.io/badge/platform-Antigravity%202.0-818CF8?style=flat-square" alt="Antigravity 2.0" />
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-C084FC?style=flat-square" alt="MIT License" /></a>
+  </p>
 
-- **常驻总控会话 (`/coord`)**：
-  - 左侧主画布始终保持 `[Coordinator] <项目名>` 上下文干净精炼，专注于需求拆解、架构决策、任务派发与结果验收。
-  - 内置 `PreToolUse` 守护钩子与持久规则，防止总控会话误退化为普通单线程执行或临时 Subagent。
-- **双模并发工作线程 (`dispatch_thread`)**：
-  - **独立 Git Worktree 模式 (`createWorktree: true`)**：自动在 `../.worktrees/<repo>/<thread-slug>` 创建独立分支检出副本，支持多任务并行改代码互不污染。
-  - **共享只读排查模式 (`createWorktree: false`)**：零磁盘拷贝直接在主仓库执行代码检索、日志分析与方案调研。
-- **严格的工程 / 会话级隔离**：
-  - 基于实时 `GetConversation` 元数据与 Git 主仓库根目录做 Fail-Closed 作用域判定，每个工程的工作线程列表、Coordinator 绑定与共享记忆完全独立，绝不跨项目串流。
-- **异步后台感知与分段式完成回调**：
-  - 自动识别仍在运行后台命令（`run_command` 异步任务）的线程，杜绝半途误报完成。
-  - 基于内核级原子锁（`wx` claim lock）去重，子线程真正收尾后自动向 `[Coordinator]` 推送结构化分段完成卡片。
-- **Swarm 风格实时监控看板 + 1:1 原生内联 `Preview` 抽屉**：
-  - 对齐 Antigravity 内置 Swarm Overview 视觉体系（`--pt-*` 独立命名空间令牌、深浅色自适应、实时步骤环形进度条与流光状态展示）。
-  - **点击卡片优先内联 `Preview`**：点击任意线程默认在右侧边栏滑出与主聊天窗 1:1 对齐的原生对话流（含 `Worked for Xm Ys` 折叠轨迹树、文件行号胶囊跳转、步骤清单卡片与青绿流光输入框），不切走左侧主窗口；同时保留 **`Open ↗`** 一键切至主窗及常驻 **`Coordinator`** 快速返回入口。
-- **共享项目记忆 (`project-memory.md`) 与多语言同步**：
-  - 主仓库 `.agents/rules/project-memory.md` 自动同步至各活跃 Worktree；界面自动跟随 Antigravity 全局语言配置切换 `简体中文 / 繁體中文 / English`。
+  <p>
+    <strong>English</strong> | <a href="./README.zh-CN.md">简体中文</a> | <a href="./README.zh-TW.md">繁體中文</a>
+  </p>
+</div>
 
 ---
 
-## 安装方法 (Installation)
+**Antigravity Project Threads** (`project-threads`) brings a **Claude Code Projects**–style ongoing project coordination workflow to **Antigravity 2.0 Desktop**: pin your main window as an always-on **`[Coordinator]`** session, dispatch physically isolated **Git Worktree** (or zero-copy read-only) worker threads in the background via native `ConversationService`, and monitor or chat with every thread inline in the right-hand **Project Threads** sidecar board.
 
-> **零外部依赖**：完全基于 Antigravity 2.0 内置 Node.js 运行时构建，**无需执行 `npm install`**。
+## Highlights
 
-### Windows (PowerShell)
+- **Persistent Coordinator (`/coord`) & Autonomous Archiving**:
+  - Keeps your main `[Coordinator] <project>` session clean and focused on scoping, architecture decisions, task delegation, and review.
+  - Built-in `PreInvocation` / `PreToolUse` / `Stop` hooks and persistent rules prevent the Coordinator from slipping back into ad-hoc single-threaded edits or untracked subagents.
+  - **Autonomous Archiving**: Once a worker thread completes and reports back (read-only checks immediately; Worktree code threads after confirming merge or obsolescence), the Coordinator can call `archive_thread` automatically without prompting every time.
+- **Dual-Mode Parallel Worker Threads (`dispatch_thread`) & Language Following**:
+  - **Isolated Git Worktree Mode (`createWorktree: true`)**: Automatically provisions an isolated checkout and branch under `../.worktrees/<repo>/<thread-slug>`, enabling parallel code changes without branch or working-tree collisions.
+  - **Zero-Copy Read-Only Mode (`createWorktree: false`)**: Runs code investigations, log checks, and design research directly against the repository with zero disk copy overhead.
+  - **Automatic User Language Following**: Thread titles, task prompts, worker analysis, and final summaries automatically follow the user's active conversation language.
+- **Two-Tier Model + Thinking Effort Picker & `inherit` Mode**:
+  - Pick models and reasoning effort tiers effortlessly via the two-tier family + effort selector in both Sidecar Settings and the inline thread composer, including mid-conversation model switching.
+  - Configure global or per-project default models separately for Worktree code threads and Read-Only threads, with first-class **`inherit`** support that dynamically resolves the Coordinator's current model at dispatch time.
+- **Thread Token Usage & Context Compaction Telemetry**:
+  - Displays per-thread **total token consumption**, **compaction-line progress**, and **compaction count** directly in the thread board.
+  - Reuses existing generator-metadata polling with cached offline transcript fallback—adding zero extra RPC overhead.
+- **Strict Project / Session Isolation & Async Background Awareness**:
+  - Fail-closed workspace scoping based on live `GetConversation` metadata and the Git repository root keeps threads, Coordinator bindings, and project memory strictly isolated per repository.
+  - Detects active background commands (`run_command` async tasks) to prevent premature completion reports, and uses atomic claim locks (`wx`) to deduplicate structured completion cards pushed back to `[Coordinator]`.
+- **Swarm-Styled Live Board & 1:1 Inline `Preview` Drawer**:
+  - Matches Antigravity's native Swarm Overview aesthetics (`--pt-*` isolated tokens, automatic light/dark theme adaptation, live progress rings, and shimmer status indicators).
+  - **Inline `Preview` by Default**: Clicking any thread opens a 1:1 native conversation drawer right inside the sidecar (with `Worked for Xm Ys` collapsible step trees, clickable file-line pills, checklists, model picker, and follow-up composer) without leaving the main window—while keeping **`Open ↗`** and **`Coordinator`** one-click navigation.
+- **Shared Project Memory (`project-memory.md`) & Trilingual UI**:
+  - Automatically syncs `.agents/rules/project-memory.md` across active Worktrees (excluded from Git commits via `.git/info/exclude`).
+  - Automatically follows Antigravity's global locale across `English`, `简体中文`, and `繁體中文`.
+
+## Installation
+
+> **Zero External Dependencies**: Built entirely on Antigravity 2.0's built-in Node.js ESM runtime—**no `npm install` required**.
+
+### Stable Release (Recommended — `main` branch)
+
+The `main` branch always tracks the latest stable release (`vX.Y.Z` / `stable` tag).
+
+#### Windows (PowerShell)
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\.gemini\config\plugins" | Out-Null
 git clone https://github.com/ShawnJim/antigravity-project-threads.git "$HOME\.gemini\config\plugins\project-threads"
 ```
 
-### macOS / Linux
+#### macOS / Linux
 
 ```bash
 mkdir -p ~/.gemini/config/plugins
 git clone https://github.com/ShawnJim/antigravity-project-threads.git ~/.gemini/config/plugins/project-threads
 ```
 
-### 启用与使用
+### Development & Pre-Release (`dev` branch / `rc` tags)
 
-1. 打开 **Antigravity 2.0** 桌面端，进入 **Customizations → Plugins**，确认 **Project Threads** 处于开启状态（更新插件代码后可 **关 → 开** 一次触发热重载）。
-2. 在主对话中输入 `/coord` 将当前会话绑定为项目总控协调器。
-3. 点击右上角边栏 **`+`** 选择 **Project Threads** 打开实时线程看板：
-   - 点击任意线程卡片或列表行在右侧内联打开 **`Preview`** 对话抽屉（可直接追问或纠偏该线程）；
-   - 点击 **`Open ↗`** 可将该线程弹出至左侧主窗口，随时点击面板顶部 **`Coordinator`** 按钮一键切回总控会话。
+Active development and pre-release builds (`vX.Y.Z-rc.N`) live on the `dev` branch without moving the `stable` tag on `main`.
 
----
+```bash
+# Clone the dev branch directly
+git clone -b dev https://github.com/ShawnJim/antigravity-project-threads.git ~/.gemini/config/plugins/project-threads
 
-## 目录结构
+# Or switch an existing installation to dev
+cd ~/.gemini/config/plugins/project-threads
+git fetch origin && git checkout dev && git pull
+```
+
+### Getting Started
+
+1. Open **Antigravity 2.0 Desktop**, go to **Customizations → Plugins**, and make sure **Project Threads** is enabled (after updating plugin files, toggle **Off → On** once to hot-reload).
+2. Type `/coord` in your main conversation to bind it as the persistent Project Coordinator.
+3. Click **`+`** in the top-right auxiliary sidebar and select **Project Threads** to open the live board:
+   - Click any thread card to open the inline **`Preview`** drawer (send follow-ups or switch models without leaving the Coordinator);
+   - Click **`Open ↗`** to pop a thread into the main window, and use the top **`Coordinator`** button anytime to jump right back.
+
+## Project Structure
 
 ```text
 project-threads/
-├── plugin.json                 # Antigravity 2.0 插件清单
-├── mcp_config.json             # Coordinator MCP 工具服务声明
-├── hooks.json                  # PreInvocation / PreToolUse / Stop 生命周期钩子
+├── plugin.json                 # Antigravity 2.0 plugin manifest
+├── mcp_config.json             # Coordinator MCP server registration
+├── hooks.json                  # PreInvocation / PreToolUse / Stop lifecycle hooks
 ├── assets/
-│   └── logo.svg
+│   └── logo.svg                # Vector plugin & repository logo
 ├── rules/
-│   └── AGENTS.md               # Coordinator 与 Worktree 隔离规则
+│   └── AGENTS.md               # Persistent Coordinator & Worktree isolation rules
 ├── skills/
 │   └── coord/
-│       └── SKILL.md            # /coord 技能工作流指引
+│       └── SKILL.md            # /coord skill workflow instructions
 ├── mcp/
-│   └── server.mjs              # Stdio MCP Server (7 个总控编排工具)
+│   └── server.mjs              # Stdio MCP server (7 orchestration tools)
 ├── scripts/
-│   └── hook-handler.mjs        # 完成状态提取、原子去重推送与指令续期
+│   └── hook-handler.mjs        # Completion extraction, atomic callback dedup & directive sync
 ├── lib/
-│   ├── ls-client.mjs           # 本地 ConversationService HTTP+JSON 客户端
-│   ├── store.mjs               # 工程隔离注册表、Git Worktree 与记忆同步引擎
-│   └── transcript.mjs          # 会话日志解析、异步任务检测与原生步骤树聚合
-└── sidecars/
-    └── threads/
-        ├── sidecar.json        # Auxiliary Pane Sidecar 视图配置
-        ├── package.json
-        ├── main.mjs            # 本地 API 服务与无缓存静态资源路由
-        ├── index.html          # Swarm 风格看板与内联聊天抽屉骨架
-        ├── theme.css           # --pt-* 独立命名空间样式表（深浅色主题）
-        └── app.js              # 实时轮询、Preview 抽屉渲染与三语国际化
+│   ├── ls-client.mjs           # Local ConversationService / LanguageServerService client
+│   ├── model-format.mjs        # Two-tier model catalog, effort formatting & inherit resolution
+│   ├── store.mjs               # Project-scoped registry, Git Worktree & memory sync engine
+│   └── transcript.mjs          # Transcript parser, async task detector & usage telemetry
+├── sidecars/
+│   └── threads/
+│       ├── sidecar.json        # Auxiliary Pane Sidecar manifest
+│       ├── package.json
+│       ├── main.mjs            # Local API server & no-cache static asset router
+│       ├── index.html          # Swarm-styled board, settings & inline preview drawer
+│       ├── theme.css           # --pt-* scoped design tokens (light & dark themes)
+│       └── app.js              # Live polling, inline preview, model picker & i18n
+└── tests/
+    └── *.test.mjs              # Zero-dependency Node.js test suite
 ```
 
----
+## Testing
 
-## 友情链接
+```bash
+node --test tests/*.test.mjs
+```
 
-友情链接：[LINUX DO - 新的理想型社区](https://linux.do)
+## Community
 
----
+Community Link: [LINUX DO](https://linux.do)
 
 ## License
 
